@@ -1,11 +1,9 @@
 package kepplr.util;
 
 /**
- * Named constants for thresholds, frustum ranges, and rendering parameters
- * defined in REDESIGN.md.
+ * Named constants for thresholds, frustum ranges, and rendering parameters defined in REDESIGN.md.
  *
- * <p>No magic numbers should appear in logic code; reference this class instead
- * (CLAUDE.md Rule 5).
+ * <p>No magic numbers should appear in logic code; reference this class instead (CLAUDE.md Rule 5).
  */
 public final class KepplrConstants {
 
@@ -42,8 +40,8 @@ public final class KepplrConstants {
     public static final double POINT_SPRITE_THRESHOLD_PX = 2.0;
 
     /**
-     * Apparent-radius threshold in pixels below which a satellite must not be drawn.
-     * Satellites are defined by NAIF ID rules (see §7.3).
+     * Apparent-radius threshold in pixels below which a satellite must not be drawn. Satellites are defined by NAIF ID
+     * rules (see §7.3).
      */
     public static final double SATELLITE_CULL_THRESHOLD_PX = 2.0;
 

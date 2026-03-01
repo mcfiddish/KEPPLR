@@ -9,8 +9,7 @@ import org.junit.jupiter.api.Test;
 /**
  * Unit tests for {@link SimulationCommands} contract.
  *
- * <p>These tests verify the interface contract via mock; concrete implementations
- * will have their own test classes.
+ * <p>These tests verify the interface contract via mock; concrete implementations will have their own test classes.
  */
 @DisplayName("SimulationCommands")
 class SimulationCommandsTest {

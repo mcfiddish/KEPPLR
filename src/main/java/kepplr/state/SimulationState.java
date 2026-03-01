@@ -8,12 +8,10 @@ import javafx.beans.property.ReadOnlyObjectProperty;
 /**
  * Single source of truth for all UI-visible simulation state (REDESIGN.md §4, §10).
  *
- * <p>Properties are updated on the <b>JME thread</b>. The JavaFX bridge layer
- * marshals reads to the FX thread via {@code Platform.runLater(...)} at the
- * boundary — never scattered through UI code (CLAUDE.md Rule 2, Rule 4).
+ * <p>Properties are updated on the <b>JME thread</b>. The JavaFX bridge layer marshals reads to the FX thread via
+ * {@code Platform.runLater(...)} at the boundary — never scattered through UI code (CLAUDE.md Rule 2, Rule 4).
  *
- * <p>Body references use NAIF IDs ({@code int}). A value of {@code -1} means
- * "no body" for that slot.
+ * <p>Body references use NAIF IDs ({@code int}). A value of {@code -1} means "no body" for that slot.
  */
 public interface SimulationState {
 

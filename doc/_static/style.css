@@ -1,0 +1,14 @@
+.wy-nav-content {
+    max-width: 100%;
+}
+
+.figures-row {
+    display: flex;
+    justify-content: space-between;
+}
+.figures-row .figure {
+    width: 30%;  /* Adjust width percentage */
+    display: inline-block;
+    text-align: center;
+}
+

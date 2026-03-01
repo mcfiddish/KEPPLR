@@ -1,12 +1,10 @@
 package kepplr.commands;
 
 /**
- * All user-initiated actions enter the simulation through this interface
- * (REDESIGN.md §4, CLAUDE.md Rule 2).
+ * All user-initiated actions enter the simulation through this interface (REDESIGN.md §4, CLAUDE.md Rule 2).
  *
- * <p>JavaFX controllers call these methods to forward user input to the
- * simulation core. Implementations may queue, validate, or execute commands
- * immediately — that is the core's concern, not the UI's.
+ * <p>JavaFX controllers call these methods to forward user input to the simulation core. Implementations may queue,
+ * validate, or execute commands immediately — that is the core's concern, not the UI's.
  *
  * <p>Body references use NAIF IDs ({@code int}).
  */
@@ -33,9 +31,8 @@ public interface SimulationCommands {
     /**
      * Target a body — "point at" (§4.4).
      *
-     * <p>The camera orientation tracks the target body center while
-     * camera position remains fixed. Targeting also selects the body
-     * and disables tracking (§4.6).
+     * <p>The camera orientation tracks the target body center while camera position remains fixed. Targeting also
+     * selects the body and disables tracking (§4.6).
      *
      * @param naifId NAIF ID of the body to target
      */
@@ -44,16 +41,13 @@ public interface SimulationCommands {
     /**
      * Track a body — lock its screen position (§4.6).
      *
-     * <p>The tracked body maintains a constant normalized screen position
-     * over time.
+     * <p>The tracked body maintains a constant normalized screen position over time.
      *
      * @param naifId NAIF ID of the body to track
      */
     void trackBody(int naifId);
 
-    /**
-     * Stop tracking the currently tracked body (§4.6).
-     */
+    /** Stop tracking the currently tracked body (§4.6). */
     void stopTracking();
 
     // ── Time commands (§1.2, §2.3) ──
