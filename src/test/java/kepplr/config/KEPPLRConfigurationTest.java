@@ -3,13 +3,16 @@ package kepplr.config;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
+import java.util.List;
 import kepplr.ephemeris.KEPPLREphemeris;
 import kepplr.testsupport.TestHarness;
+import org.apache.commons.configuration2.PropertiesConfiguration;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import picante.time.TimeConversion;
 
 /**
  * Unit tests for {@link KEPPLRConfiguration}.
@@ -83,6 +86,127 @@ class KEPPLRConfigurationTest {
 
             // Main thread still sees eph1
             assertSame(eph1, config.getEphemeris());
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────────
+    // Test template configuration
+    // ─────────────────────────────────────────────────────────────────
+
+    @Nested
+    @DisplayName("Test template configuration")
+    class TestTemplateTests {
+
+        private KEPPLRConfiguration config;
+
+        @BeforeEach
+        void setUp() {
+            config = KEPPLRConfiguration.getTestTemplate();
+        }
+
+        @Test
+        @DisplayName("Test template sets metakernel to test path")
+        void testMetakernelPath() {
+            List<String> metakernels = config.spiceBlock().metakernel();
+            assertTrue(
+                    metakernels.stream().anyMatch(mk -> mk.contains("kepplr_test.tm")),
+                    "Test template should use test metakernel, got: " + metakernels);
+        }
+
+        @Test
+        @DisplayName("Template has three default bodies")
+        void templateHasDefaultBodies() {
+            List<String> bodies = config.bodies();
+            assertEquals(3, bodies.size(), "Template should have Sun, Earth, and Moon");
+            assertTrue(bodies.contains("SUN"));
+            assertTrue(bodies.contains("EARTH"));
+            assertTrue(bodies.contains("MOON"));
+        }
+
+        @Test
+        @DisplayName("Template has New Horizons spacecraft")
+        void templateHasNewHorizons() {
+            List<Integer> spacecraft = config.spacecraft();
+            assertTrue(spacecraft.contains(-98), "Template should include New Horizons (-98)");
+        }
+
+        @Test
+        @DisplayName("bodyBlock returns correct NAIF ID for Earth")
+        void earthBodyBlockNaifId() {
+            BodyBlock earth = config.bodyBlock("EARTH");
+            assertNotNull(earth);
+            assertEquals(399, earth.naifID());
+        }
+
+        @Test
+        @DisplayName("spacecraftBlock returns New Horizons")
+        void newHorizonsSpacecraftBlock() {
+            SpacecraftBlock nh = config.spacecraftBlock(-98);
+            assertNotNull(nh);
+            assertEquals("New Horizons", nh.name());
+        }
+
+        @Test
+        @DisplayName("getTimeConversion() returns usable time conversion")
+        void timeConversionWorks() {
+            TimeConversion tc = config.getTimeConversion();
+            assertNotNull(tc);
+            // J2000 epoch: 64.184 TDB seconds = 2000 JAN 01 12:00:00 UTC
+            String utc = tc.tdbToUTCString(64.184, "C");
+            assertEquals("2000 JAN 01 12:00:00.000", utc);
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────────
+    // Configuration property defaults
+    // ─────────────────────────────────────────────────────────────────
+
+    @Nested
+    @DisplayName("Configuration property defaults")
+    class ConfigPropertyTests {
+
+        private KEPPLRConfiguration config;
+
+        @BeforeEach
+        void setUp() {
+            config = KEPPLRConfiguration.getTemplate();
+        }
+
+        @Test
+        @DisplayName("Default log level is INFO")
+        void defaultLogLevel() {
+            assertEquals("INFO", config.logLevel());
+        }
+
+        @Test
+        @DisplayName("Default time format is ISOC")
+        void defaultTimeFormat() {
+            assertEquals("ISOC", config.timeFormat());
+        }
+
+        @Test
+        @DisplayName("Resources folder is non-blank")
+        void resourcesFolderNonBlank() {
+            assertFalse(config.resourcesFolder().isBlank());
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────────
+    // Configuration reload
+    // ─────────────────────────────────────────────────────────────────
+
+    @Nested
+    @DisplayName("Configuration reload")
+    class ReloadTests {
+
+        @Test
+        @DisplayName("reload() picks up changed property")
+        void reloadPicksUpChange() {
+            KEPPLRConfiguration config = KEPPLRConfiguration.getTestTemplate();
+            PropertiesConfiguration pc = config.toPropertiesConfiguration();
+            pc.setProperty("timeFormat", "C");
+            KEPPLRConfiguration reloaded = KEPPLRConfiguration.reload(pc);
+            assertEquals("C", reloaded.timeFormat());
         }
     }
 }
