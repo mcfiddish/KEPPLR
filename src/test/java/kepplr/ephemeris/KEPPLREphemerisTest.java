@@ -213,10 +213,7 @@ class KEPPLREphemerisTest {
             VectorIJK bodyFixed = ephemeris.toBodyFixedPosition(EARTH, et, earthPos, false, null);
             assertNotNull(bodyFixed);
             assertEquals(
-                    earthPos.getLength(),
-                    bodyFixed.getLength(),
-                    1e-6,
-                    "Rotation should preserve vector magnitude");
+                    earthPos.getLength(), bodyFixed.getLength(), 1e-6, "Rotation should preserve vector magnitude");
         }
 
         @Test
@@ -393,9 +390,7 @@ class KEPPLREphemerisTest {
         @Test
         @DisplayName("j2000ToFrame by string name returns non-null for NH_SPACECRAFT")
         void nhSpacecraftFrameAvailable() {
-            assertNotNull(
-                    ephemeris.j2000ToFrame("NH_SPACECRAFT"),
-                    "NH_SPACECRAFT frame should be defined in test FK");
+            assertNotNull(ephemeris.j2000ToFrame("NH_SPACECRAFT"), "NH_SPACECRAFT frame should be defined in test FK");
         }
     }
 }

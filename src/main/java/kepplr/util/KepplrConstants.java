@@ -57,4 +57,17 @@ public final class KepplrConstants {
 
     /** Default time rate: 1 simulation second per wall-clock second. */
     public static final double DEFAULT_TIME_RATE = 1.0;
+
+    // ── World-space units (REDESIGN.md §2.1) ──
+
+    /**
+     * World-space units are kilometers. Ephemeris data from KEPPLREphemeris is in km; scene graph coordinates are in
+     * km. Do not rescale to avoid precision issues — use floating origin instead.
+     */
+    public static final String WORLD_SPACE_UNIT = "km";
+
+    // ── Body tessellation ──
+
+    /** Sphere tessellation level (zSamples and radialSamples) for planet-class bodies. */
+    public static final int BODY_SPHERE_TESSELLATION = 64;
 }
