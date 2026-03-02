@@ -1,0 +1,455 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <groupId>edu.jhuapl.ses.srn</groupId>
+  <artifactId>kepplr</artifactId>
+  <version>1.0-SNAPSHOT</version>
+  <name>KEPPLR</name>
+  <packaging>jar</packaging>
+
+  <!-- ================================================================== -->
+  <!-- Platform profiles: resolve JavaFX native classifier and JME flags  -->
+  <!-- ================================================================== -->
+  <profiles>
+    <!-- macOS Apple Silicon -->
+    <profile>
+      <id>javafx-mac-aarch64</id>
+      <activation>
+        <os><name>Mac OS X</name><arch>aarch64</arch></os>
+      </activation>
+      <properties>
+        <javafx.platform>mac-aarch64</javafx.platform>
+        <javafx.firstThreadArg>-XstartOnFirstThread</javafx.firstThreadArg>
+      </properties>
+    </profile>
+    <!-- macOS Intel -->
+    <profile>
+      <id>javafx-mac-x86_64</id>
+      <activation>
+        <os><name>Mac OS X</name><arch>amd64</arch></os>
+      </activation>
+      <properties>
+        <javafx.platform>mac</javafx.platform>
+        <javafx.firstThreadArg>-XstartOnFirstThread</javafx.firstThreadArg>
+      </properties>
+    </profile>
+    <!-- Linux x86_64 -->
+    <profile>
+      <id>javafx-linux-x86_64</id>
+      <activation>
+        <os><name>Linux</name><arch>amd64</arch></os>
+      </activation>
+      <properties>
+        <javafx.platform>linux</javafx.platform>
+        <javafx.firstThreadArg/>
+      </properties>
+    </profile>
+    <!-- Linux aarch64 -->
+    <profile>
+      <id>javafx-linux-aarch64</id>
+      <activation>
+        <os><name>Linux</name><arch>aarch64</arch></os>
+      </activation>
+      <properties>
+        <javafx.platform>linux-aarch64</javafx.platform>
+        <javafx.firstThreadArg/>
+      </properties>
+    </profile>
+    <!-- Windows -->
+    <profile>
+      <id>javafx-windows</id>
+      <activation>
+        <os><family>windows</family></os>
+      </activation>
+      <properties>
+        <javafx.platform>win</javafx.platform>
+        <javafx.firstThreadArg/>
+      </properties>
+    </profile>
+  </profiles>
+
+  <!-- ================================================================== -->
+  <!-- Properties                                                         -->
+  <!-- ================================================================== -->
+  <properties>
+    <!-- Fallback defaults (overridden by platform profiles above) -->
+    <javafx.firstThreadArg/>
+    <javafx.platform>linux</javafx.platform>
+
+    <!-- Test filtering: exclude render-tagged tests from unit phase -->
+    <excludedGroups>render</excludedGroups>
+
+    <package>KEPPLR</package>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <maven.compiler.release>21</maven.compiler.release>
+
+    <!-- Dependency versions -->
+    <picante.version>1.0.0</picante.version>
+    <immutables.version>2.12.1</immutables.version>
+    <jackfruit.version>1.1.1</jackfruit.version>
+    <javafx.version>25.0.1</javafx.version>
+    <jme.version>3.8.1-stable</jme.version>
+    <groovy.version>3.0.25</groovy.version>
+    <log4j.version>2.25.3</log4j.version>
+    <junit.version>6.0.2</junit.version>
+    <mockito.version>5.21.0</mockito.version>
+  </properties>
+
+  <!-- ================================================================== -->
+  <!-- Dependencies                                                       -->
+  <!-- ================================================================== -->
+  <dependencies>
+
+    <!-- ── Ephemeris: Picante (SPICE-compatible) ── -->
+    <dependency>
+      <groupId>edu.jhuapl.ses</groupId>
+      <artifactId>picante</artifactId>
+      <version>${picante.version}</version>
+    </dependency>
+
+    <!-- ── Configuration: Jackfruit (annotation-driven config blocks) ── -->
+    <dependency>
+      <groupId>edu.jhuapl.ses</groupId>
+      <artifactId>jackfruit</artifactId>
+      <version>${jackfruit.version}</version>
+    </dependency>
+
+    <!-- ── Immutables (value types) ── -->
+    <dependency>
+      <groupId>org.immutables</groupId>
+      <artifactId>value</artifactId>
+      <version>${immutables.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.immutables</groupId>
+      <artifactId>builder</artifactId>
+      <version>${immutables.version}</version>
+    </dependency>
+
+    <!-- ── 3D Rendering: JMonkeyEngine ── -->
+    <dependency>
+      <groupId>org.jmonkeyengine</groupId>
+      <artifactId>jme3-core</artifactId>
+      <version>${jme.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.jmonkeyengine</groupId>
+      <artifactId>jme3-desktop</artifactId>
+      <version>${jme.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.jmonkeyengine</groupId>
+      <artifactId>jme3-lwjgl3</artifactId>
+      <version>${jme.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.jmonkeyengine</groupId>
+      <artifactId>jme3-plugins</artifactId>
+      <version>${jme.version}</version>
+    </dependency>
+
+    <!-- ── UI: JavaFX ── -->
+    <dependency>
+      <groupId>org.openjfx</groupId>
+      <artifactId>javafx-controls</artifactId>
+      <version>${javafx.version}</version>
+      <classifier>${javafx.platform}</classifier>
+    </dependency>
+    <dependency>
+      <groupId>org.openjfx</groupId>
+      <artifactId>javafx-graphics</artifactId>
+      <version>${javafx.version}</version>
+      <classifier>${javafx.platform}</classifier>
+    </dependency>
+    <dependency>
+      <groupId>org.openjfx</groupId>
+      <artifactId>javafx-base</artifactId>
+      <version>${javafx.version}</version>
+      <classifier>${javafx.platform}</classifier>
+    </dependency>
+    <!-- ── Scripting: Groovy ── -->
+    <dependency>
+      <groupId>org.codehaus.groovy</groupId>
+      <artifactId>groovy</artifactId>
+      <version>${groovy.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.codehaus.groovy</groupId>
+      <artifactId>groovy-jsr223</artifactId>
+      <version>${groovy.version}</version>
+    </dependency>
+
+    <!-- ── Logging ── -->
+    <dependency>
+      <groupId>org.apache.logging.log4j</groupId>
+      <artifactId>log4j-api</artifactId>
+      <version>${log4j.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.logging.log4j</groupId>
+      <artifactId>log4j-core</artifactId>
+      <version>${log4j.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.logging.log4j</groupId>
+      <artifactId>log4j-slf4j-impl</artifactId>
+      <version>${log4j.version}</version>
+    </dependency>
+
+    <!-- ── Commons ── -->
+    <dependency>
+      <groupId>com.fasterxml.jackson.core</groupId>
+      <artifactId>jackson-databind</artifactId>
+      <version>2.20.1</version>
+    </dependency>
+    <dependency>
+      <groupId>commons-beanutils</groupId>
+      <artifactId>commons-beanutils</artifactId>
+      <version>1.11.0</version>
+    </dependency>
+    <dependency>
+      <groupId>commons-cli</groupId>
+      <artifactId>commons-cli</artifactId>
+      <version>1.11.0</version>
+    </dependency>
+    <dependency>
+      <groupId>commons-io</groupId>
+      <artifactId>commons-io</artifactId>
+      <version>2.21.0</version>
+    </dependency>
+
+    <!-- ── Testing ── -->
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <version>${junit.version}</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.mockito</groupId>
+      <artifactId>mockito-core</artifactId>
+      <version>${mockito.version}</version>
+      <scope>test</scope>
+    </dependency>
+
+  </dependencies>
+
+  <!-- ================================================================== -->
+  <!-- Build                                                              -->
+  <!-- ================================================================== -->
+  <build>
+    <finalName>${package}</finalName>
+    <sourceDirectory>src/main/java</sourceDirectory>
+
+    <extensions>
+      <extension>
+        <groupId>kr.motd.maven</groupId>
+        <artifactId>os-maven-plugin</artifactId>
+        <version>1.7.1</version>
+      </extension>
+    </extensions>
+
+    <pluginManagement>
+      <plugins>
+
+        <!-- Compiler -->
+        <plugin>
+          <artifactId>maven-compiler-plugin</artifactId>
+          <version>3.14.1</version>
+          <configuration>
+            <release>${maven.compiler.release}</release>
+            <annotationProcessorPaths>
+              <annotationProcessorPath>
+                <groupId>org.immutables</groupId>
+                <artifactId>value</artifactId>
+                <version>${immutables.version}</version>
+              </annotationProcessorPath>
+              <annotationProcessorPath>
+                <groupId>org.immutables</groupId>
+                <artifactId>builder</artifactId>
+                <version>${immutables.version}</version>
+              </annotationProcessorPath>
+              <annotationProcessorPath>
+                <groupId>edu.jhuapl.ses</groupId>
+                <artifactId>jackfruit</artifactId>
+                <version>${jackfruit.version}</version>
+              </annotationProcessorPath>
+            </annotationProcessorPaths>
+          </configuration>
+        </plugin>
+
+        <!-- Dependency management -->
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-dependency-plugin</artifactId>
+          <version>3.9.0</version>
+          <executions>
+            <execution>
+              <id>copy-javafx-for-tests</id>
+              <phase>process-test-resources</phase>
+              <goals><goal>copy-dependencies</goal></goals>
+              <configuration>
+                <outputDirectory>${project.build.directory}/${package}_lib/javafx</outputDirectory>
+                <includeGroupIds>org.openjfx</includeGroupIds>
+                <includeScope>test</includeScope>
+                <overWriteIfNewer>true</overWriteIfNewer>
+              </configuration>
+            </execution>
+            <execution>
+              <id>copy-non-javafx</id>
+              <phase>prepare-package</phase>
+              <goals><goal>copy-dependencies</goal></goals>
+              <configuration>
+                <outputDirectory>${project.build.directory}/${package}_lib</outputDirectory>
+                <excludeGroupIds>org.openjfx</excludeGroupIds>
+                <includeScope>runtime</includeScope>
+                <overWriteIfNewer>true</overWriteIfNewer>
+              </configuration>
+            </execution>
+          </executions>
+        </plugin>
+
+<!-- Create version file -->
+        <plugin>
+          <groupId>org.codehaus.mojo</groupId>
+          <artifactId>exec-maven-plugin</artifactId>
+          <version>3.6.3</version>
+          <executions>
+            <execution>
+              <phase>generate-sources</phase>
+              <id>createVersionFile</id>
+              <goals>
+                <goal>exec</goal>
+              </goals>
+              <configuration>
+                <executable>bash</executable>
+                <arguments>
+                  <argument>
+                    ${project.basedir}/src/main/bash/createVersionFile.bash</argument>
+                </arguments>
+              </configuration>
+            </execution>
+          </executions>
+        </plugin>
+
+<!-- versions -->
+        <plugin>
+          <groupId>org.codehaus.mojo</groupId>
+          <artifactId>versions-maven-plugin</artifactId>
+          <version>2.20.1</version>
+          <configuration>
+            <ruleSet>
+              <ignoreVersions>
+                <ignoreVersion>
+                  <type>regex</type>
+                  <version>(?i).*[.-](alpha|beta|milestone|m\d+|rc|cr|preview|pre).*</version>
+                </ignoreVersion>
+              </ignoreVersions>
+            </ruleSet>
+          </configuration>
+        </plugin>
+
+        <!-- Enforcer -->
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-enforcer-plugin</artifactId>
+          <version>3.6.2</version>
+          <executions>
+            <execution>
+              <id>enforce-maven</id>
+              <goals><goal>enforce</goal></goals>
+              <configuration>
+                <rules>
+                  <requireMavenVersion><version>3.6.3</version></requireMavenVersion>
+                </rules>
+              </configuration>
+            </execution>
+          </executions>
+        </plugin>
+
+        <!-- Surefire (unit tests) -->
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-surefire-plugin</artifactId>
+          <version>3.5.4</version>
+          <configuration>
+            <groups>${groups}</groups>
+            <excludedGroups>${excludedGroups}</excludedGroups>
+            <argLine>
+              --enable-native-access=ALL-UNNAMED
+              ${javafx.firstThreadArg}
+              -javaagent:${settings.localRepository}/org/mockito/mockito-core/${mockito.version}/mockito-core-${mockito.version}.jar
+            </argLine>
+          </configuration>
+        </plugin>
+
+        <!-- Failsafe (integration / render tests) -->
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-failsafe-plugin</artifactId>
+          <version>3.5.4</version>
+          <executions>
+            <execution>
+              <id>render-tests</id>
+              <goals>
+                <goal>integration-test</goal>
+                <goal>verify</goal>
+              </goals>
+              <configuration>
+                <testFailureIgnore>true</testFailureIgnore>
+                <test>**/*Test.java</test>
+                <groups>render</groups>
+                <excludedGroups>__none__</excludedGroups>
+                <forkCount>1</forkCount>
+                <reuseForks>false</reuseForks>
+                <environmentVariables>
+                  <GLFW_PLATFORM>x11</GLFW_PLATFORM>
+                  <LIBGL_ALWAYS_SOFTWARE>1</LIBGL_ALWAYS_SOFTWARE>
+                </environmentVariables>
+                <argLine>
+                  --enable-native-access=ALL-UNNAMED
+                  -Djava.awt.headless=true
+                </argLine>
+              </configuration>
+            </execution>
+          </executions>
+        </plugin>
+
+        <!-- Spotless (code formatting) -->
+        <plugin>
+          <groupId>com.diffplug.spotless</groupId>
+          <artifactId>spotless-maven-plugin</artifactId>
+          <version>3.1.0</version>
+          <configuration>
+            <java>
+              <palantirJavaFormat>
+                <formatJavadoc>true</formatJavadoc>
+              </palantirJavaFormat>
+            </java>
+          </configuration>
+        </plugin>
+
+      </plugins>
+    </pluginManagement>
+
+    <plugins>
+      <plugin><groupId>org.apache.maven.plugins</groupId><artifactId>maven-dependency-plugin</artifactId></plugin>
+      <plugin><groupId>org.apache.maven.plugins</groupId><artifactId>maven-enforcer-plugin</artifactId></plugin>
+      <plugin><groupId>org.apache.maven.plugins</groupId><artifactId>maven-surefire-plugin</artifactId></plugin>
+      <plugin><groupId>org.apache.maven.plugins</groupId><artifactId>maven-failsafe-plugin</artifactId></plugin>
+      <plugin>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>exec-maven-plugin</artifactId>
+      </plugin>
+      <plugin>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>versions-maven-plugin</artifactId>
+      </plugin>
+      <plugin><groupId>com.diffplug.spotless</groupId><artifactId>spotless-maven-plugin</artifactId></plugin>
+    </plugins>
+  </build>
+
+</project>

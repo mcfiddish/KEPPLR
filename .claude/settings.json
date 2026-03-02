@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(../KEPPLR-pre/**)"
+    ]
+  },
+  "timeout": 30000
+}
