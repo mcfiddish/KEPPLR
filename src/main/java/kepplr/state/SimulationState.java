@@ -52,4 +52,17 @@ public interface SimulationState {
      * array is always length 3.
      */
     ReadOnlyObjectProperty<double[]> cameraPositionJ2000Property();
+
+    // ── Tracking state (§4.6, §10.2) ──
+
+    /**
+     * Normalized screen coordinates {@code [x, y]} of the tracked body's center (§4.6).
+     *
+     * <p>{@code null} when no body is tracked, or when tracking has started but the JME render loop has not yet
+     * computed the first frame position. Non-null means tracking is active with a known anchor.
+     *
+     * <p>Updated each frame by the JME render thread. Read by the JavaFX status window to display whether a body is
+     * being tracked (§10.2).
+     */
+    ReadOnlyObjectProperty<double[]> trackingAnchorProperty();
 }

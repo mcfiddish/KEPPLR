@@ -167,6 +167,86 @@ class DefaultSimulationCommandsTest {
     }
 
     // ─────────────────────────────────────────────────────────────────
+    // Tracking anchor (§4.6)
+    // ─────────────────────────────────────────────────────────────────
+
+    @Nested
+    @DisplayName("Tracking anchor (§4.6)")
+    class TrackingAnchorTests {
+
+        @Test
+        @DisplayName("trackBody resets trackingAnchor to null (render loop sets it on next frame)")
+        void trackBodyResetsAnchor() {
+            // Simulate: a previous tracking session left an anchor behind
+            state.setTrackingAnchor(new double[] {0.5, 0.5});
+            commands.trackBody(MOON);
+            assertNull(state.trackingAnchorProperty().get(), "trackBody should reset anchor to null");
+            assertEquals(MOON, state.trackedBodyIdProperty().get());
+        }
+
+        @Test
+        @DisplayName("anchor persists in state once set by render thread")
+        void anchorPersistsAfterSet() {
+            commands.trackBody(MOON);
+            // Simulate render thread computing screen position for first frame
+            state.setTrackingAnchor(new double[] {0.12, -0.34});
+            assertArrayEquals(new double[] {0.12, -0.34}, state.trackingAnchorProperty().get(),
+                    "Anchor should persist until explicitly changed");
+        }
+
+        @Test
+        @DisplayName("stopTracking clears both trackedBodyId and trackingAnchor")
+        void stopTrackingClearsBothFields() {
+            commands.trackBody(MOON);
+            state.setTrackingAnchor(new double[] {0.1, 0.2});
+            commands.stopTracking();
+            assertEquals(-1, state.trackedBodyIdProperty().get(), "trackedBodyId should be -1");
+            assertNull(state.trackingAnchorProperty().get(), "trackingAnchor should be null");
+        }
+
+        @Test
+        @DisplayName("targetBody clears tracked body and anchor (§4.6)")
+        void targetBodyClearsAnchor() {
+            commands.trackBody(MOON);
+            state.setTrackingAnchor(new double[] {0.3, 0.4});
+            commands.targetBody(EARTH);
+            assertEquals(-1, state.trackedBodyIdProperty().get(), "trackedBodyId should be -1");
+            assertNull(state.trackingAnchorProperty().get(), "trackingAnchor should be null");
+        }
+
+        @Test
+        @DisplayName("focusBody clears tracked body and anchor (§4.6)")
+        void focusBodyClearsAnchor() {
+            commands.trackBody(MOON);
+            state.setTrackingAnchor(new double[] {0.6, -0.2});
+            commands.focusBody(EARTH);
+            assertEquals(-1, state.trackedBodyIdProperty().get(), "trackedBodyId should be -1");
+            assertNull(state.trackingAnchorProperty().get(), "trackingAnchor should be null");
+        }
+
+        @Test
+        @DisplayName("selectBody does not affect tracking anchor")
+        void selectBodyDoesNotAffectAnchor() {
+            commands.trackBody(MOON);
+            state.setTrackingAnchor(new double[] {0.0, 0.5});
+            commands.selectBody(EARTH);
+            assertEquals(MOON, state.trackedBodyIdProperty().get(), "trackedBodyId unchanged after selectBody");
+            assertArrayEquals(new double[] {0.0, 0.5}, state.trackingAnchorProperty().get(),
+                    "trackingAnchor unchanged after selectBody");
+        }
+
+        @Test
+        @DisplayName("trackBody on a different body while already tracking resets anchor to null")
+        void retrackDifferentBodyResetsAnchor() {
+            commands.trackBody(MOON);
+            state.setTrackingAnchor(new double[] {0.1, 0.1});
+            commands.trackBody(EARTH);
+            assertEquals(EARTH, state.trackedBodyIdProperty().get(), "trackedBodyId should switch to EARTH");
+            assertNull(state.trackingAnchorProperty().get(), "anchor should reset when switching tracked body");
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────────
     // Time commands (§1.2, §2.3)
     // ─────────────────────────────────────────────────────────────────
 

@@ -42,6 +42,10 @@ public final class DefaultSimulationState implements SimulationState {
     private final SimpleObjectProperty<double[]> cameraPositionJ2000 =
             new SimpleObjectProperty<>(new double[] {0.0, 0.0, 0.0});
 
+    // ── Tracking anchor (§4.6) ──
+
+    private final SimpleObjectProperty<double[]> trackingAnchor = new SimpleObjectProperty<>(null);
+
     // ── SimulationState read-only interface ──
 
     @Override
@@ -87,6 +91,11 @@ public final class DefaultSimulationState implements SimulationState {
     @Override
     public ReadOnlyObjectProperty<double[]> cameraPositionJ2000Property() {
         return cameraPositionJ2000;
+    }
+
+    @Override
+    public ReadOnlyObjectProperty<double[]> trackingAnchorProperty() {
+        return trackingAnchor;
     }
 
     // ── Setters (used by DefaultSimulationCommands and the simulation core) ──
@@ -142,5 +151,17 @@ public final class DefaultSimulationState implements SimulationState {
      */
     public void setCameraPositionJ2000(double[] pos) {
         cameraPositionJ2000.set(pos);
+    }
+
+    /**
+     * Set the tracking anchor to normalized screen coordinates, or {@code null} to clear it.
+     *
+     * <p>Called by the JME render thread each frame while a body is being tracked, and by
+     * {@link kepplr.commands.DefaultSimulationCommands} on any transition that ends tracking.
+     *
+     * @param anchor length-2 array [normalizedX, normalizedY], or {@code null}
+     */
+    public void setTrackingAnchor(double[] anchor) {
+        trackingAnchor.set(anchor);
     }
 }

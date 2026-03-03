@@ -42,8 +42,8 @@ public final class DefaultSimulationCommands implements SimulationCommands {
     }
 
     /**
-     * Focus the camera on a body (§4.5). Implicitly selects and targets the same body. Clears tracking because
-     * focusing implies a new point-at target (§4.6).
+     * Focus the camera on a body (§4.5). Implicitly selects and targets the same body. Clears tracking and the
+     * tracking anchor because focusing implies a new point-at target (§4.6).
      */
     @Override
     public void focusBody(int naifId) {
@@ -51,29 +51,36 @@ public final class DefaultSimulationCommands implements SimulationCommands {
         state.setFocusedBodyId(naifId);
         state.setTargetedBodyId(naifId);
         state.setTrackedBodyId(-1);
+        state.setTrackingAnchor(null);
     }
 
     /**
-     * Target a body — "point at" (§4.4). Implicitly selects the body. Clears tracking because a new point-at disables
-     * tracking (§4.6).
+     * Target a body — "point at" (§4.4). Implicitly selects the body. Clears tracking and the tracking anchor because
+     * a new point-at disables tracking (§4.6).
      */
     @Override
     public void targetBody(int naifId) {
         state.setSelectedBodyId(naifId);
         state.setTargetedBodyId(naifId);
         state.setTrackedBodyId(-1);
+        state.setTrackingAnchor(null);
     }
 
-    /** Track a body — lock its screen position (§4.6). */
+    /**
+     * Track a body — lock its screen position (§4.6). Resets the tracking anchor to {@code null} so the JME render
+     * loop establishes a fresh anchor on the next frame.
+     */
     @Override
     public void trackBody(int naifId) {
         state.setTrackedBodyId(naifId);
+        state.setTrackingAnchor(null);
     }
 
-    /** Stop tracking the currently tracked body (§4.6). */
+    /** Stop tracking the currently tracked body (§4.6). Clears both the tracked body ID and the anchor. */
     @Override
     public void stopTracking() {
         state.setTrackedBodyId(-1);
+        state.setTrackingAnchor(null);
     }
 
     /**
