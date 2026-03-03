@@ -44,4 +44,12 @@ public interface SimulationState {
 
     /** Name of the active camera frame (e.g., "J2000", "BODY_FIXED", "SYNODIC"). */
     ReadOnlyObjectProperty<String> cameraFrameProperty();
+
+    /**
+     * Heliocentric J2000 camera position in km as {@code [x, y, z]}, or {@code {0,0,0}} if not yet set (§1.4).
+     *
+     * <p>A {@code double[]} is used (not {@code VectorIJK}) to keep the state interface free of Picante types. The
+     * array is always length 3.
+     */
+    ReadOnlyObjectProperty<double[]> cameraPositionJ2000Property();
 }

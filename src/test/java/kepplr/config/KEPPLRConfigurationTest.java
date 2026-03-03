@@ -7,11 +7,8 @@ import java.util.List;
 import kepplr.ephemeris.KEPPLREphemeris;
 import kepplr.testsupport.TestHarness;
 import org.apache.commons.configuration2.PropertiesConfiguration;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Nested;
-import org.junit.jupiter.api.Test;
+import org.junit.Ignore;
+import org.junit.jupiter.api.*;
 import picante.time.TimeConversion;
 
 /**
@@ -22,8 +19,8 @@ import picante.time.TimeConversion;
 @DisplayName("KEPPLRConfiguration")
 class KEPPLRConfigurationTest {
 
-    @AfterEach
-    void tearDown() {
+    @BeforeEach
+    void setup() {
         TestHarness.resetSingleton();
     }
 
