@@ -4,6 +4,7 @@ import javafx.beans.property.ReadOnlyBooleanProperty;
 import javafx.beans.property.ReadOnlyDoubleProperty;
 import javafx.beans.property.ReadOnlyIntegerProperty;
 import javafx.beans.property.ReadOnlyObjectProperty;
+import kepplr.camera.CameraFrame;
 
 /**
  * Single source of truth for all UI-visible simulation state (REDESIGN.md §4, §10).
@@ -42,6 +43,27 @@ public interface SimulationState {
 
     // ── Camera state (§1.4, §1.5, §10.2) ──
 
-    /** Name of the active camera frame (e.g., "J2000", "BODY_FIXED", "SYNODIC"). */
-    ReadOnlyObjectProperty<String> cameraFrameProperty();
+    /** The active camera frame (§1.5). */
+    ReadOnlyObjectProperty<CameraFrame> cameraFrameProperty();
+
+    /**
+     * Heliocentric J2000 camera position in km as {@code [x, y, z]}, or {@code {0,0,0}} if not yet set (§1.4).
+     *
+     * <p>A {@code double[]} is used (not {@code VectorIJK}) to keep the state interface free of Picante types. The
+     * array is always length 3.
+     */
+    ReadOnlyObjectProperty<double[]> cameraPositionJ2000Property();
+
+    // ── Tracking state (§4.6, §10.2) ──
+
+    /**
+     * Normalized screen coordinates {@code [x, y]} of the tracked body's center (§4.6).
+     *
+     * <p>{@code null} when no body is tracked, or when tracking has started but the JME render loop has not yet
+     * computed the first frame position. Non-null means tracking is active with a known anchor.
+     *
+     * <p>Updated each frame by the JME render thread. Read by the JavaFX status window to display whether a body is
+     * being tracked (§10.2).
+     */
+    ReadOnlyObjectProperty<double[]> trackingAnchorProperty();
 }

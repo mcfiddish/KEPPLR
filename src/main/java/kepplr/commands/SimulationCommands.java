@@ -1,5 +1,7 @@
 package kepplr.commands;
 
+import kepplr.camera.CameraFrame;
+
 /**
  * All user-initiated actions enter the simulation through this interface (REDESIGN.md §4, CLAUDE.md Rule 2).
  *
@@ -69,4 +71,17 @@ public interface SimulationCommands {
      * @param paused {@code true} to pause, {@code false} to resume
      */
     void setPaused(boolean paused);
+
+    // ── Camera frame commands (§1.5) ──
+
+    /**
+     * Switch the active camera frame (§1.5).
+     *
+     * <p>{@link CameraFrame#BODY_FIXED} is deferred — implementations must throw {@link UnsupportedOperationException}
+     * until that frame is implemented.
+     *
+     * @param frame the desired camera frame
+     * @throws UnsupportedOperationException if {@code frame} is {@link CameraFrame#BODY_FIXED}
+     */
+    void setCameraFrame(CameraFrame frame);
 }
