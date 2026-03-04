@@ -1,10 +1,11 @@
 package kepplr.commands;
 
+import kepplr.camera.CameraFrame;
 import kepplr.state.DefaultSimulationState;
 
 /**
- * Concrete implementation of {@link SimulationCommands} that applies state-transition rules directly to a {@link
- * DefaultSimulationState} (REDESIGN.md §4, CLAUDE.md Rule 2).
+ * Concrete implementation of {@link SimulationCommands} that applies state-transition rules directly to a
+ * {@link DefaultSimulationState} (REDESIGN.md §4, CLAUDE.md Rule 2).
  *
  * <p>Holds a reference to {@link DefaultSimulationState} (not the read-only {@link kepplr.state.SimulationState}
  * interface) so it can call the mutable setters. This keeps the one-direction state flow intact: the UI only sees the
@@ -26,24 +27,20 @@ public final class DefaultSimulationCommands implements SimulationCommands {
 
     private final DefaultSimulationState state;
 
-    /**
-     * @param state mutable state object this instance will write to
-     */
+    /** @param state mutable state object this instance will write to */
     public DefaultSimulationCommands(DefaultSimulationState state) {
         this.state = state;
     }
 
-    /**
-     * Select a body for HUD display only (§4.3). Does not change focused, targeted, or tracked state.
-     */
+    /** Select a body for HUD display only (§4.3). Does not change focused, targeted, or tracked state. */
     @Override
     public void selectBody(int naifId) {
         state.setSelectedBodyId(naifId);
     }
 
     /**
-     * Focus the camera on a body (§4.5). Implicitly selects and targets the same body. Clears tracking and the
-     * tracking anchor because focusing implies a new point-at target (§4.6).
+     * Focus the camera on a body (§4.5). Implicitly selects and targets the same body. Clears tracking and the tracking
+     * anchor because focusing implies a new point-at target (§4.6).
      */
     @Override
     public void focusBody(int naifId) {
@@ -55,8 +52,8 @@ public final class DefaultSimulationCommands implements SimulationCommands {
     }
 
     /**
-     * Target a body — "point at" (§4.4). Implicitly selects the body. Clears tracking and the tracking anchor because
-     * a new point-at disables tracking (§4.6).
+     * Target a body — "point at" (§4.4). Implicitly selects the body. Clears tracking and the tracking anchor because a
+     * new point-at disables tracking (§4.6).
      */
     @Override
     public void targetBody(int naifId) {
@@ -67,8 +64,8 @@ public final class DefaultSimulationCommands implements SimulationCommands {
     }
 
     /**
-     * Track a body — lock its screen position (§4.6). Resets the tracking anchor to {@code null} so the JME render
-     * loop establishes a fresh anchor on the next frame.
+     * Track a body — lock its screen position (§4.6). Resets the tracking anchor to {@code null} so the JME render loop
+     * establishes a fresh anchor on the next frame.
      */
     @Override
     public void trackBody(int naifId) {
@@ -97,5 +94,20 @@ public final class DefaultSimulationCommands implements SimulationCommands {
     @Override
     public void setPaused(boolean paused) {
         state.setPaused(paused);
+    }
+
+    /**
+     * Switch the active camera frame (§1.5).
+     *
+     * <p>{@link CameraFrame#BODY_FIXED} is deferred — throws {@link UnsupportedOperationException} until implemented.
+     *
+     * @throws UnsupportedOperationException if {@code frame} is {@link CameraFrame#BODY_FIXED}
+     */
+    @Override
+    public void setCameraFrame(CameraFrame frame) {
+        if (frame == CameraFrame.BODY_FIXED) {
+            throw new UnsupportedOperationException("BODY_FIXED camera frame is not yet implemented");
+        }
+        state.setCameraFrame(frame);
     }
 }

@@ -70,4 +70,22 @@ public final class KepplrConstants {
 
     /** Sphere tessellation level (zSamples and radialSamples) for planet-class bodies. */
     public static final int BODY_SPHERE_TESSELLATION = 64;
+
+    // ── Synodic frame (REDESIGN.md §5.2) ──
+
+    /**
+     * Degenerate-case threshold for the synodic frame (§5.2).
+     *
+     * <p>If the magnitude of +X × +Z_candidate is less than this value (in radians, equivalent to |sin θ| for unit
+     * vectors), +X is considered too close to the secondary axis and Ecliptic J2000 +Z is used instead.
+     */
+    public static final double SYNODIC_DEGENERATE_THRESHOLD_RAD = 1e-3;
+
+    /**
+     * Obliquity of the ecliptic at the J2000 epoch (IAU 2000), in radians.
+     *
+     * <p>Used to derive the Ecliptic J2000 +Z axis = (0, −sin ε, cos ε) in J2000 coordinates, which is the fallback
+     * secondary axis for the synodic frame degenerate case (§5.2).
+     */
+    public static final double ECLIPTIC_J2000_OBLIQUITY_RAD = Math.toRadians(23.439291111);
 }

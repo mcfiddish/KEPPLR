@@ -7,7 +7,6 @@ import java.util.List;
 import kepplr.ephemeris.KEPPLREphemeris;
 import kepplr.testsupport.TestHarness;
 import org.apache.commons.configuration2.PropertiesConfiguration;
-import org.junit.Ignore;
 import org.junit.jupiter.api.*;
 import picante.time.TimeConversion;
 

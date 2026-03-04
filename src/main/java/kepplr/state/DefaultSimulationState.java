@@ -8,15 +8,16 @@ import javafx.beans.property.SimpleBooleanProperty;
 import javafx.beans.property.SimpleDoubleProperty;
 import javafx.beans.property.SimpleIntegerProperty;
 import javafx.beans.property.SimpleObjectProperty;
+import kepplr.camera.CameraFrame;
 import kepplr.util.KepplrConstants;
 
 /**
  * Concrete, mutable implementation of {@link SimulationState} (REDESIGN.md §4, §10).
  *
  * <p>Holds JavaFX properties for all UI-visible simulation state. The {@link SimulationState} interface exposes only
- * read-only views; this class provides public setters so the simulation core and {@link
- * kepplr.commands.DefaultSimulationCommands} can write state without violating the one-direction flow (CLAUDE.md Rule
- * 2).
+ * read-only views; this class provides public setters so the simulation core and
+ * {@link kepplr.commands.DefaultSimulationCommands} can write state without violating the one-direction flow (CLAUDE.md
+ * Rule 2).
  *
  * <p>All property mutations are expected to happen on the JME thread. The JavaFX bridge layer marshals reads to the FX
  * thread (CLAUDE.md Rule 4).
@@ -38,7 +39,7 @@ public final class DefaultSimulationState implements SimulationState {
 
     // ── Camera state (§1.4, §1.5) ──
 
-    private final SimpleObjectProperty<String> cameraFrame = new SimpleObjectProperty<>("J2000");
+    private final SimpleObjectProperty<CameraFrame> cameraFrame = new SimpleObjectProperty<>(CameraFrame.INERTIAL);
     private final SimpleObjectProperty<double[]> cameraPositionJ2000 =
             new SimpleObjectProperty<>(new double[] {0.0, 0.0, 0.0});
 
@@ -84,7 +85,7 @@ public final class DefaultSimulationState implements SimulationState {
     }
 
     @Override
-    public ReadOnlyObjectProperty<String> cameraFrameProperty() {
+    public ReadOnlyObjectProperty<CameraFrame> cameraFrameProperty() {
         return cameraFrame;
     }
 
@@ -139,8 +140,8 @@ public final class DefaultSimulationState implements SimulationState {
         paused.set(value);
     }
 
-    /** Set the active camera frame name (e.g., "J2000", "BODY_FIXED", "SYNODIC"). */
-    public void setCameraFrame(String frame) {
+    /** Set the active camera frame (§1.5). */
+    public void setCameraFrame(CameraFrame frame) {
         cameraFrame.set(frame);
     }
 

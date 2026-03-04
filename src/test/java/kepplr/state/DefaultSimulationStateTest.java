@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import kepplr.camera.CameraFrame;
 import kepplr.util.KepplrConstants;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -69,7 +70,8 @@ class DefaultSimulationStateTest {
         @Test
         @DisplayName("timeRate starts at DEFAULT_TIME_RATE")
         void timeRateInitial() {
-            assertEquals(KepplrConstants.DEFAULT_TIME_RATE, state.timeRateProperty().get());
+            assertEquals(
+                    KepplrConstants.DEFAULT_TIME_RATE, state.timeRateProperty().get());
         }
 
         @Test
@@ -79,9 +81,9 @@ class DefaultSimulationStateTest {
         }
 
         @Test
-        @DisplayName("cameraFrame starts at J2000")
+        @DisplayName("cameraFrame starts at INERTIAL")
         void cameraFrameInitial() {
-            assertEquals("J2000", state.cameraFrameProperty().get());
+            assertEquals(CameraFrame.INERTIAL, state.cameraFrameProperty().get());
         }
 
         @Test
@@ -165,8 +167,8 @@ class DefaultSimulationStateTest {
         @Test
         @DisplayName("setCameraFrame is reflected in cameraFrameProperty")
         void setCameraFrame() {
-            state.setCameraFrame("BODY_FIXED");
-            assertEquals("BODY_FIXED", state.cameraFrameProperty().get());
+            state.setCameraFrame(CameraFrame.SYNODIC);
+            assertEquals(CameraFrame.SYNODIC, state.cameraFrameProperty().get());
         }
 
         @Test

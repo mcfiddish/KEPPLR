@@ -2,6 +2,7 @@ package kepplr.commands;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import kepplr.camera.CameraFrame;
 import kepplr.state.DefaultSimulationState;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -190,7 +191,9 @@ class DefaultSimulationCommandsTest {
             commands.trackBody(MOON);
             // Simulate render thread computing screen position for first frame
             state.setTrackingAnchor(new double[] {0.12, -0.34});
-            assertArrayEquals(new double[] {0.12, -0.34}, state.trackingAnchorProperty().get(),
+            assertArrayEquals(
+                    new double[] {0.12, -0.34},
+                    state.trackingAnchorProperty().get(),
                     "Anchor should persist until explicitly changed");
         }
 
@@ -231,7 +234,9 @@ class DefaultSimulationCommandsTest {
             state.setTrackingAnchor(new double[] {0.0, 0.5});
             commands.selectBody(EARTH);
             assertEquals(MOON, state.trackedBodyIdProperty().get(), "trackedBodyId unchanged after selectBody");
-            assertArrayEquals(new double[] {0.0, 0.5}, state.trackingAnchorProperty().get(),
+            assertArrayEquals(
+                    new double[] {0.0, 0.5},
+                    state.trackingAnchorProperty().get(),
                     "trackingAnchor unchanged after selectBody");
         }
 
@@ -243,6 +248,49 @@ class DefaultSimulationCommandsTest {
             commands.trackBody(EARTH);
             assertEquals(EARTH, state.trackedBodyIdProperty().get(), "trackedBodyId should switch to EARTH");
             assertNull(state.trackingAnchorProperty().get(), "anchor should reset when switching tracked body");
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────────
+    // setCameraFrame (§1.5)
+    // ─────────────────────────────────────────────────────────────────
+
+    @Nested
+    @DisplayName("setCameraFrame (§1.5)")
+    class SetCameraFrameTests {
+
+        @Test
+        @DisplayName("setCameraFrame(INERTIAL) updates state to INERTIAL")
+        void setInertial() {
+            commands.setCameraFrame(CameraFrame.INERTIAL);
+            assertEquals(CameraFrame.INERTIAL, state.cameraFrameProperty().get());
+        }
+
+        @Test
+        @DisplayName("setCameraFrame(SYNODIC) updates state to SYNODIC")
+        void setSynodic() {
+            commands.setCameraFrame(CameraFrame.SYNODIC);
+            assertEquals(CameraFrame.SYNODIC, state.cameraFrameProperty().get());
+        }
+
+        @Test
+        @DisplayName("setCameraFrame(BODY_FIXED) throws UnsupportedOperationException (deferred, §1.5)")
+        void setBodyFixedThrows() {
+            assertThrows(
+                    UnsupportedOperationException.class,
+                    () -> commands.setCameraFrame(CameraFrame.BODY_FIXED),
+                    "BODY_FIXED frame should throw UnsupportedOperationException until implemented");
+        }
+
+        @Test
+        @DisplayName("setCameraFrame(BODY_FIXED) does not mutate state when it throws")
+        void setBodyFixedDoesNotMutateState() {
+            commands.setCameraFrame(CameraFrame.SYNODIC);
+            assertThrows(UnsupportedOperationException.class, () -> commands.setCameraFrame(CameraFrame.BODY_FIXED));
+            assertEquals(
+                    CameraFrame.SYNODIC,
+                    state.cameraFrameProperty().get(),
+                    "State should remain SYNODIC after failed BODY_FIXED attempt");
         }
     }
 

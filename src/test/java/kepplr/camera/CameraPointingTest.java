@@ -62,16 +62,13 @@ class CameraPointingTest {
 
             // Geometric direction from Earth to Moon (no correction)
             KEPPLREphemeris ephemeris = KEPPLRConfiguration.getInstance().getEphemeris();
-            VectorIJK geoRaw =
-                    ephemeris.getObserverToTargetJ2000(EARTH, MOON, testEt, AberrationCorrection.NONE);
+            VectorIJK geoRaw = ephemeris.getObserverToTargetJ2000(EARTH, MOON, testEt, AberrationCorrection.NONE);
             assertNotNull(geoRaw);
             double geoLen = geoRaw.getLength();
             VectorIJK geoDir = new VectorIJK(geoRaw.getI() / geoLen, geoRaw.getJ() / geoLen, geoRaw.getK() / geoLen);
 
             // Angle between LT+S and geometric directions
-            double dot = ltsDir.getI() * geoDir.getI()
-                    + ltsDir.getJ() * geoDir.getJ()
-                    + ltsDir.getK() * geoDir.getK();
+            double dot = ltsDir.getI() * geoDir.getI() + ltsDir.getJ() * geoDir.getJ() + ltsDir.getK() * geoDir.getK();
             dot = Math.min(1.0, Math.max(-1.0, dot));
             double angleRad = Math.acos(dot);
             double angleSec = Math.toDegrees(angleRad) * 3600.0;
@@ -109,8 +106,7 @@ class CameraPointingTest {
             VectorIJK helioRaw = ephemeris.getHeliocentricPositionJ2000(MOON, testEt);
             assertNotNull(helioRaw);
             double len = helioRaw.getLength();
-            VectorIJK expected =
-                    new VectorIJK(helioRaw.getI() / len, helioRaw.getJ() / len, helioRaw.getK() / len);
+            VectorIJK expected = new VectorIJK(helioRaw.getI() / len, helioRaw.getJ() / len, helioRaw.getK() / len);
 
             assertEquals(expected.getI(), dir.getI(), 1e-10, "I component should match heliocentric unit direction");
             assertEquals(expected.getJ(), dir.getJ(), 1e-10, "J component should match heliocentric unit direction");

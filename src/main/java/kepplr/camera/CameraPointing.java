@@ -13,16 +13,16 @@ import picante.mechanics.providers.aberrated.AberrationCorrection;
  * <h3>Light-time and aberration policy (§6.2)</h3>
  *
  * <ul>
- *   <li>When a focus body exists ({@code focusBodyId != -1}), applies {@code LT+S} aberration correction with the
- *       focus body center as the observer.
+ *   <li>When a focus body exists ({@code focusBodyId != -1}), applies {@code LT+S} aberration correction with the focus
+ *       body center as the observer.
  *   <li>When no focus body exists, returns the geometric heliocentric direction (Sun as implicit origin, no
  *       correction).
  * </ul>
  *
  * <h3>Limitation (§6.3)</h3>
  *
- * <p>If the camera is very far from the focus body, LT+S correction may be inaccurate. No special fallback is
- * required beyond the policy above.
+ * <p>If the camera is very far from the focus body, LT+S correction may be inaccurate. No special fallback is required
+ * beyond the policy above.
  */
 public final class CameraPointing {
 

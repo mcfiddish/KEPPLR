@@ -4,6 +4,7 @@ import javafx.beans.property.ReadOnlyBooleanProperty;
 import javafx.beans.property.ReadOnlyDoubleProperty;
 import javafx.beans.property.ReadOnlyIntegerProperty;
 import javafx.beans.property.ReadOnlyObjectProperty;
+import kepplr.camera.CameraFrame;
 
 /**
  * Single source of truth for all UI-visible simulation state (REDESIGN.md §4, §10).
@@ -42,8 +43,8 @@ public interface SimulationState {
 
     // ── Camera state (§1.4, §1.5, §10.2) ──
 
-    /** Name of the active camera frame (e.g., "J2000", "BODY_FIXED", "SYNODIC"). */
-    ReadOnlyObjectProperty<String> cameraFrameProperty();
+    /** The active camera frame (§1.5). */
+    ReadOnlyObjectProperty<CameraFrame> cameraFrameProperty();
 
     /**
      * Heliocentric J2000 camera position in km as {@code [x, y, z]}, or {@code {0,0,0}} if not yet set (§1.4).
