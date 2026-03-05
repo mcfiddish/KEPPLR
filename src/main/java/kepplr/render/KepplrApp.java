@@ -16,9 +16,12 @@ import com.jme3.scene.shape.Sphere;
 import com.jme3.system.AppSettings;
 import com.jme3.texture.Texture;
 import java.nio.file.Path;
+import java.time.Instant;
 import kepplr.config.BodyBlock;
 import kepplr.config.KEPPLRConfiguration;
+import kepplr.core.SimulationClock;
 import kepplr.ephemeris.KEPPLREphemeris;
+import kepplr.state.DefaultSimulationState;
 import kepplr.util.KepplrConstants;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -51,6 +54,9 @@ public class KepplrApp extends SimpleApplication {
      */
     private final double[] cameraHelioJ2000 = new double[3];
 
+    private DefaultSimulationState simulationState;
+    private SimulationClock simulationClock;
+
     @Override
     public void simpleInitApp() {
         setLostFocusBehavior(LostFocusBehavior.Disabled);
@@ -60,6 +66,12 @@ public class KepplrApp extends SimpleApplication {
         viewPort.setBackgroundColor(ColorRGBA.Black);
 
         KEPPLREphemeris eph = KEPPLRConfiguration.getInstance().getEphemeris();
+
+        // Initialise time model: start at current wall time converted to TDB (§1.2)
+        double startET = KEPPLRConfiguration.getInstance()
+                .getTimeConversion().instantToTDB(Instant.now());
+        simulationState = new DefaultSimulationState();
+        simulationClock = new SimulationClock(simulationState, startET);
 
         VectorIJK earthHelioPos = eph.getHeliocentricPositionJ2000(EARTH_NAIF_ID, FIXED_ET);
         if (earthHelioPos == null) {
@@ -84,6 +96,11 @@ public class KepplrApp extends SimpleApplication {
         rootNode.attachChild(earthNode);
 
         addLighting(eph);
+    }
+
+    @Override
+    public void simpleUpdate(float tpf) {
+        simulationClock.advance();
     }
 
     private Node createEarthNode(KEPPLREphemeris eph, VectorIJK earthHelioPos) {

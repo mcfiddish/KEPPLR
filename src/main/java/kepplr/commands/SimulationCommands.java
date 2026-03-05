@@ -72,6 +72,24 @@ public interface SimulationCommands {
      */
     void setPaused(boolean paused);
 
+    /**
+     * Jump the simulation clock to the specified ET (§1.2).
+     *
+     * <p>The time rate and paused state are preserved; only the current epoch changes.
+     *
+     * @param et target ET (TDB seconds past J2000)
+     */
+    void setET(double et);
+
+    /**
+     * Convert a UTC string to ET and jump the simulation clock to that epoch (§1.2).
+     *
+     * <p>The time rate and paused state are preserved.
+     *
+     * @param utcString UTC time string in a format accepted by Picante (e.g., {@code "2015 Jul 14 07:59:00"})
+     */
+    void setUTC(String utcString);
+
     // ── Camera frame commands (§1.5) ──
 
     /**

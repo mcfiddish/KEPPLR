@@ -41,6 +41,15 @@ public interface SimulationState {
     /** Whether the simulation clock is paused (§1.2). */
     ReadOnlyBooleanProperty pausedProperty();
 
+    /**
+     * Signed simulation seconds elapsed in the most recent frame (§1.2, §2.3).
+     *
+     * <p>Positive when time is advancing forward, negative when running in reverse. Zero on the
+     * first frame and after an explicit {@code setET()} or {@code setUTC()} jump. Updated each
+     * frame by {@link kepplr.core.SimulationClock#advance()} on the JME thread.
+     */
+    ReadOnlyDoubleProperty deltaSimSecondsProperty();
+
     // ── Camera state (§1.4, §1.5, §10.2) ──
 
     /** The active camera frame (§1.5). */

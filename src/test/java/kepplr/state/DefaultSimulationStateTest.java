@@ -102,6 +102,12 @@ class DefaultSimulationStateTest {
         void trackingAnchorInitial() {
             assertNull(state.trackingAnchorProperty().get());
         }
+
+        @Test
+        @DisplayName("deltaSimSeconds starts at 0.0")
+        void deltaSimSecondsInitial() {
+            assertEquals(0.0, state.deltaSimSecondsProperty().get());
+        }
     }
 
     // ─────────────────────────────────────────────────────────────────
@@ -193,6 +199,13 @@ class DefaultSimulationStateTest {
             state.setTrackingAnchor(new double[] {0.1, 0.2});
             state.setTrackingAnchor(null);
             assertNull(state.trackingAnchorProperty().get());
+        }
+
+        @Test
+        @DisplayName("setDeltaSimSeconds is reflected in deltaSimSecondsProperty")
+        void setDeltaSimSeconds() {
+            state.setDeltaSimSeconds(42.5);
+            assertEquals(42.5, state.deltaSimSecondsProperty().get());
         }
     }
 
