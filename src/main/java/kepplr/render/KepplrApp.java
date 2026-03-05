@@ -18,6 +18,7 @@ import com.jme3.texture.Texture;
 import java.nio.file.Path;
 import java.time.Instant;
 import javafx.application.Platform;
+import kepplr.commands.DefaultSimulationCommands;
 import kepplr.config.BodyBlock;
 import kepplr.config.KEPPLRConfiguration;
 import kepplr.core.SimulationClock;
@@ -49,7 +50,6 @@ public class KepplrApp extends SimpleApplication {
     private static final Logger logger = LogManager.getLogger();
 
     private static final int EARTH_NAIF_ID = 399;
-    private static final double FIXED_ET = 0.0;
     private static final float CAMERA_OFFSET_KM = 50_000f;
 
     /**
@@ -61,6 +61,12 @@ public class KepplrApp extends SimpleApplication {
     private DefaultSimulationState simulationState;
     private SimulationClock simulationClock;
     private KepplrHud hud;
+
+    /** Scene-graph node whose translation is updated each frame to Earth's camera-relative position. */
+    private Node earthEphemerisNode;
+
+    /** Scene-graph node whose rotation is updated each frame to the J2000 → IAU_EARTH frame transform. */
+    private Node earthBodyFixedNode;
 
     @Override
     public void simpleInitApp() {
@@ -78,12 +84,16 @@ public class KepplrApp extends SimpleApplication {
         simulationClock = new SimulationClock(simulationState, startET);
 
         // Show JavaFX status window — Platform was already started in main() on the main thread
+        DefaultSimulationCommands commands = new DefaultSimulationCommands(simulationState, simulationClock);
         SimulationStateFxBridge bridge = new SimulationStateFxBridge(simulationState);
-        Platform.runLater(() -> new KepplrStatusWindow(bridge).show());
+        Platform.runLater(() -> new KepplrStatusWindow(bridge, commands).show());
 
-        VectorIJK earthHelioPos = eph.getHeliocentricPositionJ2000(EARTH_NAIF_ID, FIXED_ET);
+        // Default camera target: focus on Earth at launch (§4.5)
+        commands.focusBody(EARTH_NAIF_ID);
+
+        VectorIJK earthHelioPos = eph.getHeliocentricPositionJ2000(EARTH_NAIF_ID, startET);
         if (earthHelioPos == null) {
-            logger.error("Cannot resolve Earth (NAIF {}) at ET={}", EARTH_NAIF_ID, FIXED_ET);
+            logger.error("Cannot resolve Earth (NAIF {}) at ET={}", EARTH_NAIF_ID, startET);
             stop();
             return;
         }
@@ -101,7 +111,7 @@ public class KepplrApp extends SimpleApplication {
         cam.setLocation(Vector3f.ZERO);
         cam.lookAt(toScenePosition(earthHelioPos), Vector3f.UNIT_Y);
 
-        Node earthNode = createEarthNode(eph, earthHelioPos);
+        Node earthNode = createEarthNode(eph, earthHelioPos, startET); // sets earthEphemerisNode + earthBodyFixedNode
         rootNode.attachChild(earthNode);
 
         addLighting(eph);
@@ -112,10 +122,26 @@ public class KepplrApp extends SimpleApplication {
     @Override
     public void simpleUpdate(float tpf) {
         simulationClock.advance();
-        hud.update(simulationState.currentEtProperty().get());
+        double currentEt = simulationState.currentEtProperty().get();
+        updateEarthSceneGraph(currentEt);
+        hud.update(currentEt);
     }
 
-    private Node createEarthNode(KEPPLREphemeris eph, VectorIJK earthHelioPos) {
+    private void updateEarthSceneGraph(double et) {
+        KEPPLREphemeris eph = KEPPLRConfiguration.getInstance().getEphemeris();
+        VectorIJK earthHelioPos = eph.getHeliocentricPositionJ2000(EARTH_NAIF_ID, et);
+        if (earthHelioPos == null) {
+            logger.warn("Cannot resolve Earth (NAIF {}) at ET={}; skipping frame update", EARTH_NAIF_ID, et);
+            return;
+        }
+        earthEphemerisNode.setLocalTranslation(toScenePosition(earthHelioPos));
+        RotationMatrixIJK rot = eph.getJ2000ToBodyFixedRotation(EARTH_NAIF_ID, et);
+        if (rot != null) {
+            earthBodyFixedNode.setLocalRotation(toJmeQuaternion(rot));
+        }
+    }
+
+    private Node createEarthNode(KEPPLREphemeris eph, VectorIJK earthHelioPos, double et) {
         // Resolve Earth's physical radius for mesh scaling
         EphemerisID earthId = eph.getSpiceBundle().getObject(EARTH_NAIF_ID);
         Ellipsoid shape = eph.getShape(earthId);
@@ -150,7 +176,7 @@ public class KepplrApp extends SimpleApplication {
 
         // Body-fixed rotation: J2000 → IAU_EARTH
         Node bodyFixedNode = new Node("Earth-body-fixed");
-        RotationMatrixIJK j2000ToBodyFixed = eph.getJ2000ToBodyFixedRotation(EARTH_NAIF_ID, FIXED_ET);
+        RotationMatrixIJK j2000ToBodyFixed = eph.getJ2000ToBodyFixedRotation(EARTH_NAIF_ID, et);
         if (j2000ToBodyFixed != null) {
             bodyFixedNode.setLocalRotation(toJmeQuaternion(j2000ToBodyFixed));
         } else {
@@ -159,11 +185,13 @@ public class KepplrApp extends SimpleApplication {
         bodyFixedNode.attachChild(textureAlignNode);
 
         // Ephemeris node: positioned at Earth's camera-relative location
-        Node ephemerisNode = new Node("Earth-ephemeris");
-        ephemerisNode.setLocalTranslation(toScenePosition(earthHelioPos));
-        ephemerisNode.attachChild(bodyFixedNode);
+        // Store references so simpleUpdate() can reposition them each frame
+        earthBodyFixedNode = bodyFixedNode;
+        earthEphemerisNode = new Node("Earth-ephemeris");
+        earthEphemerisNode.setLocalTranslation(toScenePosition(earthHelioPos));
+        earthEphemerisNode.attachChild(bodyFixedNode);
 
-        return ephemerisNode;
+        return earthEphemerisNode;
     }
 
     private Material createEarthMaterial() {
