@@ -44,9 +44,9 @@ public interface SimulationState {
     /**
      * Signed simulation seconds elapsed in the most recent frame (§1.2, §2.3).
      *
-     * <p>Positive when time is advancing forward, negative when running in reverse. Zero on the
-     * first frame and after an explicit {@code setET()} or {@code setUTC()} jump. Updated each
-     * frame by {@link kepplr.core.SimulationClock#advance()} on the JME thread.
+     * <p>Positive when time is advancing forward, negative when running in reverse. Zero on the first frame and after
+     * an explicit {@code setET()} or {@code setUTC()} jump. Updated each frame by
+     * {@link kepplr.core.SimulationClock#advance()} on the JME thread.
      */
     ReadOnlyDoubleProperty deltaSimSecondsProperty();
 

@@ -17,14 +17,19 @@ import com.jme3.system.AppSettings;
 import com.jme3.texture.Texture;
 import java.nio.file.Path;
 import java.time.Instant;
+import javafx.application.Platform;
+import kepplr.commands.DefaultSimulationCommands;
 import kepplr.config.BodyBlock;
 import kepplr.config.KEPPLRConfiguration;
 import kepplr.core.SimulationClock;
 import kepplr.ephemeris.KEPPLREphemeris;
 import kepplr.state.DefaultSimulationState;
+import kepplr.ui.KepplrStatusWindow;
+import kepplr.ui.SimulationStateFxBridge;
 import kepplr.util.KepplrConstants;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.lwjgl.glfw.GLFW;
 import picante.math.vectorspace.RotationMatrixIJK;
 import picante.math.vectorspace.VectorIJK;
 import picante.mechanics.EphemerisID;
@@ -45,7 +50,6 @@ public class KepplrApp extends SimpleApplication {
     private static final Logger logger = LogManager.getLogger();
 
     private static final int EARTH_NAIF_ID = 399;
-    private static final double FIXED_ET = 0.0;
     private static final float CAMERA_OFFSET_KM = 50_000f;
 
     /**
@@ -56,6 +60,13 @@ public class KepplrApp extends SimpleApplication {
 
     private DefaultSimulationState simulationState;
     private SimulationClock simulationClock;
+    private KepplrHud hud;
+
+    /** Scene-graph node whose translation is updated each frame to Earth's camera-relative position. */
+    private Node earthEphemerisNode;
+
+    /** Scene-graph node whose rotation is updated each frame to the J2000 → IAU_EARTH frame transform. */
+    private Node earthBodyFixedNode;
 
     @Override
     public void simpleInitApp() {
@@ -68,14 +79,21 @@ public class KepplrApp extends SimpleApplication {
         KEPPLREphemeris eph = KEPPLRConfiguration.getInstance().getEphemeris();
 
         // Initialise time model: start at current wall time converted to TDB (§1.2)
-        double startET = KEPPLRConfiguration.getInstance()
-                .getTimeConversion().instantToTDB(Instant.now());
+        double startET = KEPPLRConfiguration.getInstance().getTimeConversion().instantToTDB(Instant.now());
         simulationState = new DefaultSimulationState();
         simulationClock = new SimulationClock(simulationState, startET);
 
-        VectorIJK earthHelioPos = eph.getHeliocentricPositionJ2000(EARTH_NAIF_ID, FIXED_ET);
+        // Show JavaFX status window — Platform was already started in main() on the main thread
+        DefaultSimulationCommands commands = new DefaultSimulationCommands(simulationState, simulationClock);
+        SimulationStateFxBridge bridge = new SimulationStateFxBridge(simulationState);
+        Platform.runLater(() -> new KepplrStatusWindow(bridge, commands).show());
+
+        // Default camera target: focus on Earth at launch (§4.5)
+        commands.focusBody(EARTH_NAIF_ID);
+
+        VectorIJK earthHelioPos = eph.getHeliocentricPositionJ2000(EARTH_NAIF_ID, startET);
         if (earthHelioPos == null) {
-            logger.error("Cannot resolve Earth (NAIF {}) at ET={}", EARTH_NAIF_ID, FIXED_ET);
+            logger.error("Cannot resolve Earth (NAIF {}) at ET={}", EARTH_NAIF_ID, startET);
             stop();
             return;
         }
@@ -84,6 +102,7 @@ public class KepplrApp extends SimpleApplication {
         cameraHelioJ2000[0] = earthHelioPos.getI();
         cameraHelioJ2000[1] = earthHelioPos.getJ();
         cameraHelioJ2000[2] = earthHelioPos.getK() + CAMERA_OFFSET_KM;
+        simulationState.setCameraPositionJ2000(cameraHelioJ2000);
 
         // Frustum: single viewport, mid-frustum range
         cam.setFrustumPerspective(
@@ -92,18 +111,37 @@ public class KepplrApp extends SimpleApplication {
         cam.setLocation(Vector3f.ZERO);
         cam.lookAt(toScenePosition(earthHelioPos), Vector3f.UNIT_Y);
 
-        Node earthNode = createEarthNode(eph, earthHelioPos);
+        Node earthNode = createEarthNode(eph, earthHelioPos, startET); // sets earthEphemerisNode + earthBodyFixedNode
         rootNode.attachChild(earthNode);
 
         addLighting(eph);
+
+        hud = new KepplrHud(guiNode, assetManager, cam);
     }
 
     @Override
     public void simpleUpdate(float tpf) {
         simulationClock.advance();
+        double currentEt = simulationState.currentEtProperty().get();
+        updateEarthSceneGraph(currentEt);
+        hud.update(currentEt);
     }
 
-    private Node createEarthNode(KEPPLREphemeris eph, VectorIJK earthHelioPos) {
+    private void updateEarthSceneGraph(double et) {
+        KEPPLREphemeris eph = KEPPLRConfiguration.getInstance().getEphemeris();
+        VectorIJK earthHelioPos = eph.getHeliocentricPositionJ2000(EARTH_NAIF_ID, et);
+        if (earthHelioPos == null) {
+            logger.warn("Cannot resolve Earth (NAIF {}) at ET={}; skipping frame update", EARTH_NAIF_ID, et);
+            return;
+        }
+        earthEphemerisNode.setLocalTranslation(toScenePosition(earthHelioPos));
+        RotationMatrixIJK rot = eph.getJ2000ToBodyFixedRotation(EARTH_NAIF_ID, et);
+        if (rot != null) {
+            earthBodyFixedNode.setLocalRotation(toJmeQuaternion(rot));
+        }
+    }
+
+    private Node createEarthNode(KEPPLREphemeris eph, VectorIJK earthHelioPos, double et) {
         // Resolve Earth's physical radius for mesh scaling
         EphemerisID earthId = eph.getSpiceBundle().getObject(EARTH_NAIF_ID);
         Ellipsoid shape = eph.getShape(earthId);
@@ -138,7 +176,7 @@ public class KepplrApp extends SimpleApplication {
 
         // Body-fixed rotation: J2000 → IAU_EARTH
         Node bodyFixedNode = new Node("Earth-body-fixed");
-        RotationMatrixIJK j2000ToBodyFixed = eph.getJ2000ToBodyFixedRotation(EARTH_NAIF_ID, FIXED_ET);
+        RotationMatrixIJK j2000ToBodyFixed = eph.getJ2000ToBodyFixedRotation(EARTH_NAIF_ID, et);
         if (j2000ToBodyFixed != null) {
             bodyFixedNode.setLocalRotation(toJmeQuaternion(j2000ToBodyFixed));
         } else {
@@ -147,11 +185,13 @@ public class KepplrApp extends SimpleApplication {
         bodyFixedNode.attachChild(textureAlignNode);
 
         // Ephemeris node: positioned at Earth's camera-relative location
-        Node ephemerisNode = new Node("Earth-ephemeris");
-        ephemerisNode.setLocalTranslation(toScenePosition(earthHelioPos));
-        ephemerisNode.attachChild(bodyFixedNode);
+        // Store references so simpleUpdate() can reposition them each frame
+        earthBodyFixedNode = bodyFixedNode;
+        earthEphemerisNode = new Node("Earth-ephemeris");
+        earthEphemerisNode.setLocalTranslation(toScenePosition(earthHelioPos));
+        earthEphemerisNode.attachChild(bodyFixedNode);
 
-        return ephemerisNode;
+        return earthEphemerisNode;
     }
 
     private Material createEarthMaterial() {
@@ -222,6 +262,18 @@ public class KepplrApp extends SimpleApplication {
     }
 
     public static void main(String[] args) {
+        // On Linux with both DISPLAY and WAYLAND_DISPLAY set, GLFW defaults to Wayland and loads
+        // libdecor-gtk for window decorations.  If JavaFX then forces GTK to X11 mode, libdecor-gtk
+        // fails to initialise and its fallback path segfaults (known libdecor bug).  Pinning GLFW to
+        // X11 before glfwInit() is called avoids Wayland/libdecor entirely; XWayland provides the
+        // X11 display.  This hint is a no-op on non-Linux platforms.
+        GLFW.glfwInitHint(GLFW.GLFW_PLATFORM, GLFW.GLFW_PLATFORM_X11);
+
+        // Start the JavaFX application thread on the main thread.  GTK initialisation (which
+        // Platform.startup triggers internally) must happen on the main thread on Linux; calling it
+        // later from the JME render thread can cause GTK assertion failures and crashes.
+        Platform.startup(() -> {});
+
         KEPPLRConfiguration.getTemplate();
 
         KepplrApp app = new KepplrApp();
