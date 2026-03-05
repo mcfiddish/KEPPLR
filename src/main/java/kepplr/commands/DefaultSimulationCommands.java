@@ -1,6 +1,7 @@
 package kepplr.commands;
 
 import kepplr.camera.CameraFrame;
+import kepplr.core.SimulationClock;
 import kepplr.state.DefaultSimulationState;
 
 /**
@@ -19,17 +20,24 @@ import kepplr.state.DefaultSimulationState;
  *   <li>{@code targetBody(id)}: sets selected and targeted; clears tracked (§4.4, §4.6)
  *   <li>{@code trackBody(id)}: sets tracked only (§4.6)
  *   <li>{@code stopTracking()}: clears tracked (§4.6)
- *   <li>{@code setTimeRate(r)}: absolute assignment — "3x" means {@code timeRate = 3.0} (§2.3)
- *   <li>{@code setPaused(b)}: direct assignment (§1.2)
+ *   <li>{@code setTimeRate(r)}: delegates to {@link SimulationClock} — absolute, no-jump (§2.3)
+ *   <li>{@code setPaused(b)}: delegates to {@link SimulationClock} — clamp/resume logic (§1.2)
+ *   <li>{@code setET(et)}: delegates to {@link SimulationClock} (§1.2)
+ *   <li>{@code setUTC(s)}: converts via Picante then delegates to {@link SimulationClock} (§1.2)
  * </ul>
  */
 public final class DefaultSimulationCommands implements SimulationCommands {
 
     private final DefaultSimulationState state;
+    private final SimulationClock clock;
 
-    /** @param state mutable state object this instance will write to */
-    public DefaultSimulationCommands(DefaultSimulationState state) {
+    /**
+     * @param state mutable state object this instance will write to for interaction commands
+     * @param clock simulation clock this instance will delegate time commands to
+     */
+    public DefaultSimulationCommands(DefaultSimulationState state, SimulationClock clock) {
         this.state = state;
+        this.clock = clock;
     }
 
     /** Select a body for HUD display only (§4.3). Does not change focused, targeted, or tracked state. */
@@ -83,17 +91,35 @@ public final class DefaultSimulationCommands implements SimulationCommands {
     /**
      * Set the simulation time rate as an absolute value (§2.3).
      *
-     * <p>"3x" means {@code timeRate = 3.0}, <b>not</b> "multiply current rate by 3".
+     * <p>"3x" means {@code timeRate = 3.0}, <b>not</b> "multiply current rate by 3". Delegates to
+     * {@link SimulationClock} which replaces the anchor atomically so no ET jump occurs.
      */
     @Override
     public void setTimeRate(double simSecondsPerWallSecond) {
-        state.setTimeRate(simSecondsPerWallSecond);
+        clock.setTimeRate(simSecondsPerWallSecond);
     }
 
-    /** Pause or unpause the simulation clock (§1.2). */
+    /** Pause or unpause the simulation clock (§1.2). Delegates to {@link SimulationClock}. */
     @Override
     public void setPaused(boolean paused) {
-        state.setPaused(paused);
+        clock.setPaused(paused);
+    }
+
+    /** Jump the simulation clock to the specified ET (§1.2). Delegates to {@link SimulationClock}. */
+    @Override
+    public void setET(double et) {
+        clock.setET(et);
+    }
+
+    /**
+     * Convert a UTC string to ET and jump the clock to that epoch (§1.2).
+     *
+     * <p>Delegates to {@link SimulationClock#setUTC(String)} which acquires ephemeris at
+     * point-of-use (CLAUDE.md Rule 3).
+     */
+    @Override
+    public void setUTC(String utcString) {
+        clock.setUTC(utcString);
     }
 
     /**

@@ -3,7 +3,10 @@ package kepplr.commands;
 import static org.junit.jupiter.api.Assertions.*;
 
 import kepplr.camera.CameraFrame;
+import kepplr.config.KEPPLRConfiguration;
+import kepplr.core.SimulationClock;
 import kepplr.state.DefaultSimulationState;
+import kepplr.testsupport.TestHarness;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -29,7 +32,8 @@ class DefaultSimulationCommandsTest {
     @BeforeEach
     void setUp() {
         state = new DefaultSimulationState();
-        commands = new DefaultSimulationCommands(state);
+        SimulationClock clock = new SimulationClock(state, 0.0);
+        commands = new DefaultSimulationCommands(state, clock);
     }
 
     // ─────────────────────────────────────────────────────────────────
@@ -324,6 +328,27 @@ class DefaultSimulationCommandsTest {
             assertTrue(state.pausedProperty().get(), "should be paused after setPaused(true)");
             commands.setPaused(false);
             assertFalse(state.pausedProperty().get(), "should be unpaused after setPaused(false)");
+        }
+
+        @Test
+        @DisplayName("setET updates currentEt in state")
+        void setETUpdatesState() {
+            commands.setET(489297600.0);
+            assertEquals(489297600.0, state.currentEtProperty().get(),
+                    "currentEt should reflect setET value");
+        }
+
+        @Test
+        @DisplayName("setUTC converts known UTC string and updates currentEt (requires SPICE kernel)")
+        void setUTCUpdatesState() {
+            TestHarness.resetSingleton();
+            KEPPLRConfiguration.getTestTemplate();
+
+            double expectedET = TestHarness.getTestEpoch();
+            commands.setUTC("2015 Jul 14 07:59:00");
+
+            assertEquals(expectedET, state.currentEtProperty().get(), 1e-3,
+                    "setUTC must set currentEt to the ET matching the UTC string");
         }
     }
 }

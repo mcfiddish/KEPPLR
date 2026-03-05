@@ -36,6 +36,7 @@ public final class DefaultSimulationState implements SimulationState {
     private final SimpleDoubleProperty currentEt = new SimpleDoubleProperty(0.0);
     private final SimpleDoubleProperty timeRate = new SimpleDoubleProperty(KepplrConstants.DEFAULT_TIME_RATE);
     private final SimpleBooleanProperty paused = new SimpleBooleanProperty(false);
+    private final SimpleDoubleProperty deltaSimSeconds = new SimpleDoubleProperty(0.0);
 
     // ── Camera state (§1.4, §1.5) ──
 
@@ -82,6 +83,11 @@ public final class DefaultSimulationState implements SimulationState {
     @Override
     public ReadOnlyBooleanProperty pausedProperty() {
         return paused;
+    }
+
+    @Override
+    public ReadOnlyDoubleProperty deltaSimSecondsProperty() {
+        return deltaSimSeconds;
     }
 
     @Override
@@ -138,6 +144,15 @@ public final class DefaultSimulationState implements SimulationState {
     /** Set the paused state of the simulation clock. */
     public void setPaused(boolean value) {
         paused.set(value);
+    }
+
+    /**
+     * Set the signed simulation seconds elapsed in the most recent frame.
+     *
+     * <p>Called by {@link kepplr.core.SimulationClock#advance()} on the JME thread each frame.
+     */
+    public void setDeltaSimSeconds(double delta) {
+        deltaSimSeconds.set(delta);
     }
 
     /** Set the active camera frame (§1.5). */
