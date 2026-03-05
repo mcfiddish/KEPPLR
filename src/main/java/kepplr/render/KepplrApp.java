@@ -17,14 +17,18 @@ import com.jme3.system.AppSettings;
 import com.jme3.texture.Texture;
 import java.nio.file.Path;
 import java.time.Instant;
+import javafx.application.Platform;
 import kepplr.config.BodyBlock;
 import kepplr.config.KEPPLRConfiguration;
 import kepplr.core.SimulationClock;
 import kepplr.ephemeris.KEPPLREphemeris;
 import kepplr.state.DefaultSimulationState;
+import kepplr.ui.KepplrStatusWindow;
+import kepplr.ui.SimulationStateFxBridge;
 import kepplr.util.KepplrConstants;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.lwjgl.glfw.GLFW;
 import picante.math.vectorspace.RotationMatrixIJK;
 import picante.math.vectorspace.VectorIJK;
 import picante.mechanics.EphemerisID;
@@ -56,6 +60,7 @@ public class KepplrApp extends SimpleApplication {
 
     private DefaultSimulationState simulationState;
     private SimulationClock simulationClock;
+    private KepplrHud hud;
 
     @Override
     public void simpleInitApp() {
@@ -68,10 +73,13 @@ public class KepplrApp extends SimpleApplication {
         KEPPLREphemeris eph = KEPPLRConfiguration.getInstance().getEphemeris();
 
         // Initialise time model: start at current wall time converted to TDB (§1.2)
-        double startET = KEPPLRConfiguration.getInstance()
-                .getTimeConversion().instantToTDB(Instant.now());
+        double startET = KEPPLRConfiguration.getInstance().getTimeConversion().instantToTDB(Instant.now());
         simulationState = new DefaultSimulationState();
         simulationClock = new SimulationClock(simulationState, startET);
+
+        // Show JavaFX status window — Platform was already started in main() on the main thread
+        SimulationStateFxBridge bridge = new SimulationStateFxBridge(simulationState);
+        Platform.runLater(() -> new KepplrStatusWindow(bridge).show());
 
         VectorIJK earthHelioPos = eph.getHeliocentricPositionJ2000(EARTH_NAIF_ID, FIXED_ET);
         if (earthHelioPos == null) {
@@ -84,6 +92,7 @@ public class KepplrApp extends SimpleApplication {
         cameraHelioJ2000[0] = earthHelioPos.getI();
         cameraHelioJ2000[1] = earthHelioPos.getJ();
         cameraHelioJ2000[2] = earthHelioPos.getK() + CAMERA_OFFSET_KM;
+        simulationState.setCameraPositionJ2000(cameraHelioJ2000);
 
         // Frustum: single viewport, mid-frustum range
         cam.setFrustumPerspective(
@@ -96,11 +105,14 @@ public class KepplrApp extends SimpleApplication {
         rootNode.attachChild(earthNode);
 
         addLighting(eph);
+
+        hud = new KepplrHud(guiNode, assetManager, cam);
     }
 
     @Override
     public void simpleUpdate(float tpf) {
         simulationClock.advance();
+        hud.update(simulationState.currentEtProperty().get());
     }
 
     private Node createEarthNode(KEPPLREphemeris eph, VectorIJK earthHelioPos) {
@@ -222,6 +234,18 @@ public class KepplrApp extends SimpleApplication {
     }
 
     public static void main(String[] args) {
+        // On Linux with both DISPLAY and WAYLAND_DISPLAY set, GLFW defaults to Wayland and loads
+        // libdecor-gtk for window decorations.  If JavaFX then forces GTK to X11 mode, libdecor-gtk
+        // fails to initialise and its fallback path segfaults (known libdecor bug).  Pinning GLFW to
+        // X11 before glfwInit() is called avoids Wayland/libdecor entirely; XWayland provides the
+        // X11 display.  This hint is a no-op on non-Linux platforms.
+        GLFW.glfwInitHint(GLFW.GLFW_PLATFORM, GLFW.GLFW_PLATFORM_X11);
+
+        // Start the JavaFX application thread on the main thread.  GTK initialisation (which
+        // Platform.startup triggers internally) must happen on the main thread on Linux; calling it
+        // later from the JME render thread can cause GTK assertion failures and crashes.
+        Platform.startup(() -> {});
+
         KEPPLRConfiguration.getTemplate();
 
         KepplrApp app = new KepplrApp();

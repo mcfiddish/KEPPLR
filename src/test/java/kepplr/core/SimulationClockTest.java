@@ -14,16 +14,13 @@ import org.junit.jupiter.api.Test;
 /**
  * Unit tests for {@link SimulationClock} (REDESIGN.md §1.2, §2.3).
  *
- * <p>All tests use an injectable wall-clock supplier so wall time is fully controlled — no real
- * sleeping, no dependency on system time. The SPICE kernel is only loaded for {@code setUTC} tests
- * that require UTC→ET conversion.
+ * <p>All tests use an injectable wall-clock supplier so wall time is fully controlled — no real sleeping, no dependency
+ * on system time. The SPICE kernel is only loaded for {@code setUTC} tests that require UTC→ET conversion.
  */
 @DisplayName("SimulationClock")
 class SimulationClockTest {
 
-    /**
-     * Controllable wall clock: a simple mutable double that tests can advance manually.
-     */
+    /** Controllable wall clock: a simple mutable double that tests can advance manually. */
     static class FakeClock {
         double wall = 0.0;
 
@@ -63,7 +60,8 @@ class SimulationClockTest {
         @Test
         @DisplayName("timeRate is DEFAULT_TIME_RATE")
         void initialRate() {
-            assertEquals(KepplrConstants.DEFAULT_TIME_RATE, state.timeRateProperty().get(), TOLERANCE);
+            assertEquals(
+                    KepplrConstants.DEFAULT_TIME_RATE, state.timeRateProperty().get(), TOLERANCE);
         }
 
         @Test
@@ -90,7 +88,7 @@ class SimulationClockTest {
         @Test
         @DisplayName("1x rate: ET advances by wall Δt after one advance() call")
         void advanceAt1x() {
-            fakeClock.wall = 1.0;   // advance wall by 1 second
+            fakeClock.wall = 1.0; // advance wall by 1 second
             clock.advance();
             assertEquals(START_ET + 1.0, state.currentEtProperty().get(), TOLERANCE);
         }
@@ -176,8 +174,7 @@ class SimulationClockTest {
             // Advance wall clock while paused — ET must not change
             fakeClock.wall = 5.0;
             clock.advance();
-            assertEquals(etAtPause, state.currentEtProperty().get(), TOLERANCE,
-                    "ET must not change while paused");
+            assertEquals(etAtPause, state.currentEtProperty().get(), TOLERANCE, "ET must not change while paused");
         }
 
         @Test
@@ -189,16 +186,19 @@ class SimulationClockTest {
             double etBeforePause = state.currentEtProperty().get(); // START_ET + 2
 
             clock.setPaused(true);
-            fakeClock.wall = 12.0;   // 10 seconds pass on wall while paused
-            clock.advance();          // ET should still be etBeforePause
+            fakeClock.wall = 12.0; // 10 seconds pass on wall while paused
+            clock.advance(); // ET should still be etBeforePause
 
-            clock.setPaused(false);  // resume; anchor reset at (etBeforePause, wall=2)
+            clock.setPaused(false); // resume; anchor reset at (etBeforePause, wall=2)
             // Immediately advance by 1 more wall second
             fakeClock.wall = 13.0;
             clock.advance();
 
             // Expected ET = etBeforePause + 1.0 (only the 1 post-resume second counted)
-            assertEquals(etBeforePause + 1.0, state.currentEtProperty().get(), TOLERANCE,
+            assertEquals(
+                    etBeforePause + 1.0,
+                    state.currentEtProperty().get(),
+                    TOLERANCE,
                     "Only time elapsed after resume should count");
         }
 
@@ -206,10 +206,10 @@ class SimulationClockTest {
         @DisplayName("calling setPaused(true) twice does not double-clamp wall time")
         void doublePauseIsIdempotent() {
             fakeClock.wall = 1.0;
-            clock.setPaused(true);   // clamp at wall=1
+            clock.setPaused(true); // clamp at wall=1
 
             fakeClock.wall = 5.0;
-            clock.setPaused(true);   // second call — wall clamp should still be 1, not 5
+            clock.setPaused(true); // second call — wall clamp should still be 1, not 5
             clock.advance();
 
             // ET = START_ET + rate*(1 - 0) = START_ET + 1
@@ -223,7 +223,7 @@ class SimulationClockTest {
             clock.advance();
             double et1 = state.currentEtProperty().get();
 
-            clock.setPaused(false);  // already running — should be a no-op
+            clock.setPaused(false); // already running — should be a no-op
 
             fakeClock.wall = 2.0;
             clock.advance();
@@ -261,8 +261,8 @@ class SimulationClockTest {
 
             // Immediately call advance() at the same wall time: delta = 0
             clock.advance();
-            assertEquals(etBeforeChange, state.currentEtProperty().get(), TOLERANCE,
-                    "No ET jump at rate change boundary");
+            assertEquals(
+                    etBeforeChange, state.currentEtProperty().get(), TOLERANCE, "No ET jump at rate change boundary");
         }
 
         @Test
@@ -294,9 +294,12 @@ class SimulationClockTest {
 
             clock.setPaused(true);
             clock.setTimeRate(500.0);
-            clock.advance();  // still paused, wall still 1
+            clock.advance(); // still paused, wall still 1
 
-            assertEquals(etBeforePause, state.currentEtProperty().get(), TOLERANCE,
+            assertEquals(
+                    etBeforePause,
+                    state.currentEtProperty().get(),
+                    TOLERANCE,
                     "Rate change while paused must not change ET");
         }
     }
@@ -342,10 +345,10 @@ class SimulationClockTest {
             clock.setET(42.0);
 
             fakeClock.wall = 100.0;
-            clock.advance();  // still paused
+            clock.advance(); // still paused
 
-            assertEquals(42.0, state.currentEtProperty().get(), TOLERANCE,
-                    "ET must remain at setET value while paused");
+            assertEquals(
+                    42.0, state.currentEtProperty().get(), TOLERANCE, "ET must remain at setET value while paused");
         }
     }
 
@@ -371,7 +374,10 @@ class SimulationClockTest {
 
             clock.setUTC("2015 Jul 14 07:59:00");
 
-            assertEquals(expectedET, state.currentEtProperty().get(), 1e-3,
+            assertEquals(
+                    expectedET,
+                    state.currentEtProperty().get(),
+                    1e-3,
                     "setUTC must produce the same ET as utcStringToTDB for the same string");
         }
 
@@ -384,8 +390,10 @@ class SimulationClockTest {
             fakeClock.wall = 1.0;
             clock.advance();
 
-            assertEquals(expectedET + KepplrConstants.DEFAULT_TIME_RATE,
-                    state.currentEtProperty().get(), 1e-3,
+            assertEquals(
+                    expectedET + KepplrConstants.DEFAULT_TIME_RATE,
+                    state.currentEtProperty().get(),
+                    1e-3,
                     "One wall-second at 1x should advance ET by 1");
         }
     }

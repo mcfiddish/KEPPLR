@@ -114,8 +114,8 @@ public final class DefaultSimulationCommands implements SimulationCommands {
     /**
      * Convert a UTC string to ET and jump the clock to that epoch (§1.2).
      *
-     * <p>Delegates to {@link SimulationClock#setUTC(String)} which acquires ephemeris at
-     * point-of-use (CLAUDE.md Rule 3).
+     * <p>Delegates to {@link SimulationClock#setUTC(String)} which acquires ephemeris at point-of-use (CLAUDE.md Rule
+     * 3).
      */
     @Override
     public void setUTC(String utcString) {

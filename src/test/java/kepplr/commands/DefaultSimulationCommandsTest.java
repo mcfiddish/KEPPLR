@@ -334,8 +334,7 @@ class DefaultSimulationCommandsTest {
         @DisplayName("setET updates currentEt in state")
         void setETUpdatesState() {
             commands.setET(489297600.0);
-            assertEquals(489297600.0, state.currentEtProperty().get(),
-                    "currentEt should reflect setET value");
+            assertEquals(489297600.0, state.currentEtProperty().get(), "currentEt should reflect setET value");
         }
 
         @Test
@@ -347,7 +346,10 @@ class DefaultSimulationCommandsTest {
             double expectedET = TestHarness.getTestEpoch();
             commands.setUTC("2015 Jul 14 07:59:00");
 
-            assertEquals(expectedET, state.currentEtProperty().get(), 1e-3,
+            assertEquals(
+                    expectedET,
+                    state.currentEtProperty().get(),
+                    1e-3,
                     "setUTC must set currentEt to the ET matching the UTC string");
         }
     }
