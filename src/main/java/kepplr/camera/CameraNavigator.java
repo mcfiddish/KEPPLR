@@ -131,7 +131,8 @@ public final class CameraNavigator {
      *
      * @param camPosJ2000 current camera heliocentric J2000 position in km (length-3 array)
      * @param focusPosJ2000 focus body heliocentric J2000 position in km, or {@code null} for no-op
-     * @param steps zoom steps; positive = apply factor (zoom in when factor&lt;1), negative = zoom out
+     * @param steps zoom steps (may be fractional); positive = apply factor (zoom in when factor&lt;1), negative = zoom
+     *     out
      * @param minDistKm minimum allowed camera distance from focus in km (≥ 0)
      * @param maxDistKm maximum allowed camera distance from focus in km
      * @param zoomFactor fractional factor per step (e.g. {@link KepplrConstants#CAMERA_ZOOM_FACTOR_PER_STEP})
@@ -140,10 +141,11 @@ public final class CameraNavigator {
     public static double[] zoom(
             double[] camPosJ2000,
             double[] focusPosJ2000,
-            int steps,
+            double steps,
             double minDistKm,
             double maxDistKm,
             double zoomFactor) {
+        // steps is double to support fractional rates from continuous keyboard hold
         if (focusPosJ2000 == null) {
             return camPosJ2000.clone();
         }

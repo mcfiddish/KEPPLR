@@ -128,8 +128,14 @@ public final class CameraInputHandler implements ActionListener, AnalogListener,
         inputManager.addMapping(SHIFT_LEFT, new KeyTrigger(KeyInput.KEY_LSHIFT));
         inputManager.addMapping(SHIFT_RIGHT, new KeyTrigger(KeyInput.KEY_RSHIFT));
 
+        // ActionListener only for shift modifier (toggle state)
+        inputManager.addListener((ActionListener) this, SHIFT_LEFT, SHIFT_RIGHT);
+
+        // AnalogListener for scroll and all keyboard navigation (fires every frame while held)
         inputManager.addListener(
-                (ActionListener) this,
+                (AnalogListener) this,
+                SCROLL_UP,
+                SCROLL_DOWN,
                 TILT_UP,
                 TILT_DOWN,
                 ROLL_LEFT,
@@ -139,10 +145,7 @@ public final class CameraInputHandler implements ActionListener, AnalogListener,
                 ORBIT_LEFT,
                 ORBIT_RIGHT,
                 ZOOM_IN,
-                ZOOM_OUT,
-                SHIFT_LEFT,
-                SHIFT_RIGHT);
-        inputManager.addListener((AnalogListener) this, SCROLL_UP, SCROLL_DOWN);
+                ZOOM_OUT);
 
         // Raw mouse listener: provides raw pixel deltas and button events regardless of cursor mode
         inputManager.addRawInputListener(this);
@@ -151,56 +154,60 @@ public final class CameraInputHandler implements ActionListener, AnalogListener,
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // ActionListener — discrete keyboard press events
+    // ActionListener — shift modifier only
     // ─────────────────────────────────────────────────────────────────────────
 
     @Override
     public void onAction(String name, boolean isPressed, float tpf) {
-        switch (name) {
-            case SHIFT_LEFT, SHIFT_RIGHT -> shiftDown = isPressed;
-
-            case TILT_UP -> {
-                if (isPressed && !shiftDown) applyTilt(-(float) KepplrConstants.CAMERA_ROTATE_INCREMENT_RAD);
-            }
-            case TILT_DOWN -> {
-                if (isPressed && !shiftDown) applyTilt((float) KepplrConstants.CAMERA_ROTATE_INCREMENT_RAD);
-            }
-            case ROLL_LEFT -> {
-                if (isPressed && !shiftDown) applyRoll(-(float) KepplrConstants.CAMERA_ROTATE_INCREMENT_RAD);
-            }
-            case ROLL_RIGHT -> {
-                if (isPressed && !shiftDown) applyRoll((float) KepplrConstants.CAMERA_ROTATE_INCREMENT_RAD);
-            }
-            case ORBIT_UP -> {
-                if (isPressed && shiftDown) applyOrbit((float) KepplrConstants.CAMERA_ORBIT_INCREMENT_RAD, 0f);
-            }
-            case ORBIT_DOWN -> {
-                if (isPressed && shiftDown) applyOrbit(-(float) KepplrConstants.CAMERA_ORBIT_INCREMENT_RAD, 0f);
-            }
-            case ORBIT_LEFT -> {
-                if (isPressed && shiftDown) applyOrbit(0f, (float) KepplrConstants.CAMERA_ORBIT_INCREMENT_RAD);
-            }
-            case ORBIT_RIGHT -> {
-                if (isPressed && shiftDown) applyOrbit(0f, -(float) KepplrConstants.CAMERA_ORBIT_INCREMENT_RAD);
-            }
-            case ZOOM_IN -> {
-                if (isPressed) applyZoom(1); // steps=1 → factor^1 < 1 → distance decreases
-            }
-            case ZOOM_OUT -> {
-                if (isPressed) applyZoom(-1); // steps=-1 → factor^-1 > 1 → distance increases
-            }
+        if (name.equals(SHIFT_LEFT) || name.equals(SHIFT_RIGHT)) {
+            shiftDown = isPressed;
         }
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // AnalogListener — scroll wheel only
+    // AnalogListener — scroll wheel and all keyboard navigation
+    //
+    // For keyboard keys, JME fires onAnalog every frame while the key is held
+    // with value ≈ tpf (seconds since last frame).  Multiplying by a per-second
+    // rate gives smooth, frame-rate-independent motion.
     // ─────────────────────────────────────────────────────────────────────────
 
     @Override
     public void onAnalog(String name, float value, float tpf) {
         switch (name) {
-            case SCROLL_UP -> applyZoom(1);
-            case SCROLL_DOWN -> applyZoom(-1);
+            case SCROLL_UP -> applyZoom(1.0);
+            case SCROLL_DOWN -> applyZoom(-1.0);
+
+            case TILT_UP -> {
+                if (!shiftDown) applyTilt(-(float) (value * KepplrConstants.CAMERA_KEYBOARD_ROTATE_RATE_RAD_PER_SEC));
+            }
+            case TILT_DOWN -> {
+                if (!shiftDown) applyTilt((float) (value * KepplrConstants.CAMERA_KEYBOARD_ROTATE_RATE_RAD_PER_SEC));
+            }
+            case ROLL_LEFT -> {
+                if (!shiftDown) applyRoll(-(float) (value * KepplrConstants.CAMERA_KEYBOARD_ROTATE_RATE_RAD_PER_SEC));
+            }
+            case ROLL_RIGHT -> {
+                if (!shiftDown) applyRoll((float) (value * KepplrConstants.CAMERA_KEYBOARD_ROTATE_RATE_RAD_PER_SEC));
+            }
+
+            case ORBIT_UP -> {
+                if (shiftDown) applyOrbit((float) (value * KepplrConstants.CAMERA_KEYBOARD_ORBIT_RATE_RAD_PER_SEC), 0f);
+            }
+            case ORBIT_DOWN -> {
+                if (shiftDown)
+                    applyOrbit(-(float) (value * KepplrConstants.CAMERA_KEYBOARD_ORBIT_RATE_RAD_PER_SEC), 0f);
+            }
+            case ORBIT_LEFT -> {
+                if (shiftDown) applyOrbit(0f, (float) (value * KepplrConstants.CAMERA_KEYBOARD_ORBIT_RATE_RAD_PER_SEC));
+            }
+            case ORBIT_RIGHT -> {
+                if (shiftDown)
+                    applyOrbit(0f, -(float) (value * KepplrConstants.CAMERA_KEYBOARD_ORBIT_RATE_RAD_PER_SEC));
+            }
+
+            case ZOOM_IN -> applyZoom(value * KepplrConstants.CAMERA_KEYBOARD_ZOOM_RATE_STEPS_PER_SEC);
+            case ZOOM_OUT -> applyZoom(-value * KepplrConstants.CAMERA_KEYBOARD_ZOOM_RATE_STEPS_PER_SEC);
         }
     }
 
@@ -319,7 +326,7 @@ public final class CameraInputHandler implements ActionListener, AnalogListener,
         state.setCameraPositionJ2000(cameraHelioJ2000);
     }
 
-    private void applyZoom(int steps) {
+    private void applyZoom(double steps) {
         int focusId = state.focusedBodyIdProperty().get();
         if (focusId == -1) return;
 
