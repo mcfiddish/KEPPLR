@@ -18,6 +18,7 @@ import com.jme3.texture.Texture;
 import java.nio.file.Path;
 import java.time.Instant;
 import javafx.application.Platform;
+import kepplr.camera.CameraInputHandler;
 import kepplr.commands.DefaultSimulationCommands;
 import kepplr.config.BodyBlock;
 import kepplr.config.KEPPLRConfiguration;
@@ -61,6 +62,7 @@ public class KepplrApp extends SimpleApplication {
     private DefaultSimulationState simulationState;
     private SimulationClock simulationClock;
     private KepplrHud hud;
+    private CameraInputHandler cameraInputHandler;
 
     /** Scene-graph node whose translation is updated each frame to Earth's camera-relative position. */
     private Node earthEphemerisNode;
@@ -117,11 +119,15 @@ public class KepplrApp extends SimpleApplication {
         addLighting(eph);
 
         hud = new KepplrHud(guiNode, assetManager, cam);
+
+        cameraInputHandler = new CameraInputHandler(cam, cameraHelioJ2000, simulationState);
+        cameraInputHandler.register(inputManager);
     }
 
     @Override
     public void simpleUpdate(float tpf) {
         simulationClock.advance();
+        cameraInputHandler.update();
         double currentEt = simulationState.currentEtProperty().get();
         updateEarthSceneGraph(currentEt);
         hud.update(currentEt);
