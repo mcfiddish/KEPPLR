@@ -14,7 +14,7 @@ public interface Spacecraft extends Comparable<Spacecraft> {
     /** @return NAIF id code */
     int code();
 
-    /** @return {@link FOV#getFrameID()} */
+    /** @return spacecraft frame */
     FrameID frameID();
 
     String shapeModel();
