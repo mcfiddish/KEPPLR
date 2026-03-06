@@ -88,4 +88,39 @@ public final class KepplrConstants {
      * secondary axis for the synodic frame degenerate case (§5.2).
      */
     public static final double ECLIPTIC_J2000_OBLIQUITY_RAD = Math.toRadians(23.439291111);
+
+    // ── Camera navigation (Step 10) ──
+
+    /**
+     * Fractional distance change per scroll or keyboard zoom step.
+     *
+     * <p>New distance = current distance × {@code CAMERA_ZOOM_FACTOR_PER_STEP}^steps. Values less than 1.0 shrink
+     * distance (zoom in) for a positive step count.
+     */
+    public static final double CAMERA_ZOOM_FACTOR_PER_STEP = 0.85;
+
+    /** Keyboard orbit angular rate while key is held (radians per second). */
+    public static final double CAMERA_KEYBOARD_ORBIT_RATE_RAD_PER_SEC = Math.toRadians(60.0);
+
+    /** Keyboard tilt/roll angular rate while key is held (radians per second). */
+    public static final double CAMERA_KEYBOARD_ROTATE_RATE_RAD_PER_SEC = Math.toRadians(90.0);
+
+    /** Keyboard zoom rate while PgUp/PgDn is held (zoom steps per second). */
+    public static final double CAMERA_KEYBOARD_ZOOM_RATE_STEPS_PER_SEC = 5.0;
+
+    /**
+     * Minimum zoom distance expressed as a multiple of the focus body's mean radius.
+     *
+     * <p>Camera cannot zoom closer than {@code bodyRadius × CAMERA_ZOOM_BODY_RADIUS_FACTOR}.
+     */
+    public static final double CAMERA_ZOOM_BODY_RADIUS_FACTOR = 1.1;
+
+    /** Fallback minimum zoom distance in km, used when the focus body has no shape data. */
+    public static final double CAMERA_ZOOM_FALLBACK_MIN_KM = 100.0;
+
+    /** Mouse rotate sensitivity in radians per pixel. */
+    public static final double CAMERA_MOUSE_ROTATE_SENSITIVITY = 0.001;
+
+    /** Mouse orbit sensitivity in radians per pixel. */
+    public static final double CAMERA_MOUSE_ORBIT_SENSITIVITY = 0.005;
 }
