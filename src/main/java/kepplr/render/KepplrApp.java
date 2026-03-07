@@ -111,6 +111,11 @@ public class KepplrApp extends SimpleApplication {
 
         DefaultSimulationCommands commands = new DefaultSimulationCommands(simulationState, simulationClock);
         SimulationStateFxBridge bridge = new SimulationStateFxBridge(simulationState);
+        // On macOS, JavaFX is started here (after GLFW has claimed NSApplication) rather than in
+        // main().  See main() comment for the full rationale.
+        if (System.getProperty("os.name", "").toLowerCase().contains("mac")) {
+            Platform.startup(() -> {});
+        }
         Platform.runLater(() -> new KepplrStatusWindow(bridge, commands).show());
 
         commands.focusBody(EARTH_NAIF_ID);
@@ -254,17 +259,31 @@ public class KepplrApp extends SimpleApplication {
     }
 
     public static void main(String[] args) {
-        // On Linux with both DISPLAY and WAYLAND_DISPLAY set, GLFW defaults to Wayland and loads
-        // libdecor-gtk for window decorations.  If JavaFX then forces GTK to X11 mode, libdecor-gtk
-        // fails to initialise and its fallback path segfaults (known libdecor bug).  Pinning GLFW to
-        // X11 before glfwInit() is called avoids Wayland/libdecor entirely; XWayland provides the
-        // X11 display.  This hint is a no-op on non-Linux platforms.
-        GLFW.glfwInitHint(GLFW.GLFW_PLATFORM, GLFW.GLFW_PLATFORM_X11);
+        String os = System.getProperty("os.name", "").toLowerCase();
 
-        // Start the JavaFX application thread on the main thread.  GTK initialisation (which
-        // Platform.startup triggers internally) must happen on the main thread on Linux; calling it
-        // later from the JME render thread can cause GTK assertion failures and crashes.
-        Platform.startup(() -> {});
+        if (os.contains("linux")) {
+            // On Linux with both DISPLAY and WAYLAND_DISPLAY set, GLFW defaults to Wayland and
+            // loads libdecor-gtk for window decorations.  If JavaFX then forces GTK to X11 mode,
+            // libdecor-gtk fails to initialise and its fallback path segfaults (known libdecor
+            // bug).  Pinning GLFW to X11 before glfwInit() avoids Wayland/libdecor entirely;
+            // XWayland provides the X11 display.
+            //
+            // IMPORTANT: GLFW 3.4 (LWJGL 3.3.5+) interprets GLFW_PLATFORM hints strictly —
+            // requesting an unavailable platform causes glfwInit() to fail.  This hint must only
+            // be set on Linux; on macOS it would select X11 (unavailable) and silently prevent
+            // the JME window from ever appearing.
+            GLFW.glfwInitHint(GLFW.GLFW_PLATFORM, GLFW.GLFW_PLATFORM_X11);
+
+            // GTK initialisation (triggered by Platform.startup) must happen on the main thread
+            // on Linux.  Calling it later from the JME render thread causes GTK assertion failures
+            // and crashes.
+            Platform.startup(() -> {});
+        }
+        // On macOS, Platform.startup() is deferred to simpleInitApp() so that GLFW initialises
+        // NSApplication first.  Calling Platform.startup() before glfwInit() on macOS lets JavaFX
+        // install its own NSApplication delegate; when GLFW then also tries to configure
+        // NSApplication the result is a conflict that silently prevents the JME window from
+        // appearing.
 
         KEPPLRConfiguration.getTemplate();
 
