@@ -123,4 +123,23 @@ public final class KepplrConstants {
 
     /** Mouse orbit sensitivity in radians per pixel. */
     public static final double CAMERA_MOUSE_ORBIT_SENSITIVITY = 0.005;
+
+    // ── Body rendering ──
+
+    /**
+     * Vertical field-of-view for all frustum cameras (degrees).
+     *
+     * <p>Stored here so {@link kepplr.render.body.BodyCuller} and {@link kepplr.render.body.BodySceneManager}
+     * can compute apparent pixel radii without access to the JME camera object.
+     */
+    public static final float CAMERA_FOV_Y_DEG = 45f;
+
+    /**
+     * Visual size of a point-sprite in screen pixels.
+     *
+     * <p>Used by {@link kepplr.render.body.BodySceneNode} to scale sprite geometry so it appears
+     * as this many pixels in diameter regardless of distance. Applied to spacecraft and small
+     * non-satellite bodies drawn below the {@link #POINT_SPRITE_THRESHOLD_PX} threshold.
+     */
+    public static final double SPACECRAFT_POINT_SPRITE_SIZE = 4.0;
 }

@@ -2,28 +2,23 @@ package kepplr.render;
 
 import com.jme3.app.LostFocusBehavior;
 import com.jme3.app.SimpleApplication;
-import com.jme3.asset.plugins.FileLocator;
 import com.jme3.light.AmbientLight;
 import com.jme3.light.PointLight;
-import com.jme3.material.Material;
 import com.jme3.math.ColorRGBA;
-import com.jme3.math.Matrix3f;
-import com.jme3.math.Quaternion;
 import com.jme3.math.Vector3f;
-import com.jme3.scene.Geometry;
+import com.jme3.renderer.Camera;
+import com.jme3.renderer.ViewPort;
 import com.jme3.scene.Node;
-import com.jme3.scene.shape.Sphere;
 import com.jme3.system.AppSettings;
-import com.jme3.texture.Texture;
-import java.nio.file.Path;
 import java.time.Instant;
 import javafx.application.Platform;
 import kepplr.camera.CameraInputHandler;
 import kepplr.commands.DefaultSimulationCommands;
-import kepplr.config.BodyBlock;
 import kepplr.config.KEPPLRConfiguration;
 import kepplr.core.SimulationClock;
 import kepplr.ephemeris.KEPPLREphemeris;
+import kepplr.render.body.BodySceneManager;
+import kepplr.render.frustum.FrustumLayer;
 import kepplr.state.DefaultSimulationState;
 import kepplr.ui.KepplrStatusWindow;
 import kepplr.ui.SimulationStateFxBridge;
@@ -31,20 +26,35 @@ import kepplr.util.KepplrConstants;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.lwjgl.glfw.GLFW;
-import picante.math.vectorspace.RotationMatrixIJK;
 import picante.math.vectorspace.VectorIJK;
-import picante.mechanics.EphemerisID;
-import picante.surfaces.Ellipsoid;
 
 /**
  * Main JMonkeyEngine application for KEPPLR.
  *
- * <p>Renders the solar system using ephemeris-driven body positions in a floating-origin scene graph. World-space units
- * are kilometers (REDESIGN.md §2.1). Body positions are computed relative to the camera's heliocentric J2000 position
- * each frame, keeping scene graph coordinate values small regardless of true heliocentric distances.
+ * <p>Renders all known solar-system bodies and spacecraft using ephemeris-driven positions in a
+ * floating-origin scene graph. World-space units are kilometers (REDESIGN.md §2.1). Body positions
+ * are computed relative to the camera's heliocentric J2000 position each frame, keeping
+ * scene-graph coordinate values numerically small regardless of true heliocentric distances.
  *
- * <p>This initial version renders Earth as a textured sphere at its correct heliocentric position for ET = 0.0 (J2000
- * epoch), with a fixed camera offset.
+ * <h3>Multi-frustum rendering (§8)</h3>
+ *
+ * <p>Three camera/viewport pairs share the same position and orientation but have different
+ * near/far planes. They render in far→mid→near order; far clears color and depth, mid and near
+ * clear depth only. Bodies are assigned to the nearest frustum whose expanded range fully contains
+ * their bounding volume (§8.3).
+ *
+ * <h3>Sun light (§7.6)</h3>
+ *
+ * <p>A {@link PointLight} is used (not DirectionalLight) because at solar-system scale the Sun's
+ * direction varies significantly between bodies — a directional light would be incorrect for bodies
+ * on opposite sides of the Solar System. The PointLight position is updated every frame to track
+ * the Sun's scene-relative location under floating origin (Sun helio pos = origin, so scene pos =
+ * −cameraHelioJ2000). One PointLight instance per frustum layer is required because JME lights
+ * illuminate only the subtree they are attached to.
+ *
+ * <p>Note for future shadow step: the Sun's radius is accessible from its {@code BodySceneNode}
+ * fullGeom scale (set by {@code BodyNodeFactory} from the PCK shape data). Retrieve it there when
+ * implementing analytic eclipse geometry (§9).
  */
 public class KepplrApp extends SimpleApplication {
 
@@ -54,21 +64,38 @@ public class KepplrApp extends SimpleApplication {
     private static final float CAMERA_OFFSET_KM = 50_000f;
 
     /**
-     * Camera heliocentric J2000 position in km, stored in double precision. Scene graph positions are computed as (body
-     * helio pos - camera helio pos) and cast to float for JME.
+     * Camera heliocentric J2000 position in km. Scene positions are {@code helioPos − this},
+     * cast to float for JME.
      */
     private final double[] cameraHelioJ2000 = new double[3];
 
+    // ── Simulation model ──────────────────────────────────────────────────────────────────────
     private DefaultSimulationState simulationState;
     private SimulationClock simulationClock;
     private KepplrHud hud;
     private CameraInputHandler cameraInputHandler;
 
-    /** Scene-graph node whose translation is updated each frame to Earth's camera-relative position. */
-    private Node earthEphemerisNode;
+    // ── Multi-frustum cameras and viewports (§8) ─────────────────────────────────────────────
+    /** Mid camera — slave of {@code cam}, mid-range frustum planes. */
+    private Camera midCam;
+    /** Near camera — slave of {@code cam}, near-range frustum planes. */
+    private Camera nearCam;
 
-    /** Scene-graph node whose rotation is updated each frame to the J2000 → IAU_EARTH frame transform. */
-    private Node earthBodyFixedNode;
+    // ── Frustum scene-graph roots ─────────────────────────────────────────────────────────────
+    /** Root node for the far frustum layer; receives far-range bodies. */
+    private Node farNode;
+    /** Root node for the mid frustum layer; receives mid-range bodies. */
+    private Node midNode;
+    /** Root node for the near frustum layer; receives near-range bodies. */
+    private Node nearNode;
+
+    // ── Sun lights (one per frustum layer; position updated every frame) ─────────────────────
+    private PointLight sunLightFar;
+    private PointLight sunLightMid;
+    private PointLight sunLightNear;
+
+    // ── Body scene management ─────────────────────────────────────────────────────────────────
+    private BodySceneManager bodySceneManager;
 
     @Override
     public void simpleInitApp() {
@@ -76,50 +103,90 @@ public class KepplrApp extends SimpleApplication {
         setDisplayFps(true);
         setDisplayStatView(false);
         flyCam.setEnabled(false);
-        viewPort.setBackgroundColor(ColorRGBA.Black);
 
-        KEPPLREphemeris eph = KEPPLRConfiguration.getInstance().getEphemeris();
-
-        // Initialise time model: start at current wall time converted to TDB (§1.2)
+        // ── Simulation clock and commands ─────────────────────────────────────────────────────
         double startET = KEPPLRConfiguration.getInstance().getTimeConversion().instantToTDB(Instant.now());
         simulationState = new DefaultSimulationState();
         simulationClock = new SimulationClock(simulationState, startET);
 
-        // Show JavaFX status window — Platform was already started in main() on the main thread
         DefaultSimulationCommands commands = new DefaultSimulationCommands(simulationState, simulationClock);
         SimulationStateFxBridge bridge = new SimulationStateFxBridge(simulationState);
         Platform.runLater(() -> new KepplrStatusWindow(bridge, commands).show());
 
-        // Default camera target: focus on Earth at launch (§4.5)
         commands.focusBody(EARTH_NAIF_ID);
 
+        // ── Camera initial position: offset above Earth in J2000 +Z ──────────────────────────
+        KEPPLREphemeris eph = KEPPLRConfiguration.getInstance().getEphemeris();
         VectorIJK earthHelioPos = eph.getHeliocentricPositionJ2000(EARTH_NAIF_ID, startET);
         if (earthHelioPos == null) {
-            logger.error("Cannot resolve Earth (NAIF {}) at ET={}", EARTH_NAIF_ID, startET);
+            logger.error("Cannot resolve Earth (NAIF {}) at ET={}; cannot start", EARTH_NAIF_ID, startET);
             stop();
             return;
         }
-
-        // Camera: offset from Earth along J2000 +Z
         cameraHelioJ2000[0] = earthHelioPos.getI();
         cameraHelioJ2000[1] = earthHelioPos.getJ();
         cameraHelioJ2000[2] = earthHelioPos.getK() + CAMERA_OFFSET_KM;
         simulationState.setCameraPositionJ2000(cameraHelioJ2000);
 
-        // Frustum: single viewport, mid-frustum range
-        cam.setFrustumPerspective(
-                45f, (float) cam.getWidth() / cam.getHeight(), (float) KepplrConstants.FRUSTUM_MID_MIN_KM, (float)
-                        KepplrConstants.FRUSTUM_MID_MAX_KM);
+        // ── Multi-frustum setup (§8) ──────────────────────────────────────────────────────────
+        float aspect = (float) cam.getWidth() / cam.getHeight();
+
+        // Reuse the default viewPort as the FAR layer (rendered first: clears color + depth).
+        // 'cam' drives all three layers; midCam and nearCam are synced from it every frame.
+        cam.setFrustumPerspective(KepplrConstants.CAMERA_FOV_Y_DEG, aspect,
+                (float) FrustumLayer.FAR.nearKm, (float) FrustumLayer.FAR.farKm);
         cam.setLocation(Vector3f.ZERO);
         cam.lookAt(toScenePosition(earthHelioPos), Vector3f.UNIT_Y);
 
-        Node earthNode = createEarthNode(eph, earthHelioPos, startET); // sets earthEphemerisNode + earthBodyFixedNode
-        rootNode.attachChild(earthNode);
+        farNode = new Node("far");
+        viewPort.detachScene(rootNode);
+        viewPort.attachScene(farNode);
+        viewPort.setBackgroundColor(ColorRGBA.Black);
+        viewPort.setClearFlags(true, true, false);
 
-        addLighting(eph);
+        midCam = cam.clone();
+        midCam.setFrustumPerspective(KepplrConstants.CAMERA_FOV_Y_DEG, aspect,
+                (float) FrustumLayer.MID.nearKm, (float) FrustumLayer.MID.farKm);
+        midNode = new Node("mid");
+        ViewPort midVP = renderManager.createMainView("Mid", midCam);
+        midVP.setClearFlags(false, true, false);
+        midVP.attachScene(midNode);
 
+        nearCam = cam.clone();
+        nearCam.setFrustumPerspective(KepplrConstants.CAMERA_FOV_Y_DEG, aspect,
+                (float) FrustumLayer.NEAR.nearKm, (float) FrustumLayer.NEAR.farKm);
+        nearNode = new Node("near");
+        ViewPort nearVP = renderManager.createMainView("Near", nearCam);
+        nearVP.setClearFlags(false, true, false);
+        nearVP.attachScene(nearNode);
+
+        // ── Lighting ──────────────────────────────────────────────────────────────────────────
+        // Dim ambient on all three layer nodes so night sides are dark but not black.
+        AmbientLight ambientFar  = new AmbientLight(new ColorRGBA(0.15f, 0.15f, 0.15f, 1f));
+        AmbientLight ambientMid  = new AmbientLight(new ColorRGBA(0.15f, 0.15f, 0.15f, 1f));
+        AmbientLight ambientNear = new AmbientLight(new ColorRGBA(0.15f, 0.15f, 0.15f, 1f));
+        farNode.addLight(ambientFar);
+        midNode.addLight(ambientMid);
+        nearNode.addLight(ambientNear);
+
+        // PointLight at the Sun's scene position, updated every frame (§7.6).
+        // PointLight chosen over DirectionalLight: at solar-system scale the Sun's direction from
+        // bodies on opposite sides of the Solar System can differ by 180°; a directional light
+        // (infinite source) cannot represent this. PointLight.setRadius(MAX_VALUE) ensures no
+        // distance attenuation across the scene.
+        Vector3f sunScenePos = sunScenePosition();
+        sunLightFar  = sunPointLight(sunScenePos);
+        sunLightMid  = sunPointLight(sunScenePos);
+        sunLightNear = sunPointLight(sunScenePos);
+        farNode.addLight(sunLightFar);
+        midNode.addLight(sunLightMid);
+        nearNode.addLight(sunLightNear);
+
+        // ── Body scene manager ────────────────────────────────────────────────────────────────
+        bodySceneManager = new BodySceneManager(nearNode, midNode, farNode, assetManager);
+
+        // ── HUD and camera input ──────────────────────────────────────────────────────────────
         hud = new KepplrHud(guiNode, assetManager, cam);
-
         cameraInputHandler = new CameraInputHandler(cam, cameraHelioJ2000, simulationState);
         cameraInputHandler.register(inputManager);
     }
@@ -128,120 +195,37 @@ public class KepplrApp extends SimpleApplication {
     public void simpleUpdate(float tpf) {
         simulationClock.advance();
         cameraInputHandler.update();
+
+        // Sync slave cameras to master orientation (position is always ZERO in floating-origin)
+        midCam.setLocation(cam.getLocation());
+        midCam.setRotation(cam.getRotation());
+        nearCam.setLocation(cam.getLocation());
+        nearCam.setRotation(cam.getRotation());
+
+        // Update Sun light position in all three layers (Sun helio pos = origin; scene pos = −cam)
+        Vector3f sunScenePos = sunScenePosition();
+        sunLightFar.setPosition(sunScenePos);
+        sunLightMid.setPosition(sunScenePos);
+        sunLightNear.setPosition(sunScenePos);
+
         double currentEt = simulationState.currentEtProperty().get();
-        updateEarthSceneGraph(currentEt);
+        bodySceneManager.update(currentEt, cameraHelioJ2000, cam);
         hud.update(currentEt);
+
+        // JME calls updateGeometricState() only on rootNode and guiNode (SimpleApplication source).
+        // Our frustum layer roots are custom viewport scenes and must be updated manually;
+        // otherwise checkCulling() raises IllegalStateException during the render pass.
+        farNode.updateGeometricState();
+        midNode.updateGeometricState();
+        nearNode.updateGeometricState();
     }
 
-    private void updateEarthSceneGraph(double et) {
-        KEPPLREphemeris eph = KEPPLRConfiguration.getInstance().getEphemeris();
-        VectorIJK earthHelioPos = eph.getHeliocentricPositionJ2000(EARTH_NAIF_ID, et);
-        if (earthHelioPos == null) {
-            logger.warn("Cannot resolve Earth (NAIF {}) at ET={}; skipping frame update", EARTH_NAIF_ID, et);
-            return;
-        }
-        earthEphemerisNode.setLocalTranslation(toScenePosition(earthHelioPos));
-        RotationMatrixIJK rot = eph.getJ2000ToBodyFixedRotation(EARTH_NAIF_ID, et);
-        if (rot != null) {
-            earthBodyFixedNode.setLocalRotation(toJmeQuaternion(rot));
-        }
-    }
-
-    private Node createEarthNode(KEPPLREphemeris eph, VectorIJK earthHelioPos, double et) {
-        // Resolve Earth's physical radius for mesh scaling
-        EphemerisID earthId = eph.getSpiceBundle().getObject(EARTH_NAIF_ID);
-        Ellipsoid shape = eph.getShape(earthId);
-        float radiusKm;
-        if (shape != null) {
-            radiusKm = (float) ((shape.getA() + shape.getB() + shape.getC()) / 3.0);
-        } else {
-            radiusKm = 6371f;
-            logger.warn("No shape data for Earth; using default radius {} km", radiusKm);
-        }
-
-        // Sphere mesh — unit radius, scaled by setLocalScale
-        int tess = KepplrConstants.BODY_SPHERE_TESSELLATION;
-        Sphere mesh = new Sphere(tess, tess, 1f);
-        mesh.setTextureMode(Sphere.TextureMode.Projected);
-        mesh.updateBound();
-
-        Geometry earthGeom = new Geometry("Earth", mesh);
-        earthGeom.setLocalScale(radiusKm);
-        earthGeom.setMaterial(createEarthMaterial());
-
-        // Texture alignment: rotate so texture center longitude aligns in body-fixed frame
-        BodyBlock earthBlock = KEPPLRConfiguration.getInstance().bodyBlock("earth");
-        double centerLonRad = earthBlock.centerLon();
-        Node textureAlignNode = new Node("Earth-texture-align");
-        if (centerLonRad != 0.0) {
-            Quaternion texRot = new Quaternion();
-            texRot.fromAngleAxis((float) centerLonRad, Vector3f.UNIT_Z);
-            textureAlignNode.setLocalRotation(texRot);
-        }
-        textureAlignNode.attachChild(earthGeom);
-
-        // Body-fixed rotation: J2000 → IAU_EARTH
-        Node bodyFixedNode = new Node("Earth-body-fixed");
-        RotationMatrixIJK j2000ToBodyFixed = eph.getJ2000ToBodyFixedRotation(EARTH_NAIF_ID, et);
-        if (j2000ToBodyFixed != null) {
-            bodyFixedNode.setLocalRotation(toJmeQuaternion(j2000ToBodyFixed));
-        } else {
-            logger.warn("No body-fixed frame for Earth; texture orientation will be incorrect");
-        }
-        bodyFixedNode.attachChild(textureAlignNode);
-
-        // Ephemeris node: positioned at Earth's camera-relative location
-        // Store references so simpleUpdate() can reposition them each frame
-        earthBodyFixedNode = bodyFixedNode;
-        earthEphemerisNode = new Node("Earth-ephemeris");
-        earthEphemerisNode.setLocalTranslation(toScenePosition(earthHelioPos));
-        earthEphemerisNode.attachChild(bodyFixedNode);
-
-        return earthEphemerisNode;
-    }
-
-    private Material createEarthMaterial() {
-        Material mat = new Material(assetManager, "Common/MatDefs/Light/Lighting.j3md");
-        mat.setBoolean("UseMaterialColors", true);
-        mat.setColor("Diffuse", ColorRGBA.White);
-        mat.setColor("Ambient", new ColorRGBA(0.05f, 0.05f, 0.05f, 1f));
-
-        BodyBlock earthBlock = KEPPLRConfiguration.getInstance().bodyBlock("earth");
-        String texturePath = earthBlock.textureMap();
-        if (texturePath != null && !texturePath.isBlank()) {
-            Path resolved = KEPPLRConfiguration.getInstance().getPathInResources(texturePath);
-            try {
-                String parentDir = resolved.getParent().toString();
-                assetManager.registerLocator(parentDir, FileLocator.class);
-                Texture tex = assetManager.loadTexture(resolved.getFileName().toString());
-                tex.setWrap(Texture.WrapMode.Repeat);
-                mat.setTexture("DiffuseMap", tex);
-            } catch (Exception e) {
-                logger.warn("Could not load Earth texture {}: {}", resolved, e.getMessage());
-                mat.setColor("Diffuse", ColorRGBA.Blue);
-            }
-        } else {
-            mat.setColor("Diffuse", ColorRGBA.Blue);
-        }
-        return mat;
-    }
-
-    private void addLighting(KEPPLREphemeris eph) {
-        // Dim ambient so night side is visible but dark
-        AmbientLight ambient = new AmbientLight(new ColorRGBA(0.15f, 0.15f, 0.15f, 1f));
-        rootNode.addLight(ambient);
-
-        // Sun point light at Sun's scene position (Sun helio pos = origin)
-        PointLight sunLight = new PointLight();
-        sunLight.setColor(ColorRGBA.White.mult(2f));
-        sunLight.setPosition(toScenePosition(new VectorIJK(0.0, 0.0, 0.0)));
-        sunLight.setRadius(Float.MAX_VALUE);
-        rootNode.addLight(sunLight);
-    }
+    // ── private helpers ───────────────────────────────────────────────────────────────────────
 
     /**
-     * Convert a heliocentric J2000 position (km, double) to scene-graph coordinates (camera-relative, float). Floating
-     * origin: scene position = helio position - camera helio position.
+     * Convert a heliocentric J2000 position (km, double) to scene-graph coordinates
+     * (camera-relative, float). Floating origin: scene position = helio position − camera helio
+     * position.
      */
     private Vector3f toScenePosition(VectorIJK helioPos) {
         return new Vector3f(
@@ -250,21 +234,23 @@ public class KepplrApp extends SimpleApplication {
                 (float) (helioPos.getK() - cameraHelioJ2000[2]));
     }
 
-    /** Convert a Picante RotationMatrixIJK to a JME Quaternion. */
-    private static Quaternion toJmeQuaternion(RotationMatrixIJK rot) {
-        Matrix3f m = new Matrix3f(
-                (float) rot.get(0, 0),
-                (float) rot.get(0, 1),
-                (float) rot.get(0, 2),
-                (float) rot.get(1, 0),
-                (float) rot.get(1, 1),
-                (float) rot.get(1, 2),
-                (float) rot.get(2, 0),
-                (float) rot.get(2, 1),
-                (float) rot.get(2, 2));
-        Quaternion q = new Quaternion();
-        q.fromRotationMatrix(m);
-        return q;
+    /**
+     * Scene-space position of the Sun (km). Under floating origin, the Sun is always at helio
+     * origin (0, 0, 0), so its scene position is the negation of the camera's helio position.
+     */
+    private Vector3f sunScenePosition() {
+        return new Vector3f(
+                (float) -cameraHelioJ2000[0],
+                (float) -cameraHelioJ2000[1],
+                (float) -cameraHelioJ2000[2]);
+    }
+
+    private static PointLight sunPointLight(Vector3f position) {
+        PointLight light = new PointLight();
+        light.setColor(ColorRGBA.White.mult(2f));
+        light.setPosition(position);
+        light.setRadius(Float.MAX_VALUE); // no distance attenuation
+        return light;
     }
 
     public static void main(String[] args) {
