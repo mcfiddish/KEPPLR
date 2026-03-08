@@ -8,13 +8,13 @@ import org.junit.jupiter.api.Test;
 /**
  * Unit tests for {@link FrustumLayer} assignment (REDESIGN.md §8.1, §8.2, §8.3).
  *
- * <p>All expected values are derived from the base ranges in {@link KepplrConstants} with 10%
- * overlap applied. Base ranges (km):
+ * <p>All expected values are derived from the base ranges in {@link KepplrConstants} with 10% overlap applied. Base
+ * ranges (km):
  *
  * <ul>
- *   <li>NEAR: [0.001, 1 000]    → camera near/far [0.001, 1 100]
- *   <li>MID:  [1 000, 1×10⁹]   → camera near/far [900,   1.1×10⁹]
- *   <li>FAR:  [1×10⁹, 1×10¹⁵] → camera near/far [9×10⁸, 1×10¹⁵]
+ *   <li>NEAR: [0.001, 1 000] → camera near/far [0.001, 1 100]
+ *   <li>MID: [1 000, 1×10⁹] → camera near/far [900, 1.1×10⁹]
+ *   <li>FAR: [1×10⁹, 1×10¹⁵] → camera near/far [9×10⁸, 1×10¹⁵]
  * </ul>
  */
 class FrustumLayerTest {
@@ -43,21 +43,21 @@ class FrustumLayerTest {
 
     @Test
     void pointInNear_assignsNear() {
-        assertEquals(FrustumLayer.NEAR, FrustumLayer.assign(0.5, 0.0));   // 500 m
+        assertEquals(FrustumLayer.NEAR, FrustumLayer.assign(0.5, 0.0)); // 500 m
         assertEquals(FrustumLayer.NEAR, FrustumLayer.assign(100.0, 0.0)); // 100 km
         assertEquals(FrustumLayer.NEAR, FrustumLayer.assign(999.0, 0.0)); // just inside
     }
 
     @Test
     void pointInMid_assignsMid() {
-        assertEquals(FrustumLayer.MID, FrustumLayer.assign(1e6, 0.0));   // 1 million km
-        assertEquals(FrustumLayer.MID, FrustumLayer.assign(1e8, 0.0));   // 100 million km
+        assertEquals(FrustumLayer.MID, FrustumLayer.assign(1e6, 0.0)); // 1 million km
+        assertEquals(FrustumLayer.MID, FrustumLayer.assign(1e8, 0.0)); // 100 million km
     }
 
     @Test
     void pointInFar_assignsFar() {
-        assertEquals(FrustumLayer.FAR, FrustumLayer.assign(2e9, 0.0));   // 2 billion km
-        assertEquals(FrustumLayer.FAR, FrustumLayer.assign(1e12, 0.0));  // 1 trillion km
+        assertEquals(FrustumLayer.FAR, FrustumLayer.assign(2e9, 0.0)); // 2 billion km
+        assertEquals(FrustumLayer.FAR, FrustumLayer.assign(1e12, 0.0)); // 1 trillion km
     }
 
     // ── Bounding-volume fits within a single layer ────────────────────────────────────────────

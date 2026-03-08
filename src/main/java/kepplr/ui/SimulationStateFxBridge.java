@@ -35,9 +35,9 @@ public final class SimulationStateFxBridge {
     private final Consumer<Runnable> dispatcher;
 
     /**
-     * Set to {@code true} by {@link #startPolling()} when the {@link AnimationTimer} is active.
-     * While polling, reactive listeners skip their {@code dispatcher.accept()} calls to avoid
-     * flooding the FX run queue at 60 fps; the AnimationTimer handles all updates instead.
+     * Set to {@code true} by {@link #startPolling()} when the {@link AnimationTimer} is active. While polling, reactive
+     * listeners skip their {@code dispatcher.accept()} calls to avoid flooding the FX run queue at 60 fps; the
+     * AnimationTimer handles all updates instead.
      */
     private volatile boolean polling = false;
 
@@ -155,13 +155,12 @@ public final class SimulationStateFxBridge {
     /**
      * Start an {@link AnimationTimer} that refreshes all display properties each JavaFX frame.
      *
-     * <p>Must be called on the JavaFX application thread (e.g., from
-     * {@link KepplrStatusWindow#show()}). This is the primary update path in production: it reads
-     * {@link SimulationState} directly on the FX thread, bypassing {@link Platform#runLater} which
-     * can stall on macOS when GLFW holds the main thread.
+     * <p>Must be called on the JavaFX application thread (e.g., from {@link KepplrStatusWindow#show()}). This is the
+     * primary update path in production: it reads {@link SimulationState} directly on the FX thread, bypassing
+     * {@link Platform#runLater} which can stall on macOS when GLFW holds the main thread.
      *
-     * <p>The reactive listeners added in the constructor remain active for unit-test compatibility
-     * (tests use a synchronous dispatcher and never call this method).
+     * <p>The reactive listeners added in the constructor remain active for unit-test compatibility (tests use a
+     * synchronous dispatcher and never call this method).
      */
     public void startPolling() {
         polling = true;
@@ -182,7 +181,8 @@ public final class SimulationStateFxBridge {
         timeRateText.set(formatTimeRate(state.timeRateProperty().get()));
         pausedText.set(formatPaused(state.pausedProperty().get()));
         cameraFrameText.set(formatCameraFrame(state.cameraFrameProperty().get()));
-        cameraPositionText.set(formatCameraPosition(state.cameraPositionJ2000Property().get()));
+        cameraPositionText.set(
+                formatCameraPosition(state.cameraPositionJ2000Property().get()));
         bodiesInViewText.set(formatBodiesInView(state.bodiesInViewProperty().get()));
     }
 
@@ -313,7 +313,7 @@ public final class SimulationStateFxBridge {
     /**
      * Format the bodies-in-view list as a multi-line string, one body per line.
      *
-     * <p>Each line: {@code NAME  dist km}. Returns {@code "—"} if the list is null or empty.
+     * <p>Each line: {@code NAME dist km}. Returns {@code "—"} if the list is null or empty.
      *
      * @param bodies sorted by ascending distance; may be null
      */

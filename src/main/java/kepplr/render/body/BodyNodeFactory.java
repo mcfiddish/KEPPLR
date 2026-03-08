@@ -37,18 +37,18 @@ import picante.surfaces.Ellipsoid;
  * └── spriteGeom  (unit sphere, scaled per frame to constant pixel size)
  * </pre>
  *
- * <p>Initially: {@code fullGeom} is visible ({@code CullHint.Inherit}), {@code spriteGeom} is
- * hidden ({@code CullHint.Always}). {@link BodySceneNode#apply} switches between them each frame.
+ * <p>Initially: {@code fullGeom} is visible ({@code CullHint.Inherit}), {@code spriteGeom} is hidden
+ * ({@code CullHint.Always}). {@link BodySceneNode#apply} switches between them each frame.
  *
  * <h3>Sun (NAIF 10)</h3>
  *
- * <p>The Sun uses an {@code Unshaded} material so it renders as fully emissive and is not
- * self-shadowed by the scene's PointLight (REDESIGN.md §7.6).
+ * <p>The Sun uses an {@code Unshaded} material so it renders as fully emissive and is not self-shadowed by the scene's
+ * PointLight (REDESIGN.md §7.6).
  *
  * <h3>Missing texture data (§12.3)</h3>
  *
- * <p>If a body's configured texture path is absent or fails to load, the body renders as an
- * untextured sphere in its configured hex color.
+ * <p>If a body's configured texture path is absent or fails to load, the body renders as an untextured sphere in its
+ * configured hex color.
  */
 public final class BodyNodeFactory {
 
@@ -57,9 +57,7 @@ public final class BodyNodeFactory {
     /** NAIF ID of the Sun — used to select the emissive (Unshaded) material. */
     private static final int SUN_NAIF_ID = 10;
 
-    /**
-     * Fallback mean radius (km) used when a body has no PCK shape data. Logged as a warning.
-     */
+    /** Fallback mean radius (km) used when a body has no PCK shape data. Logged as a warning. */
     private static final float DEFAULT_RADIUS_KM = 1.0f;
 
     private BodyNodeFactory() {}
@@ -67,10 +65,9 @@ public final class BodyNodeFactory {
     /**
      * Create a {@link BodySceneNode} for a celestial body.
      *
-     * @param bodyId       body EphemerisID (used for scene node names)
-     * @param naifId       integer NAIF ID (used to select Sun material and look up BodyBlock)
-     * @param shape        body ellipsoid from {@code KEPPLREphemeris.getShape()}; null → default
-     *                     radius, untextured
+     * @param bodyId body EphemerisID (used for scene node names)
+     * @param naifId integer NAIF ID (used to select Sun material and look up BodyBlock)
+     * @param shape body ellipsoid from {@code KEPPLREphemeris.getShape()}; null → default radius, untextured
      * @param assetManager JME asset manager
      * @return fully assembled BodySceneNode; fullGeom visible, spriteGeom hidden
      */
@@ -80,8 +77,8 @@ public final class BodyNodeFactory {
         float radiusKm = meanRadius(shape, bodyId.getName());
 
         // Full-geometry ellipsoid (unit sphere scaled to body radius)
-        Sphere mesh = new Sphere(KepplrConstants.BODY_SPHERE_TESSELLATION,
-                KepplrConstants.BODY_SPHERE_TESSELLATION, 1f);
+        Sphere mesh =
+                new Sphere(KepplrConstants.BODY_SPHERE_TESSELLATION, KepplrConstants.BODY_SPHERE_TESSELLATION, 1f);
         mesh.setTextureMode(Sphere.TextureMode.Projected);
         mesh.updateBound();
 
@@ -120,7 +117,7 @@ public final class BodyNodeFactory {
      *
      * <p>The {@code fullGeom} is permanently hidden; shape model rendering is deferred.
      *
-     * @param spacecraft   spacecraft descriptor
+     * @param spacecraft spacecraft descriptor
      * @param assetManager JME asset manager
      * @return BodySceneNode whose fullGeom is always culled
      */
@@ -163,9 +160,8 @@ public final class BodyNodeFactory {
     /**
      * Create the surface material for a body.
      *
-     * <p>The Sun uses {@code Unshaded.j3md} (fully emissive; §7.6). All other bodies use
-     * {@code Lighting.j3md} with a texture if one is configured, otherwise a flat diffuse color
-     * (§12.3).
+     * <p>The Sun uses {@code Unshaded.j3md} (fully emissive; §7.6). All other bodies use {@code Lighting.j3md} with a
+     * texture if one is configured, otherwise a flat diffuse color (§12.3).
      */
     private static Material createBodyMaterial(int naifId, String bodyName, AssetManager assetManager) {
         if (naifId == SUN_NAIF_ID) {
@@ -184,7 +180,8 @@ public final class BodyNodeFactory {
                 try {
                     Path resolved = KEPPLRConfiguration.getInstance().getPathInResources(texPath);
                     assetManager.registerLocator(resolved.getParent().toString(), FileLocator.class);
-                    Texture tex = assetManager.loadTexture(resolved.getFileName().toString());
+                    Texture tex =
+                            assetManager.loadTexture(resolved.getFileName().toString());
                     tex.setWrap(Texture.WrapMode.Repeat);
                     mat.setTexture("DiffuseMap", tex);
                     return mat;
@@ -199,11 +196,10 @@ public final class BodyNodeFactory {
     }
 
     /**
-     * Create an Unshaded material for the Sun so it is fully emissive and not self-shadowed
-     * (REDESIGN.md §7.6).
+     * Create an Unshaded material for the Sun so it is fully emissive and not self-shadowed (REDESIGN.md §7.6).
      *
-     * <p>Note for future shadow step: the Sun's radius is stored in its {@link BodySceneNode}'s
-     * fullGeom scale; retrieve it from there when defining analytic shadow geometry.
+     * <p>Note for future shadow step: the Sun's radius is stored in its {@link BodySceneNode}'s fullGeom scale;
+     * retrieve it from there when defining analytic shadow geometry.
      */
     private static Material createSunMaterial(String bodyName, AssetManager assetManager) {
         BodyBlock block = bodyBlockFor(bodyName);
@@ -215,7 +211,8 @@ public final class BodyNodeFactory {
                     Material mat = new Material(assetManager, "Common/MatDefs/Misc/Unshaded.j3md");
                     Path resolved = KEPPLRConfiguration.getInstance().getPathInResources(texPath);
                     assetManager.registerLocator(resolved.getParent().toString(), FileLocator.class);
-                    Texture tex = assetManager.loadTexture(resolved.getFileName().toString());
+                    Texture tex =
+                            assetManager.loadTexture(resolved.getFileName().toString());
                     tex.setWrap(Texture.WrapMode.Repeat);
                     mat.setTexture("ColorMap", tex);
                     return mat;
@@ -262,16 +259,13 @@ public final class BodyNodeFactory {
         if (block != null) {
             try {
                 return toColorRGBA(block.color());
-            } catch (Exception ignored) {}
+            } catch (Exception ignored) {
+            }
         }
         return ColorRGBA.White;
     }
 
     private static ColorRGBA toColorRGBA(Color awtColor) {
-        return new ColorRGBA(
-                awtColor.getRed() / 255f,
-                awtColor.getGreen() / 255f,
-                awtColor.getBlue() / 255f,
-                1f);
+        return new ColorRGBA(awtColor.getRed() / 255f, awtColor.getGreen() / 255f, awtColor.getBlue() / 255f, 1f);
     }
 }

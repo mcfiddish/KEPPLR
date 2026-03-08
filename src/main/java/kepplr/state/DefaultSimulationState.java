@@ -184,8 +184,7 @@ public final class DefaultSimulationState implements SimulationState {
     /**
      * Set the list of bodies currently visible in the scene.
      *
-     * <p>Called by {@code KepplrApp.simpleUpdate()} each frame with the result from
-     * {@code BodySceneManager.update()}.
+     * <p>Called by {@code KepplrApp.simpleUpdate()} each frame with the result from {@code BodySceneManager.update()}.
      *
      * @param bodies non-null list, sorted by ascending distance; pass an empty list when nothing visible
      */

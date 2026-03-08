@@ -23,11 +23,10 @@ import picante.math.vectorspace.RotationMatrixIJK;
  * └── spriteGeom  — point sprite (tiny sphere, sized per frame)
  * </pre>
  *
- * <p>Each frame, {@link BodySceneManager} calls {@link #updatePosition}, optionally
- * {@link #updateRotation}, and then {@link #apply} to set the cull state and frustum attachment.
+ * <p>Each frame, {@link BodySceneManager} calls {@link #updatePosition}, optionally {@link #updateRotation}, and then
+ * {@link #apply} to set the cull state and frustum attachment.
  *
- * <p>Instances are created exclusively by {@link BodyNodeFactory}; the constructor is
- * package-private.
+ * <p>Instances are created exclusively by {@link BodyNodeFactory}; the constructor is package-private.
  */
 public class BodySceneNode {
 
@@ -63,9 +62,15 @@ public class BodySceneNode {
      */
     public void updateRotation(RotationMatrixIJK rot) {
         Matrix3f m = new Matrix3f(
-                (float) rot.get(0, 0), (float) rot.get(0, 1), (float) rot.get(0, 2),
-                (float) rot.get(1, 0), (float) rot.get(1, 1), (float) rot.get(1, 2),
-                (float) rot.get(2, 0), (float) rot.get(2, 1), (float) rot.get(2, 2));
+                (float) rot.get(0, 0),
+                (float) rot.get(0, 1),
+                (float) rot.get(0, 2),
+                (float) rot.get(1, 0),
+                (float) rot.get(1, 1),
+                (float) rot.get(1, 2),
+                (float) rot.get(2, 0),
+                (float) rot.get(2, 1),
+                (float) rot.get(2, 2));
         Quaternion q = new Quaternion();
         q.fromRotationMatrix(m);
         bodyFixedNode.setLocalRotation(q);
@@ -74,17 +79,17 @@ public class BodySceneNode {
     /**
      * Apply the current rendering decision and frustum assignment.
      *
-     * <p>Manages scene-graph attachment: ensures {@link #ephemerisNode} is attached to the correct
-     * frustum layer node, and the correct geometry (full ellipsoid or point sprite) is visible.
+     * <p>Manages scene-graph attachment: ensures {@link #ephemerisNode} is attached to the correct frustum layer node,
+     * and the correct geometry (full ellipsoid or point sprite) is visible.
      *
-     * @param decision      how to render this body
-     * @param layer         which frustum layer this body belongs to
-     * @param nearNode      near-frustum root node
-     * @param midNode       mid-frustum root node
-     * @param farNode       far-frustum root node
-     * @param distKm        camera-to-body distance (km), used for sprite scaling
+     * @param decision how to render this body
+     * @param layer which frustum layer this body belongs to
+     * @param nearNode near-frustum root node
+     * @param midNode mid-frustum root node
+     * @param farNode far-frustum root node
+     * @param distKm camera-to-body distance (km), used for sprite scaling
      * @param viewportHeight viewport height in pixels
-     * @param fovYDeg       camera vertical FOV in degrees
+     * @param fovYDeg camera vertical FOV in degrees
      */
     public void apply(
             CullDecision decision,
@@ -101,11 +106,12 @@ public class BodySceneNode {
             return;
         }
 
-        Node targetParent = switch (layer) {
-            case NEAR -> nearNode;
-            case MID  -> midNode;
-            case FAR  -> farNode;
-        };
+        Node targetParent =
+                switch (layer) {
+                    case NEAR -> nearNode;
+                    case MID -> midNode;
+                    case FAR -> farNode;
+                };
 
         if (currentParent != targetParent) {
             if (currentParent != null) currentParent.detachChild(ephemerisNode);
@@ -124,10 +130,7 @@ public class BodySceneNode {
         }
     }
 
-    /**
-     * Detach this body from the scene entirely (used when culled or body disappears from
-     * ephemeris).
-     */
+    /** Detach this body from the scene entirely (used when culled or body disappears from ephemeris). */
     public void detach() {
         if (currentParent != null) {
             currentParent.detachChild(ephemerisNode);
@@ -136,14 +139,14 @@ public class BodySceneNode {
     }
 
     /**
-     * Scale the sprite geometry so it appears as
-     * {@link KepplrConstants#SPACECRAFT_POINT_SPRITE_SIZE} pixels regardless of distance.
+     * Scale the sprite geometry so it appears as {@link KepplrConstants#SPACECRAFT_POINT_SPRITE_SIZE} pixels regardless
+     * of distance.
      */
     private void updateSpriteScale(double distKm, int viewportHeight, float fovYDeg) {
         if (distKm <= 0 || viewportHeight <= 0 || fovYDeg <= 0) return;
         double tanHalfFov = Math.tan(Math.toRadians(fovYDeg) / 2.0);
-        double worldRadius = KepplrConstants.SPACECRAFT_POINT_SPRITE_SIZE
-                * distKm * tanHalfFov / (viewportHeight / 2.0);
+        double worldRadius =
+                KepplrConstants.SPACECRAFT_POINT_SPRITE_SIZE * distKm * tanHalfFov / (viewportHeight / 2.0);
         spriteGeom.setLocalScale((float) Math.max(worldRadius, 0.001f));
     }
 }

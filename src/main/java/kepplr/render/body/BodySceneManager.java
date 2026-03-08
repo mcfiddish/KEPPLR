@@ -32,12 +32,12 @@ import picante.surfaces.Ellipsoid;
  * <ol>
  *   <li>Acquire ephemeris at point-of-use (§3.3 — never stored).
  *   <li>Enumerate all known bodies and spacecraft.
- *   <li>Filter: skip bodies without a body-fixed frame (§4.1) or with no valid ephemeris at current
- *       ET (returns null position).
- *   <li>For each visible body: compute camera-relative position, apparent pixel radius, cull
- *       decision (§7.3), and frustum assignment (§8).
- *   <li>Update or create the body's {@link BodySceneNode}; position and rotation updated in-place
- *       (geometry is not recreated per frame).
+ *   <li>Filter: skip bodies without a body-fixed frame (§4.1) or with no valid ephemeris at current ET (returns null
+ *       position).
+ *   <li>For each visible body: compute camera-relative position, apparent pixel radius, cull decision (§7.3), and
+ *       frustum assignment (§8).
+ *   <li>Update or create the body's {@link BodySceneNode}; position and rotation updated in-place (geometry is not
+ *       recreated per frame).
  *   <li>Detach any body that was visible last frame but is no longer renderable.
  * </ol>
  *
@@ -53,21 +53,21 @@ public class BodySceneManager {
     private final AssetManager assetManager;
 
     /**
-     * Persistent map from EphemerisID to scene node wrapper. Geometry is created once and reused;
-     * only position/rotation/attachment are updated per frame.
+     * Persistent map from EphemerisID to scene node wrapper. Geometry is created once and reused; only
+     * position/rotation/attachment are updated per frame.
      */
     private final Map<EphemerisID, BodySceneNode> bodyNodes = new HashMap<>();
 
     /**
-     * Set of EphemerisIDs that belong to configured spacecraft. Used to skip spacecraft in the
-     * general body loop so they are not double-rendered. Populated on first {@link #update} call.
+     * Set of EphemerisIDs that belong to configured spacecraft. Used to skip spacecraft in the general body loop so
+     * they are not double-rendered. Populated on first {@link #update} call.
      */
     private Set<EphemerisID> spacecraftIdSet;
 
     /**
-     * @param nearNode     near-frustum root node (bodies 1 m – 1100 km)
-     * @param midNode      mid-frustum root node (bodies 900 km – 1.1×10⁹ km)
-     * @param farNode      far-frustum root node (bodies 9×10⁸ km – 10¹⁵ km)
+     * @param nearNode near-frustum root node (bodies 1 m – 1100 km)
+     * @param midNode mid-frustum root node (bodies 900 km – 1.1×10⁹ km)
+     * @param farNode far-frustum root node (bodies 9×10⁸ km – 10¹⁵ km)
      * @param assetManager JME asset manager for material and texture loading
      */
     public BodySceneManager(Node nearNode, Node midNode, Node farNode, AssetManager assetManager) {
@@ -82,9 +82,9 @@ public class BodySceneManager {
      *
      * <p>Ephemeris is acquired at point-of-use per §3.3.
      *
-     * @param et               current ephemeris time (TDB seconds past J2000)
+     * @param et current ephemeris time (TDB seconds past J2000)
      * @param cameraHelioJ2000 camera heliocentric J2000 position (km), double[3]
-     * @param cam              current render camera (used for apparent-radius calculation)
+     * @param cam current render camera (used for apparent-radius calculation)
      * @return non-culled bodies visible this frame, sorted by ascending distance; never null
      */
     public List<BodyInView> update(double et, double[] cameraHelioJ2000, Camera cam) {
@@ -169,15 +169,14 @@ public class BodySceneManager {
                 inView.add(new BodyInView(sc.id().getName(), naifId, dist));
             }
 
-            BodySceneNode bsn = bodyNodes.computeIfAbsent(
-                    sc.id(), id -> BodyNodeFactory.createSpacecraftNode(sc, assetManager));
+            BodySceneNode bsn =
+                    bodyNodes.computeIfAbsent(sc.id(), id -> BodyNodeFactory.createSpacecraftNode(sc, assetManager));
 
             bsn.updatePosition(new Vector3f((float) dx, (float) dy, (float) dz));
 
             // Spacecraft always render as sprites — no cull check, no rotation needed
             FrustumLayer layer = FrustumLayer.assign(dist, 0.0);
-            bsn.apply(CullDecision.DRAW_SPRITE, layer, nearNode, midNode, farNode,
-                    dist, viewportHeight, fovYDeg);
+            bsn.apply(CullDecision.DRAW_SPRITE, layer, nearNode, midNode, farNode, dist, viewportHeight, fovYDeg);
         }
 
         // ── Detach bodies no longer visible (out of ephemeris coverage, etc.) ─────────────────
@@ -204,8 +203,8 @@ public class BodySceneManager {
     }
 
     /**
-     * Returns true if the body at scene-relative offset (dx, dy, dz) is within the camera's
-     * viewing cone, using {@link KepplrConstants#BODIES_IN_VIEW_COS_THRESHOLD} as the cutoff.
+     * Returns true if the body at scene-relative offset (dx, dy, dz) is within the camera's viewing cone, using
+     * {@link KepplrConstants#BODIES_IN_VIEW_COS_THRESHOLD} as the cutoff.
      */
     private static boolean isInCameraFov(double dx, double dy, double dz, double dist, Camera cam) {
         if (dist <= 0.0) return false;

@@ -8,8 +8,7 @@ import org.junit.jupiter.api.Test;
 /**
  * Unit tests for {@link BodyCuller} (REDESIGN.md §7.3).
  *
- * <p>Tests cover: apparent-radius formula, NAIF satellite classification, and the three-way cull
- * decision table.
+ * <p>Tests cover: apparent-radius formula, NAIF satellite classification, and the three-way cull decision table.
  */
 class BodyCullerTest {
 
@@ -18,10 +17,9 @@ class BodyCullerTest {
     /**
      * Earth at 1 AU (1.496×10^8 km), radius 6371 km, 720 px viewport, 45° FOV.
      *
-     * <p>Expected: (6371 / 1.496e8) × (360) / tan(22.5°)
-     *            = 4.257e-5 × 360 / 0.41421
-     *            ≈ 0.03700 px  (much less than 2 px at this distance — correctly small)
-     * Hmm — actually at 1 AU Earth should appear very small. Let me use a closer scenario.
+     * <p>Expected: (6371 / 1.496e8) × (360) / tan(22.5°) = 4.257e-5 × 360 / 0.41421 ≈ 0.03700 px (much less than 2 px
+     * at this distance — correctly small) Hmm — actually at 1 AU Earth should appear very small. Let me use a closer
+     * scenario.
      */
     @Test
     void apparentRadius_earthAt50000km() {
@@ -46,11 +44,11 @@ class BodyCullerTest {
 
     @Test
     void apparentRadius_invalidInputs_returnsZero() {
-        assertEquals(0.0, BodyCuller.computeApparentRadiusPx(0.0, 1e6, 720, 45f));   // zero radius
+        assertEquals(0.0, BodyCuller.computeApparentRadiusPx(0.0, 1e6, 720, 45f)); // zero radius
         assertEquals(0.0, BodyCuller.computeApparentRadiusPx(1000.0, 0.0, 720, 45f)); // zero dist
-        assertEquals(0.0, BodyCuller.computeApparentRadiusPx(1000.0, 1e6, 0, 45f));   // zero height
-        assertEquals(0.0, BodyCuller.computeApparentRadiusPx(1000.0, 1e6, 720, 0f));  // zero fov
-        assertEquals(0.0, BodyCuller.computeApparentRadiusPx(-1.0, 1e6, 720, 45f));   // neg radius
+        assertEquals(0.0, BodyCuller.computeApparentRadiusPx(1000.0, 1e6, 0, 45f)); // zero height
+        assertEquals(0.0, BodyCuller.computeApparentRadiusPx(1000.0, 1e6, 720, 0f)); // zero fov
+        assertEquals(0.0, BodyCuller.computeApparentRadiusPx(-1.0, 1e6, 720, 45f)); // neg radius
     }
 
     @Test
@@ -109,8 +107,8 @@ class BodyCullerTest {
 
     @Test
     void isSatellite_spacecraft_negative_false() {
-        assertFalse(BodyCuller.isSatellite(-98),  "New Horizons (-98) is not a satellite");
-        assertFalse(BodyCuller.isSatellite(-77),  "Cassini (-77) is not a satellite");
+        assertFalse(BodyCuller.isSatellite(-98), "New Horizons (-98) is not a satellite");
+        assertFalse(BodyCuller.isSatellite(-77), "Cassini (-77) is not a satellite");
     }
 
     @Test
@@ -144,14 +142,13 @@ class BodyCullerTest {
     void decide_belowThreshold_nonSatellite_drawSprite() {
         double belowThreshold = KepplrConstants.POINT_SPRITE_THRESHOLD_PX - 0.5;
         assertEquals(CullDecision.DRAW_SPRITE, BodyCuller.decide(belowThreshold, 399)); // Earth
-        assertEquals(CullDecision.DRAW_SPRITE, BodyCuller.decide(belowThreshold, 10));  // Sun
+        assertEquals(CullDecision.DRAW_SPRITE, BodyCuller.decide(belowThreshold, 10)); // Sun
         assertEquals(CullDecision.DRAW_SPRITE, BodyCuller.decide(belowThreshold, -98)); // NH
     }
 
     @Test
     void decide_atExactThreshold_drawFull() {
         // Boundary: exactly at threshold is DRAW_FULL (≥ threshold)
-        assertEquals(CullDecision.DRAW_FULL,
-                BodyCuller.decide(KepplrConstants.POINT_SPRITE_THRESHOLD_PX, 301));
+        assertEquals(CullDecision.DRAW_FULL, BodyCuller.decide(KepplrConstants.POINT_SPRITE_THRESHOLD_PX, 301));
     }
 }

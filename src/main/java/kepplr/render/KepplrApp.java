@@ -19,8 +19,8 @@ import kepplr.config.KEPPLRConfiguration;
 import kepplr.core.SimulationClock;
 import kepplr.ephemeris.KEPPLREphemeris;
 import kepplr.render.body.BodySceneManager;
-import kepplr.state.BodyInView;
 import kepplr.render.frustum.FrustumLayer;
+import kepplr.state.BodyInView;
 import kepplr.state.DefaultSimulationState;
 import kepplr.ui.KepplrStatusWindow;
 import kepplr.ui.SimulationStateFxBridge;
@@ -33,30 +33,27 @@ import picante.math.vectorspace.VectorIJK;
 /**
  * Main JMonkeyEngine application for KEPPLR.
  *
- * <p>Renders all known solar-system bodies and spacecraft using ephemeris-driven positions in a
- * floating-origin scene graph. World-space units are kilometers (REDESIGN.md §2.1). Body positions
- * are computed relative to the camera's heliocentric J2000 position each frame, keeping
- * scene-graph coordinate values numerically small regardless of true heliocentric distances.
+ * <p>Renders all known solar-system bodies and spacecraft using ephemeris-driven positions in a floating-origin scene
+ * graph. World-space units are kilometers (REDESIGN.md §2.1). Body positions are computed relative to the camera's
+ * heliocentric J2000 position each frame, keeping scene-graph coordinate values numerically small regardless of true
+ * heliocentric distances.
  *
  * <h3>Multi-frustum rendering (§8)</h3>
  *
- * <p>Three camera/viewport pairs share the same position and orientation but have different
- * near/far planes. They render in far→mid→near order; far clears color and depth, mid and near
- * clear depth only. Bodies are assigned to the nearest frustum whose expanded range fully contains
- * their bounding volume (§8.3).
+ * <p>Three camera/viewport pairs share the same position and orientation but have different near/far planes. They
+ * render in far→mid→near order; far clears color and depth, mid and near clear depth only. Bodies are assigned to the
+ * nearest frustum whose expanded range fully contains their bounding volume (§8.3).
  *
  * <h3>Sun light (§7.6)</h3>
  *
- * <p>A {@link PointLight} is used (not DirectionalLight) because at solar-system scale the Sun's
- * direction varies significantly between bodies — a directional light would be incorrect for bodies
- * on opposite sides of the Solar System. The PointLight position is updated every frame to track
- * the Sun's scene-relative location under floating origin (Sun helio pos = origin, so scene pos =
- * −cameraHelioJ2000). One PointLight instance per frustum layer is required because JME lights
- * illuminate only the subtree they are attached to.
+ * <p>A {@link PointLight} is used (not DirectionalLight) because at solar-system scale the Sun's direction varies
+ * significantly between bodies — a directional light would be incorrect for bodies on opposite sides of the Solar
+ * System. The PointLight position is updated every frame to track the Sun's scene-relative location under floating
+ * origin (Sun helio pos = origin, so scene pos = −cameraHelioJ2000). One PointLight instance per frustum layer is
+ * required because JME lights illuminate only the subtree they are attached to.
  *
- * <p>Note for future shadow step: the Sun's radius is accessible from its {@code BodySceneNode}
- * fullGeom scale (set by {@code BodyNodeFactory} from the PCK shape data). Retrieve it there when
- * implementing analytic eclipse geometry (§9).
+ * <p>Note for future shadow step: the Sun's radius is accessible from its {@code BodySceneNode} fullGeom scale (set by
+ * {@code BodyNodeFactory} from the PCK shape data). Retrieve it there when implementing analytic eclipse geometry (§9).
  */
 public class KepplrApp extends SimpleApplication {
 
@@ -65,10 +62,7 @@ public class KepplrApp extends SimpleApplication {
     private static final int EARTH_NAIF_ID = 399;
     private static final float CAMERA_OFFSET_KM = 50_000f;
 
-    /**
-     * Camera heliocentric J2000 position in km. Scene positions are {@code helioPos − this},
-     * cast to float for JME.
-     */
+    /** Camera heliocentric J2000 position in km. Scene positions are {@code helioPos − this}, cast to float for JME. */
     private final double[] cameraHelioJ2000 = new double[3];
 
     // ── Simulation model ──────────────────────────────────────────────────────────────────────
@@ -140,8 +134,8 @@ public class KepplrApp extends SimpleApplication {
 
         // Reuse the default viewPort as the FAR layer (rendered first: clears color + depth).
         // 'cam' drives all three layers; midCam and nearCam are synced from it every frame.
-        cam.setFrustumPerspective(KepplrConstants.CAMERA_FOV_Y_DEG, aspect,
-                (float) FrustumLayer.FAR.nearKm, (float) FrustumLayer.FAR.farKm);
+        cam.setFrustumPerspective(KepplrConstants.CAMERA_FOV_Y_DEG, aspect, (float) FrustumLayer.FAR.nearKm, (float)
+                FrustumLayer.FAR.farKm);
         cam.setLocation(Vector3f.ZERO);
         cam.lookAt(toScenePosition(earthHelioPos), Vector3f.UNIT_Y);
 
@@ -152,16 +146,17 @@ public class KepplrApp extends SimpleApplication {
         viewPort.setClearFlags(true, true, false);
 
         midCam = cam.clone();
-        midCam.setFrustumPerspective(KepplrConstants.CAMERA_FOV_Y_DEG, aspect,
-                (float) FrustumLayer.MID.nearKm, (float) FrustumLayer.MID.farKm);
+        midCam.setFrustumPerspective(KepplrConstants.CAMERA_FOV_Y_DEG, aspect, (float) FrustumLayer.MID.nearKm, (float)
+                FrustumLayer.MID.farKm);
         midNode = new Node("mid");
         ViewPort midVP = renderManager.createMainView("Mid", midCam);
         midVP.setClearFlags(false, true, false);
         midVP.attachScene(midNode);
 
         nearCam = cam.clone();
-        nearCam.setFrustumPerspective(KepplrConstants.CAMERA_FOV_Y_DEG, aspect,
-                (float) FrustumLayer.NEAR.nearKm, (float) FrustumLayer.NEAR.farKm);
+        nearCam.setFrustumPerspective(
+                KepplrConstants.CAMERA_FOV_Y_DEG, aspect, (float) FrustumLayer.NEAR.nearKm, (float)
+                        FrustumLayer.NEAR.farKm);
         nearNode = new Node("near");
         ViewPort nearVP = renderManager.createMainView("Near", nearCam);
         nearVP.setClearFlags(false, true, false);
@@ -169,8 +164,8 @@ public class KepplrApp extends SimpleApplication {
 
         // ── Lighting ──────────────────────────────────────────────────────────────────────────
         // Dim ambient on all three layer nodes so night sides are dark but not black.
-        AmbientLight ambientFar  = new AmbientLight(new ColorRGBA(0.15f, 0.15f, 0.15f, 1f));
-        AmbientLight ambientMid  = new AmbientLight(new ColorRGBA(0.15f, 0.15f, 0.15f, 1f));
+        AmbientLight ambientFar = new AmbientLight(new ColorRGBA(0.15f, 0.15f, 0.15f, 1f));
+        AmbientLight ambientMid = new AmbientLight(new ColorRGBA(0.15f, 0.15f, 0.15f, 1f));
         AmbientLight ambientNear = new AmbientLight(new ColorRGBA(0.15f, 0.15f, 0.15f, 1f));
         farNode.addLight(ambientFar);
         midNode.addLight(ambientMid);
@@ -182,8 +177,8 @@ public class KepplrApp extends SimpleApplication {
         // (infinite source) cannot represent this. PointLight.setRadius(MAX_VALUE) ensures no
         // distance attenuation across the scene.
         Vector3f sunScenePos = sunScenePosition();
-        sunLightFar  = sunPointLight(sunScenePos);
-        sunLightMid  = sunPointLight(sunScenePos);
+        sunLightFar = sunPointLight(sunScenePos);
+        sunLightMid = sunPointLight(sunScenePos);
         sunLightNear = sunPointLight(sunScenePos);
         farNode.addLight(sunLightFar);
         midNode.addLight(sunLightMid);
@@ -234,9 +229,8 @@ public class KepplrApp extends SimpleApplication {
     // ── private helpers ───────────────────────────────────────────────────────────────────────
 
     /**
-     * Convert a heliocentric J2000 position (km, double) to scene-graph coordinates
-     * (camera-relative, float). Floating origin: scene position = helio position − camera helio
-     * position.
+     * Convert a heliocentric J2000 position (km, double) to scene-graph coordinates (camera-relative, float). Floating
+     * origin: scene position = helio position − camera helio position.
      */
     private Vector3f toScenePosition(VectorIJK helioPos) {
         return new Vector3f(
@@ -246,14 +240,11 @@ public class KepplrApp extends SimpleApplication {
     }
 
     /**
-     * Scene-space position of the Sun (km). Under floating origin, the Sun is always at helio
-     * origin (0, 0, 0), so its scene position is the negation of the camera's helio position.
+     * Scene-space position of the Sun (km). Under floating origin, the Sun is always at helio origin (0, 0, 0), so its
+     * scene position is the negation of the camera's helio position.
      */
     private Vector3f sunScenePosition() {
-        return new Vector3f(
-                (float) -cameraHelioJ2000[0],
-                (float) -cameraHelioJ2000[1],
-                (float) -cameraHelioJ2000[2]);
+        return new Vector3f((float) -cameraHelioJ2000[0], (float) -cameraHelioJ2000[1], (float) -cameraHelioJ2000[2]);
     }
 
     private static PointLight sunPointLight(Vector3f position) {

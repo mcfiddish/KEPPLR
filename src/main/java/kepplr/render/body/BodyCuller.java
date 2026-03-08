@@ -5,8 +5,8 @@ import kepplr.util.KepplrConstants;
 /**
  * Small-body culling logic per REDESIGN.md §7.3.
  *
- * <p>Computes apparent angular size in pixels and returns a {@link CullDecision} based on the
- * body's NAIF ID class and the {@link KepplrConstants#POINT_SPRITE_THRESHOLD_PX 2-pixel threshold}.
+ * <p>Computes apparent angular size in pixels and returns a {@link CullDecision} based on the body's NAIF ID class and
+ * the {@link KepplrConstants#POINT_SPRITE_THRESHOLD_PX 2-pixel threshold}.
  *
  * <p>All methods are static; this class is not instantiated.
  */
@@ -23,10 +23,10 @@ public final class BodyCuller {
      *   apparentRadiusPx = (bodyRadiusKm / distKm) × (viewportHeight / 2) / tan(fovY / 2)
      * </pre>
      *
-     * @param bodyRadiusKm   body mean radius (km); must be &gt; 0
-     * @param distKm         camera-to-body-center distance (km); must be &gt; 0
+     * @param bodyRadiusKm body mean radius (km); must be &gt; 0
+     * @param distKm camera-to-body-center distance (km); must be &gt; 0
      * @param viewportHeight viewport height in pixels; must be &gt; 0
-     * @param fovYDeg        camera vertical field-of-view in degrees; must be &gt; 0
+     * @param fovYDeg camera vertical field-of-view in degrees; must be &gt; 0
      * @return apparent radius in pixels; 0.0 if any input is invalid
      */
     public static double computeApparentRadiusPx(
@@ -41,10 +41,9 @@ public final class BodyCuller {
     /**
      * Determine whether the given NAIF ID represents a natural satellite.
      *
-     * <p>Per NAIF conventions (REDESIGN.md §7.3): natural satellites have IDs in the range
-     * [100, 999] where {@code id % 100 != 99}. Planet bodies end in 99 (Mercury=199, Venus=299,
-     * Earth=399, Mars=499, …, Pluto=999). Barycenters (1–9) and the Sun (10) are excluded by the
-     * range.
+     * <p>Per NAIF conventions (REDESIGN.md §7.3): natural satellites have IDs in the range [100, 999] where {@code id %
+     * 100 != 99}. Planet bodies end in 99 (Mercury=199, Venus=299, Earth=399, Mars=499, …, Pluto=999). Barycenters
+     * (1–9) and the Sun (10) are excluded by the range.
      *
      * <p>Examples: Moon=301 → satellite; Earth=399 → not satellite; Io=501 → satellite.
      *
@@ -65,7 +64,7 @@ public final class BodyCuller {
      * </ul>
      *
      * @param apparentRadiusPx apparent radius in pixels
-     * @param naifId           NAIF integer ID of the body
+     * @param naifId NAIF integer ID of the body
      * @return rendering decision
      */
     public static CullDecision decide(double apparentRadiusPx, int naifId) {
