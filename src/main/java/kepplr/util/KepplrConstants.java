@@ -74,7 +74,7 @@ public final class KepplrConstants {
      * by only ~0.18° per cycle (well below the 2° coarse sample spacing), giving smooth fade
      * behaviour at any time rate.
      */
-    public static final double TRAIL_STALENESS_FRACTION = 0.005;
+    public static final double TRAIL_STALENESS_FRACTION = 0.0003;
 
     /**
      * Upper cap on simulation-time staleness (seconds).
