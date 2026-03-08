@@ -1,15 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<project xmlns="http://maven.apache.org/POM/4.0.0"
-         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
   <modelVersion>4.0.0</modelVersion>
-
   <groupId>edu.jhuapl.ses.srn</groupId>
   <artifactId>kepplr</artifactId>
   <version>1.0-SNAPSHOT</version>
   <name>KEPPLR</name>
   <packaging>jar</packaging>
-
   <!-- ================================================================== -->
   <!-- Platform profiles: resolve JavaFX native classifier and JME flags  -->
   <!-- ================================================================== -->
@@ -18,7 +14,10 @@
     <profile>
       <id>javafx-mac-aarch64</id>
       <activation>
-        <os><name>Mac OS X</name><arch>aarch64</arch></os>
+        <os>
+          <name>Mac OS X</name>
+          <arch>aarch64</arch>
+        </os>
       </activation>
       <properties>
         <javafx.platform>mac-aarch64</javafx.platform>
@@ -29,7 +28,10 @@
     <profile>
       <id>javafx-mac-x86_64</id>
       <activation>
-        <os><name>Mac OS X</name><arch>amd64</arch></os>
+        <os>
+          <name>Mac OS X</name>
+          <arch>amd64</arch>
+        </os>
       </activation>
       <properties>
         <javafx.platform>mac</javafx.platform>
@@ -40,7 +42,10 @@
     <profile>
       <id>javafx-linux-x86_64</id>
       <activation>
-        <os><name>Linux</name><arch>amd64</arch></os>
+        <os>
+          <name>Linux</name>
+          <arch>amd64</arch>
+        </os>
       </activation>
       <properties>
         <javafx.platform>linux</javafx.platform>
@@ -51,7 +56,10 @@
     <profile>
       <id>javafx-linux-aarch64</id>
       <activation>
-        <os><name>Linux</name><arch>aarch64</arch></os>
+        <os>
+          <name>Linux</name>
+          <arch>aarch64</arch>
+        </os>
       </activation>
       <properties>
         <javafx.platform>linux-aarch64</javafx.platform>
@@ -62,7 +70,9 @@
     <profile>
       <id>javafx-windows</id>
       <activation>
-        <os><family>windows</family></os>
+        <os>
+          <family>windows</family>
+        </os>
       </activation>
       <properties>
         <javafx.platform>win</javafx.platform>
@@ -70,7 +80,6 @@
       </properties>
     </profile>
   </profiles>
-
   <!-- ================================================================== -->
   <!-- Properties                                                         -->
   <!-- ================================================================== -->
@@ -78,14 +87,11 @@
     <!-- Fallback defaults (overridden by platform profiles above) -->
     <javafx.firstThreadArg/>
     <javafx.platform>linux</javafx.platform>
-
     <!-- Test filtering: exclude render-tagged tests from unit phase -->
     <excludedGroups>render</excludedGroups>
-
     <package>KEPPLR</package>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <maven.compiler.release>21</maven.compiler.release>
-
     <!-- Dependency versions -->
     <picante.version>1.0.0</picante.version>
     <immutables.version>2.12.1</immutables.version>
@@ -94,29 +100,25 @@
     <jme.version>3.8.1-stable</jme.version>
     <groovy.version>3.0.25</groovy.version>
     <log4j.version>2.25.3</log4j.version>
-    <junit.version>6.0.2</junit.version>
-    <mockito.version>5.21.0</mockito.version>
+    <junit.version>6.0.3</junit.version>
+    <mockito.version>5.22.0</mockito.version>
   </properties>
-
   <!-- ================================================================== -->
   <!-- Dependencies                                                       -->
   <!-- ================================================================== -->
   <dependencies>
-
     <!-- ── Ephemeris: Picante (SPICE-compatible) ── -->
     <dependency>
       <groupId>edu.jhuapl.ses</groupId>
       <artifactId>picante</artifactId>
       <version>${picante.version}</version>
     </dependency>
-
     <!-- ── Configuration: Jackfruit (annotation-driven config blocks) ── -->
     <dependency>
       <groupId>edu.jhuapl.ses</groupId>
       <artifactId>jackfruit</artifactId>
       <version>${jackfruit.version}</version>
     </dependency>
-
     <!-- ── Immutables (value types) ── -->
     <dependency>
       <groupId>org.immutables</groupId>
@@ -128,7 +130,6 @@
       <artifactId>builder</artifactId>
       <version>${immutables.version}</version>
     </dependency>
-
     <!-- ── 3D Rendering: JMonkeyEngine ── -->
     <dependency>
       <groupId>org.jmonkeyengine</groupId>
@@ -150,7 +151,6 @@
       <artifactId>jme3-plugins</artifactId>
       <version>${jme.version}</version>
     </dependency>
-
     <!-- ── UI: JavaFX ── -->
     <dependency>
       <groupId>org.openjfx</groupId>
@@ -181,7 +181,6 @@
       <artifactId>groovy-jsr223</artifactId>
       <version>${groovy.version}</version>
     </dependency>
-
     <!-- ── Logging ── -->
     <dependency>
       <groupId>org.apache.logging.log4j</groupId>
@@ -198,12 +197,11 @@
       <artifactId>log4j-slf4j-impl</artifactId>
       <version>${log4j.version}</version>
     </dependency>
-
     <!-- ── Commons ── -->
     <dependency>
       <groupId>com.fasterxml.jackson.core</groupId>
       <artifactId>jackson-databind</artifactId>
-      <version>2.20.1</version>
+      <version>2.21.1</version>
     </dependency>
     <dependency>
       <groupId>commons-beanutils</groupId>
@@ -220,7 +218,6 @@
       <artifactId>commons-io</artifactId>
       <version>2.21.0</version>
     </dependency>
-
     <!-- ── Testing ── -->
     <dependency>
       <groupId>org.junit.jupiter</groupId>
@@ -234,16 +231,13 @@
       <version>${mockito.version}</version>
       <scope>test</scope>
     </dependency>
-
   </dependencies>
-
   <!-- ================================================================== -->
   <!-- Build                                                              -->
   <!-- ================================================================== -->
   <build>
     <finalName>${package}</finalName>
     <sourceDirectory>src/main/java</sourceDirectory>
-
     <extensions>
       <extension>
         <groupId>kr.motd.maven</groupId>
@@ -251,14 +245,12 @@
         <version>1.7.1</version>
       </extension>
     </extensions>
-
     <pluginManagement>
       <plugins>
-
         <!-- Compiler -->
         <plugin>
           <artifactId>maven-compiler-plugin</artifactId>
-          <version>3.14.1</version>
+          <version>3.15.0</version>
           <configuration>
             <release>${maven.compiler.release}</release>
             <annotationProcessorPaths>
@@ -280,17 +272,18 @@
             </annotationProcessorPaths>
           </configuration>
         </plugin>
-
         <!-- Dependency management -->
         <plugin>
           <groupId>org.apache.maven.plugins</groupId>
           <artifactId>maven-dependency-plugin</artifactId>
-          <version>3.9.0</version>
+          <version>3.10.0</version>
           <executions>
             <execution>
               <id>copy-javafx-for-tests</id>
               <phase>process-test-resources</phase>
-              <goals><goal>copy-dependencies</goal></goals>
+              <goals>
+                <goal>copy-dependencies</goal>
+              </goals>
               <configuration>
                 <outputDirectory>${project.build.directory}/${package}_lib/javafx</outputDirectory>
                 <includeGroupIds>org.openjfx</includeGroupIds>
@@ -301,7 +294,9 @@
             <execution>
               <id>copy-non-javafx</id>
               <phase>prepare-package</phase>
-              <goals><goal>copy-dependencies</goal></goals>
+              <goals>
+                <goal>copy-dependencies</goal>
+              </goals>
               <configuration>
                 <outputDirectory>${project.build.directory}/${package}_lib</outputDirectory>
                 <excludeGroupIds>org.openjfx</excludeGroupIds>
@@ -311,8 +306,17 @@
             </execution>
           </executions>
         </plugin>
-
-<!-- Create version file -->
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-project-info-reports-plugin</artifactId>
+          <version>3.9.0</version>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-site-plugin</artifactId>
+          <version>3.21.0</version>
+        </plugin>
+        <!-- Create version file -->
         <plugin>
           <groupId>org.codehaus.mojo</groupId>
           <artifactId>exec-maven-plugin</artifactId>
@@ -334,12 +338,11 @@
             </execution>
           </executions>
         </plugin>
-
-<!-- versions -->
+        <!-- versions -->
         <plugin>
           <groupId>org.codehaus.mojo</groupId>
           <artifactId>versions-maven-plugin</artifactId>
-          <version>2.20.1</version>
+          <version>2.21.0</version>
           <configuration>
             <ruleSet>
               <ignoreVersions>
@@ -351,7 +354,6 @@
             </ruleSet>
           </configuration>
         </plugin>
-
         <!-- Enforcer -->
         <plugin>
           <groupId>org.apache.maven.plugins</groupId>
@@ -360,21 +362,24 @@
           <executions>
             <execution>
               <id>enforce-maven</id>
-              <goals><goal>enforce</goal></goals>
+              <goals>
+                <goal>enforce</goal>
+              </goals>
               <configuration>
                 <rules>
-                  <requireMavenVersion><version>3.6.3</version></requireMavenVersion>
+                  <requireMavenVersion>
+                    <version>3.6.3</version>
+                  </requireMavenVersion>
                 </rules>
               </configuration>
             </execution>
           </executions>
         </plugin>
-
         <!-- Surefire (unit tests) -->
         <plugin>
           <groupId>org.apache.maven.plugins</groupId>
           <artifactId>maven-surefire-plugin</artifactId>
-          <version>3.5.4</version>
+          <version>3.5.5</version>
           <configuration>
             <groups>${groups}</groups>
             <excludedGroups>${excludedGroups}</excludedGroups>
@@ -385,12 +390,11 @@
             </argLine>
           </configuration>
         </plugin>
-
         <!-- Failsafe (integration / render tests) -->
         <plugin>
           <groupId>org.apache.maven.plugins</groupId>
           <artifactId>maven-failsafe-plugin</artifactId>
-          <version>3.5.4</version>
+          <version>3.5.5</version>
           <executions>
             <execution>
               <id>render-tests</id>
@@ -417,12 +421,11 @@
             </execution>
           </executions>
         </plugin>
-
         <!-- Spotless (code formatting) -->
         <plugin>
           <groupId>com.diffplug.spotless</groupId>
           <artifactId>spotless-maven-plugin</artifactId>
-          <version>3.1.0</version>
+          <version>3.3.0</version>
           <configuration>
             <java>
               <palantirJavaFormat>
@@ -431,15 +434,33 @@
             </java>
           </configuration>
         </plugin>
-
       </plugins>
     </pluginManagement>
-
     <plugins>
-      <plugin><groupId>org.apache.maven.plugins</groupId><artifactId>maven-dependency-plugin</artifactId></plugin>
-      <plugin><groupId>org.apache.maven.plugins</groupId><artifactId>maven-enforcer-plugin</artifactId></plugin>
-      <plugin><groupId>org.apache.maven.plugins</groupId><artifactId>maven-surefire-plugin</artifactId></plugin>
-      <plugin><groupId>org.apache.maven.plugins</groupId><artifactId>maven-failsafe-plugin</artifactId></plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-dependency-plugin</artifactId>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-enforcer-plugin</artifactId>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-failsafe-plugin</artifactId>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-project-info-reports-plugin</artifactId>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-site-plugin</artifactId>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+      </plugin>
       <plugin>
         <groupId>org.codehaus.mojo</groupId>
         <artifactId>exec-maven-plugin</artifactId>
@@ -448,8 +469,10 @@
         <groupId>org.codehaus.mojo</groupId>
         <artifactId>versions-maven-plugin</artifactId>
       </plugin>
-      <plugin><groupId>com.diffplug.spotless</groupId><artifactId>spotless-maven-plugin</artifactId></plugin>
+      <plugin>
+        <groupId>com.diffplug.spotless</groupId>
+        <artifactId>spotless-maven-plugin</artifactId>
+      </plugin>
     </plugins>
   </build>
-
 </project>
