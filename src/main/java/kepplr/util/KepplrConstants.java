@@ -189,4 +189,32 @@ public final class KepplrConstants {
      * {@link #POINT_SPRITE_THRESHOLD_PX} threshold.
      */
     public static final double SPACECRAFT_POINT_SPRITE_SIZE = 4.0;
+
+    // ── Vector overlays (Step 13) ──
+
+    /**
+     * Simulation-time staleness threshold for vector overlay geometry (seconds).
+     *
+     * <p>Vector directions are recomputed and geometry rebuilt when {@code |currentEt - lastBuiltEt|} exceeds this
+     * value. At 1× real-time, vectors update at most every 60 simulation seconds; at 1000× time rate, this translates
+     * to a wall-clock update interval of ~60 ms (≈ 17 Hz), which is responsive enough for interactive use.
+     */
+    public static final double VECTOR_STALENESS_THRESHOLD_SEC = 60.0;
+
+    /**
+     * Minimum projected screen length in pixels for a vector to be rendered.
+     *
+     * <p>Vectors whose scale, when projected onto the screen, would be shorter than this threshold are silently
+     * skipped. This prevents sub-pixel clutter when the camera is very far from the origin body.
+     */
+    public static final double VECTOR_MIN_VISIBLE_LENGTH_PX = 5.0;
+
+    /**
+     * Default visual scale of a vector overlay in km.
+     *
+     * <p>The rendered line segment extends {@code VECTOR_DEFAULT_SCALE_KM} km from the origin body centre in the
+     * computed direction. Callers may override this per-{@code VectorDefinition}. Chosen as roughly twice Earth's mean
+     * radius (6371 km) so vectors are legible when focused on an Earth-class body.
+     */
+    public static final double VECTOR_DEFAULT_SCALE_KM = 15_000.0;
 }
