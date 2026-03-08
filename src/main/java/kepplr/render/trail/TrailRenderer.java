@@ -20,13 +20,12 @@ import kepplr.render.frustum.FrustumLayer;
 /**
  * Renders one body's orbital trail as line segments in the JME scene graph.
  *
- * <p>Trail segments are assigned to the appropriate frustum layer by passing the camera-relative
- * midpoint distance of each segment to {@link FrustumLayer#assign(double, double)} (REDESIGN.md
- * §8.3). One {@link Geometry} per occupied frustum layer is attached to the corresponding layer
- * root node.
+ * <p>Trail segments are assigned to the appropriate frustum layer by passing the camera-relative midpoint distance of
+ * each segment to {@link FrustumLayer#assign(double, double)} (REDESIGN.md §8.3). One {@link Geometry} per occupied
+ * frustum layer is attached to the corresponding layer root node.
  *
- * <p>Color is derived from the body's NAIF ID via a golden-ratio hash — deterministic, visually
- * well-distributed, and data-driven (no switch/case over NAIF IDs).
+ * <p>Color is derived from the body's NAIF ID via a golden-ratio hash — deterministic, visually well-distributed, and
+ * data-driven (no switch/case over NAIF IDs).
  *
  * <p>All methods must be called on the JME render thread (CLAUDE.md Rule 4).
  */
@@ -42,8 +41,8 @@ class TrailRenderer {
     /**
      * Fraction of the trail (measured from the newest end) beyond which alpha is zero.
      *
-     * <p>Value 0.9 means the trail fades to fully transparent 90% of the way back in time.
-     * The oldest 10% of samples are drawn with alpha = 0 and contribute no visible pixels.
+     * <p>Value 0.9 means the trail fades to fully transparent 90% of the way back in time. The oldest 10% of samples
+     * are drawn with alpha = 0 and contribute no visible pixels.
      */
     private static final float FADE_CUTOFF = 0.9f;
 
@@ -69,20 +68,18 @@ class TrailRenderer {
     /**
      * Rebuild trail geometry from the given heliocentric sample positions.
      *
-     * <p>Converts each position to camera-relative coordinates (floating origin), assigns each
-     * segment to a frustum layer, and attaches the resulting geometries to the layer nodes.
-     * Previously attached geometries are detached before rebuilding.
+     * <p>Converts each position to camera-relative coordinates (floating origin), assigns each segment to a frustum
+     * layer, and attaches the resulting geometries to the layer nodes. Previously attached geometries are detached
+     * before rebuilding.
      *
-     * <p>The list is expected to be time-ordered oldest-first (as produced by
-     * {@link TrailSampler#sample}). Alpha is 1.0 at the newest end and fades linearly to 0.0 at
-     * {@link #FADE_CUTOFF} of the way back in time. Segments beyond that fraction are emitted with
-     * alpha 0 and contribute no visible pixels.
+     * <p>The list is expected to be time-ordered oldest-first (as produced by {@link TrailSampler#sample}). Alpha is
+     * 1.0 at the newest end and fades linearly to 0.0 at {@link #FADE_CUTOFF} of the way back in time. Segments beyond
+     * that fraction are emitted with alpha 0 and contribute no visible pixels.
      *
-     * @param samples heliocentric J2000 positions in km, oldest-first (each element is
-     *     {@code double[3]})
+     * @param samples heliocentric J2000 positions in km, oldest-first (each element is {@code double[3]})
      * @param cameraHelioJ2000 camera heliocentric J2000 position in km (length ≥ 3)
-     * @param sampleOffsetOrNull offset to add to each sample position before rendering (km), or
-     *     {@code null} for no offset; used to shift satellite trails by the live barycenter drift
+     * @param sampleOffsetOrNull offset to add to each sample position before rendering (km), or {@code null} for no
+     *     offset; used to shift satellite trails by the live barycenter drift
      */
     void update(List<double[]> samples, double[] cameraHelioJ2000, double[] sampleOffsetOrNull) {
         detachAll();
@@ -143,7 +140,7 @@ class TrailRenderer {
             List<Float> alphas = layerAlphas.get(layer);
             float[] colorData = new float[verts.length * 4];
             for (int i = 0; i < verts.length; i++) {
-                colorData[i * 4]     = color.r;
+                colorData[i * 4] = color.r;
                 colorData[i * 4 + 1] = color.g;
                 colorData[i * 4 + 2] = color.b;
                 colorData[i * 4 + 3] = alphas.get(i);
@@ -172,9 +169,9 @@ class TrailRenderer {
     /**
      * Compute the alpha for a sample at a given ET.
      *
-     * <p>Alpha is 1.0 at {@code newestEt} and fades linearly to 0.0 at {@link #FADE_CUTOFF} of
-     * the total duration back in time, based on actual elapsed time rather than sample index.
-     * This is correct for non-uniform (adaptive) sampling where index spacing ≠ time spacing.
+     * <p>Alpha is 1.0 at {@code newestEt} and fades linearly to 0.0 at {@link #FADE_CUTOFF} of the total duration back
+     * in time, based on actual elapsed time rather than sample index. This is correct for non-uniform (adaptive)
+     * sampling where index spacing ≠ time spacing.
      *
      * @param sampleEt ET of this sample
      * @param newestEt ET of the newest sample (body's current position, alpha = 1.0)
@@ -205,8 +202,7 @@ class TrailRenderer {
     }
 
     /**
-     * Convert a heliocentric J2000 position (plus offset) to camera-relative scene coordinates
-     * (floating origin).
+     * Convert a heliocentric J2000 position (plus offset) to camera-relative scene coordinates (floating origin).
      *
      * @param helioPos heliocentric J2000 position in km
      * @param ox x-component of offset in km (0 for planets)
@@ -215,8 +211,7 @@ class TrailRenderer {
      * @param cameraHelioJ2000 camera heliocentric J2000 position in km
      * @return camera-relative position as a JME {@link Vector3f}
      */
-    private static Vector3f toScene(
-            double[] helioPos, double ox, double oy, double oz, double[] cameraHelioJ2000) {
+    private static Vector3f toScene(double[] helioPos, double ox, double oy, double oz, double[] cameraHelioJ2000) {
         return new Vector3f(
                 (float) (helioPos[0] + ox - cameraHelioJ2000[0]),
                 (float) (helioPos[1] + oy - cameraHelioJ2000[1]),
@@ -226,9 +221,8 @@ class TrailRenderer {
     /**
      * Derive a trail color from a NAIF ID using a golden-ratio hash.
      *
-     * <p>The golden-ratio conjugate (≈ 0.618…) distributes hues evenly across the color wheel
-     * regardless of the input sequence, so nearby NAIF IDs receive visually distinct colors.
-     * Saturation = 0.8, brightness = 1.0, alpha = 0.9.
+     * <p>The golden-ratio conjugate (≈ 0.618…) distributes hues evenly across the color wheel regardless of the input
+     * sequence, so nearby NAIF IDs receive visually distinct colors. Saturation = 0.8, brightness = 1.0, alpha = 0.9.
      *
      * @param naifId NAIF integer ID
      * @return a {@link ColorRGBA} unique to this ID
@@ -250,12 +244,36 @@ class TrailRenderer {
 
         float r, g, bv;
         switch (hi) {
-            case 0 -> { r = b; g = t; bv = p; }
-            case 1 -> { r = q; g = b; bv = p; }
-            case 2 -> { r = p; g = b; bv = t; }
-            case 3 -> { r = p; g = q; bv = b; }
-            case 4 -> { r = t; g = p; bv = b; }
-            default -> { r = b; g = p; bv = q; }
+            case 0 -> {
+                r = b;
+                g = t;
+                bv = p;
+            }
+            case 1 -> {
+                r = q;
+                g = b;
+                bv = p;
+            }
+            case 2 -> {
+                r = p;
+                g = b;
+                bv = t;
+            }
+            case 3 -> {
+                r = p;
+                g = q;
+                bv = b;
+            }
+            case 4 -> {
+                r = t;
+                g = p;
+                bv = b;
+            }
+            default -> {
+                r = b;
+                g = p;
+                bv = q;
+            }
         }
 
         return new ColorRGBA(r, g, bv, 0.9f);

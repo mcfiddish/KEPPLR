@@ -2,14 +2,13 @@ package kepplr.render.trail;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import java.util.List;
 import kepplr.config.KEPPLRConfiguration;
 import kepplr.testsupport.TestHarness;
 import kepplr.util.KepplrConstants;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-
-import java.util.List;
 
 @DisplayName("TrailSampler")
 public class TrailSamplerTest {
@@ -18,9 +17,8 @@ public class TrailSamplerTest {
     private static final int PHOBOS = 401;
 
     /**
-     * Phobos orbital period in seconds at the test epoch (Dec 25, 2007), derived from
-     * OsculatingElementsTest — the authoritative cross-check for this implementation.
-     * Tolerance of 1 s applied in assertions.
+     * Phobos orbital period in seconds at the test epoch (Dec 25, 2007), derived from OsculatingElementsTest — the
+     * authoritative cross-check for this implementation. Tolerance of 1 s applied in assertions.
      */
     private static final double PHOBOS_PERIOD_SEC = 27_577.09;
 
@@ -46,7 +44,8 @@ public class TrailSamplerTest {
         // Upper bound: if all steps were minArc → 2π/minArcRad ≈ 3600 samples.
         int minExpected = (int) Math.floor(2 * Math.PI / Math.toRadians(KepplrConstants.TRAIL_MAX_ARC_DEG));
         int maxExpected = (int) Math.ceil(2 * Math.PI / Math.toRadians(KepplrConstants.TRAIL_MIN_ARC_DEG));
-        assertTrue(samples.size() >= minExpected && samples.size() <= maxExpected,
+        assertTrue(
+                samples.size() >= minExpected && samples.size() <= maxExpected,
                 "Adaptive sample count " + samples.size() + " out of range [" + minExpected + ", " + maxExpected + "]");
 
         // Every position must be a non-null double[3] within a physically plausible range.
@@ -59,10 +58,10 @@ public class TrailSamplerTest {
             assertNotNull(pos);
             assertEquals(4, pos.length, "Each sample must be double[4] with ET at index 3");
             double distFromSun = Math.sqrt(pos[0] * pos[0] + pos[1] * pos[1] + pos[2] * pos[2]);
-            assertTrue(distFromSun > 1e7 && distFromSun < 1e9,
-                    "Distance from Sun out of range: " + distFromSun);
+            assertTrue(distFromSun > 1e7 && distFromSun < 1e9, "Distance from Sun out of range: " + distFromSun);
             // ET must be within the trail window [centerEt - period, centerEt]
-            assertTrue(pos[3] >= testEt - PHOBOS_PERIOD_SEC - 1.0 && pos[3] <= testEt + 1.0,
+            assertTrue(
+                    pos[3] >= testEt - PHOBOS_PERIOD_SEC - 1.0 && pos[3] <= testEt + 1.0,
                     "Sample ET out of trail window: " + pos[3]);
         }
     }
@@ -77,8 +76,8 @@ public class TrailSamplerTest {
 
         double duration = TrailSampler.computeTrailDurationSec(PHOBOS, et);
 
-        assertEquals(PHOBOS_PERIOD_SEC, duration, 1.0,
-                "Phobos trail duration should match its orbital period (~27,577 s)");
+        assertEquals(
+                PHOBOS_PERIOD_SEC, duration, 1.0, "Phobos trail duration should match its orbital period (~27,577 s)");
     }
 
     @Test
@@ -90,7 +89,9 @@ public class TrailSamplerTest {
 
         double duration = TrailSampler.computeTrailDurationSec(-999999, et);
 
-        assertEquals(KepplrConstants.TRAIL_DEFAULT_DURATION_SEC, duration,
+        assertEquals(
+                KepplrConstants.TRAIL_DEFAULT_DURATION_SEC,
+                duration,
                 "Should fall back to 30-day default for a body not in the SPK");
     }
 }

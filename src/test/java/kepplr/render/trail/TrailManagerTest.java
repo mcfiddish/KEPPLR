@@ -15,8 +15,8 @@ public class TrailManagerTest {
     private static final int NEVER_ENABLED = 999;
 
     /**
-     * Create a TrailManager with null JME nodes. Valid for enable/disable tests that never call
-     * update() (which is the only method that accesses the nodes or asset manager).
+     * Create a TrailManager with null JME nodes. Valid for enable/disable tests that never call update() (which is the
+     * only method that accesses the nodes or asset manager).
      */
     private TrailManager manager() {
         return new TrailManager(null, null, null, null);
@@ -28,8 +28,7 @@ public class TrailManagerTest {
         TrailManager tm = manager();
         tm.enableTrail(PHOBOS);
 
-        assertTrue(tm.getEnabledIds().contains(PHOBOS),
-                "Enabled trail set should contain PHOBOS after enableTrail");
+        assertTrue(tm.getEnabledIds().contains(PHOBOS), "Enabled trail set should contain PHOBOS after enableTrail");
     }
 
     @Test
@@ -39,8 +38,8 @@ public class TrailManagerTest {
         tm.enableTrail(PHOBOS);
         tm.disableTrail(PHOBOS);
 
-        assertFalse(tm.getEnabledIds().contains(PHOBOS),
-                "Enabled trail set should not contain PHOBOS after disableTrail");
+        assertFalse(
+                tm.getEnabledIds().contains(PHOBOS), "Enabled trail set should not contain PHOBOS after disableTrail");
         assertTrue(tm.getEnabledIds().isEmpty());
     }
 
@@ -48,8 +47,8 @@ public class TrailManagerTest {
     @DisplayName("disableTrail() on a body that was never enabled does not throw")
     void testDisableMissingBody() {
         TrailManager tm = manager();
-        assertDoesNotThrow(() -> tm.disableTrail(NEVER_ENABLED),
-                "disableTrail on a body that was never enabled must not throw");
+        assertDoesNotThrow(
+                () -> tm.disableTrail(NEVER_ENABLED), "disableTrail on a body that was never enabled must not throw");
         assertTrue(tm.getEnabledIds().isEmpty());
     }
 }

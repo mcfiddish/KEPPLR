@@ -50,8 +50,8 @@ public final class KepplrConstants {
     /**
      * Per-half safety cap on adaptive trail samples.
      *
-     * <p>Applied independently to the forward and backward passes in {@code TrailSampler.sample()},
-     * so the total sample count is bounded at {@code 2 × TRAIL_SAMPLES_PER_PERIOD}.
+     * <p>Applied independently to the forward and backward passes in {@code TrailSampler.sample()}, so the total sample
+     * count is bounded at {@code 2 × TRAIL_SAMPLES_PER_PERIOD}.
      */
     public static final int TRAIL_SAMPLES_PER_PERIOD = 1801;
 
@@ -65,31 +65,29 @@ public final class KepplrConstants {
     public static final double TRAIL_DEFAULT_DURATION_SEC = 30.0 * 86_400.0;
 
     /**
-     * Primary staleness criterion: fraction of the orbital period after which a cached trail must
-     * be resampled.
+     * Primary staleness criterion: fraction of the orbital period after which a cached trail must be resampled.
      *
-     * <p>Using a period fraction means fast-period bodies (e.g., Phobos at ~7.7 h) resample
-     * frequently while slow bodies (e.g., Earth at 365 days) resample much less often.
-     * At 0.5%, Phobos resamples every ~138 s of simulation time; the fade boundary advances
-     * by only ~0.18° per cycle (well below the 2° coarse sample spacing), giving smooth fade
-     * behaviour at any time rate.
+     * <p>Using a period fraction means fast-period bodies (e.g., Phobos at ~7.7 h) resample frequently while slow
+     * bodies (e.g., Earth at 365 days) resample much less often. At 0.5%, Phobos resamples every ~138 s of simulation
+     * time; the fade boundary advances by only ~0.18° per cycle (well below the 2° coarse sample spacing), giving
+     * smooth fade behaviour at any time rate.
      */
     public static final double TRAIL_STALENESS_FRACTION = 0.0003;
 
     /**
      * Upper cap on simulation-time staleness (seconds).
      *
-     * <p>Prevents slow-period bodies (orbital period measured in years) from going without a
-     * resample for days of wall-clock time at low time rates. The effective staleness threshold
-     * is {@code min(TRAIL_STALENESS_THRESHOLD_SEC, durationSec × TRAIL_STALENESS_FRACTION)}.
+     * <p>Prevents slow-period bodies (orbital period measured in years) from going without a resample for days of
+     * wall-clock time at low time rates. The effective staleness threshold is {@code min(TRAIL_STALENESS_THRESHOLD_SEC,
+     * durationSec × TRAIL_STALENESS_FRACTION)}.
      */
     public static final double TRAIL_STALENESS_THRESHOLD_SEC = 1_800.0; // 30 simulation minutes
 
     /**
      * Minimum wall-clock interval (seconds) between SPICE trail resample passes.
      *
-     * <p>Prevents saturating the render thread with ephemeris calls when many trails are active and
-     * simulation time is advancing rapidly. Geometry is still rebuilt from cached samples every frame.
+     * <p>Prevents saturating the render thread with ephemeris calls when many trails are active and simulation time is
+     * advancing rapidly. Geometry is still rebuilt from cached samples every frame.
      */
     public static final double TRAIL_RESAMPLE_WALL_INTERVAL_SEC = 5.0;
 

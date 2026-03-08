@@ -27,11 +27,11 @@ import picante.mechanics.providers.aberrated.AberrationCorrection;
  * <h3>Period determination (REDESIGN.md §7.5)</h3>
  *
  * <ul>
- *   <li><b>Natural satellites</b> (NAIF IDs 100–999 not ending in 99): state relative to the
- *       system barycenter ({@code naifId / 100}) using {@code BODY{barycenterId}_GM}.
+ *   <li><b>Natural satellites</b> (NAIF IDs 100–999 not ending in 99): state relative to the system barycenter
+ *       ({@code naifId / 100}) using {@code BODY{barycenterId}_GM}.
  *   <li><b>Planets and all other bodies</b>: heliocentric state using {@code BODY10_GM} (Sun).
- *   <li><b>Fallback</b>: {@link KepplrConstants#TRAIL_DEFAULT_DURATION_SEC} (30 days) when the
- *       period cannot be determined (hyperbolic/parabolic orbit, null state, or exception).
+ *   <li><b>Fallback</b>: {@link KepplrConstants#TRAIL_DEFAULT_DURATION_SEC} (30 days) when the period cannot be
+ *       determined (hyperbolic/parabolic orbit, null state, or exception).
  * </ul>
  */
 public final class TrailSampler {
@@ -43,14 +43,13 @@ public final class TrailSampler {
     /**
      * Compute the trail duration in seconds for the given body at the given ET.
      *
-     * <p>Uses the OsculatingElements approach (see {@code OsculatingElementsTest} for the
-     * authoritative pattern). For natural satellites uses the barycenter-relative state and
-     * barycenter GM; for planets uses heliocentric state and the Sun's GM.
+     * <p>Uses the OsculatingElements approach (see {@code OsculatingElementsTest} for the authoritative pattern). For
+     * natural satellites uses the barycenter-relative state and barycenter GM; for planets uses heliocentric state and
+     * the Sun's GM.
      *
      * @param naifId NAIF integer ID of the body
      * @param et ephemeris time (TDB seconds past J2000)
-     * @return orbital period in seconds, or {@link KepplrConstants#TRAIL_DEFAULT_DURATION_SEC} if
-     *     undetermined
+     * @return orbital period in seconds, or {@link KepplrConstants#TRAIL_DEFAULT_DURATION_SEC} if undetermined
      */
     public static double computeTrailDurationSec(int naifId, double et) {
         KEPPLREphemeris eph = KEPPLRConfiguration.getInstance().getEphemeris();
@@ -107,37 +106,34 @@ public final class TrailSampler {
     /**
      * Sample trail positions for a body, in heliocentric J2000 coordinates.
      *
-     * <p>Uses adaptive arc-based sampling going <em>backward</em> from {@code centerEt} (the
-     * body's current position) over one full {@code durationSec}. Segments near {@code centerEt}
-     * are spaced at {@link KepplrConstants#TRAIL_MIN_ARC_DEG} of orbital arc, widening to
-     * {@link KepplrConstants#TRAIL_MAX_ARC_DEG} at the oldest edge. The forward direction (times
-     * after {@code centerEt}) is not sampled.
+     * <p>Uses adaptive arc-based sampling going <em>backward</em> from {@code centerEt} (the body's current position)
+     * over one full {@code durationSec}. Segments near {@code centerEt} are spaced at
+     * {@link KepplrConstants#TRAIL_MIN_ARC_DEG} of orbital arc, widening to {@link KepplrConstants#TRAIL_MAX_ARC_DEG}
+     * at the oldest edge. The forward direction (times after {@code centerEt}) is not sampled.
      *
-     * <p>The returned list is time-ordered oldest-first: {@code samples.get(0)} is at
-     * {@code centerEt − durationSec} and {@code samples.get(last)} is at {@code centerEt}.
-     * {@link TrailRenderer} uses this ordering to assign per-vertex alpha (newest = opaque,
-     * oldest = transparent).
+     * <p>The returned list is time-ordered oldest-first: {@code samples.get(0)} is at {@code centerEt − durationSec}
+     * and {@code samples.get(last)} is at {@code centerEt}. {@link TrailRenderer} uses this ordering to assign
+     * per-vertex alpha (newest = opaque, oldest = transparent).
      *
      * <h3>Satellite anchoring</h3>
      *
-     * <p>For natural satellites (NAIF IDs 100–999 not ending in 99) the trail is anchored to the
-     * central body (barycenter, {@code naifId / 100}) rather than traced in heliocentric space.
-     * Each sample is computed as:
+     * <p>For natural satellites (NAIF IDs 100–999 not ending in 99) the trail is anchored to the central body
+     * (barycenter, {@code naifId / 100}) rather than traced in heliocentric space. Each sample is computed as:
      *
      * <pre>
      *   baryAnchor(centerEt) + (satHelio(sampleEt) − baryHelio(sampleEt))
      * </pre>
      *
-     * <p>This produces an orbital arc centred on the barycenter's current position rather than a
-     * near-copy of the barycenter's heliocentric trail. For planets and other bodies, sample
-     * positions are heliocentric J2000 positions at each sample ET.
+     * <p>This produces an orbital arc centred on the barycenter's current position rather than a near-copy of the
+     * barycenter's heliocentric trail. For planets and other bodies, sample positions are heliocentric J2000 positions
+     * at each sample ET.
      *
      * @param naifId NAIF integer ID of the body
      * @param centerEt ET at the newest (body's current) end of the trail
      * @param durationSec total trail duration in seconds (= orbital period for period trails)
      * @param frame reference frame name (reserved; current implementation always uses J2000)
-     * @return list of {@code double[4]} arrays — [x, y, z] in km (heliocentric J2000) and
-     *     [3] = sample ET — oldest first; never null
+     * @return list of {@code double[4]} arrays — [x, y, z] in km (heliocentric J2000) and [3] = sample ET — oldest
+     *     first; never null
      */
     public static List<double[]> sample(int naifId, double centerEt, double durationSec, String frame) {
         KEPPLREphemeris eph = KEPPLRConfiguration.getInstance().getEphemeris();
@@ -180,11 +176,11 @@ public final class TrailSampler {
     /**
      * Sample the heliocentric J2000 position for a single ET, handling both planet and satellite paths.
      *
-     * <p>Package-private so {@link TrailManager} can call it each frame to keep the newest trail
-     * endpoint pinned to the body's live position between full SPICE resamples.
+     * <p>Package-private so {@link TrailManager} can call it each frame to keep the newest trail endpoint pinned to the
+     * body's live position between full SPICE resamples.
      *
-     * @return {@code double[4]} — [x, y, z] position in km and [3] = sample ET — or {@code null}
-     *     if the ephemeris cannot resolve it
+     * @return {@code double[4]} — [x, y, z] position in km and [3] = sample ET — or {@code null} if the ephemeris
+     *     cannot resolve it
      */
     static double[] sampleOnePosition(
             int naifId, int barycenterId, double[] baryAnchor, double et, KEPPLREphemeris eph) {
