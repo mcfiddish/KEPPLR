@@ -217,4 +217,44 @@ public final class KepplrConstants {
      * radius (6371 km) so vectors are legible when focused on an Earth-class body.
      */
     public static final double VECTOR_DEFAULT_SCALE_KM = 15_000.0;
+
+    // ── Star field (Step 14, REDESIGN.md §7.4) ──
+
+    /** Visual magnitude cutoff — naked-eye limit. Stars dimmer than this are not rendered. */
+    public static final double STAR_DEFAULT_MAGNITUDE_CUTOFF = 6.5;
+
+    /**
+     * Distance from the camera at which all stars are placed (km).
+     *
+     * <p>Must be inside the FAR frustum (< FRUSTUM_FAR_MAX_KM) so stars are rendered and depth-tested. Set to 90% of
+     * FAR far clip to keep stars well inside the frustum.
+     */
+    public static final double STAR_FIELD_DISTANCE_KM = 9.0e14;
+
+    /** Reference magnitude for flux ratio calculation (naked-eye limit). */
+    public static final double STAR_MAG_REF = 6.0;
+
+    /** Exponential coefficient for core brightness saturation: intensity = 1 − exp(−k · flux). */
+    public static final double STAR_CORE_K = 0.02;
+
+    /** Normalisation divisor for halo strength: haloStrength = clamp(log2(flux) / scale, 0, 1). */
+    public static final double STAR_HALO_SCALE = 5.0;
+
+    /** Base point-sprite radius in pixels at the reference magnitude (flux=1). */
+    public static final float STAR_POINT_BASE_PX = 1.5f;
+
+    /** Point-sprite radius growth per log₂ of flux ratio. */
+    public static final float STAR_POINT_SLOPE = 0.5f;
+
+    /** Maximum point-sprite radius in pixels (Sirius saturates here). */
+    public static final float STAR_POINT_MAX_PX = 8.0f;
+
+    /** Base halo radius in pixels at the reference magnitude. */
+    public static final float STAR_HALO_BASE_PX = 0.4f;
+
+    /** Halo radius growth per log₂ of flux ratio. */
+    public static final float STAR_HALO_SLOPE = 0.8f;
+
+    /** Maximum halo radius in pixels. */
+    public static final float STAR_HALO_MAX_PX = 4.0f;
 }

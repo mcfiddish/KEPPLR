@@ -1,0 +1,15 @@
+MaterialDef Star {
+    Technique {
+        VertexShader   GLSL330: kepplr/shaders/Star.vert
+        FragmentShader GLSL330: kepplr/shaders/Star.frag
+
+        WorldParameters {
+            WorldViewProjectionMatrix
+        }
+
+        RenderState {
+            Blend Additive
+            DepthWrite Off
+        }
+    }
+}

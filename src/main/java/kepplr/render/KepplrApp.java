@@ -24,6 +24,7 @@ import kepplr.render.trail.TrailManager;
 import kepplr.render.vector.VectorDefinition;
 import kepplr.render.vector.VectorManager;
 import kepplr.render.vector.VectorTypes;
+import kepplr.stars.catalogs.yaleBSC.YaleBrightStarCatalog;
 import kepplr.state.BodyInView;
 import kepplr.state.DefaultSimulationState;
 import kepplr.ui.KepplrStatusWindow;
@@ -102,6 +103,9 @@ public class KepplrApp extends SimpleApplication {
 
     // ── Vector overlay management ──────────────────────────────────────────────────────────────
     private VectorManager vectorManager;
+
+    // ── Star field management ──────────────────────────────────────────────────────────────────
+    private StarFieldManager starFieldManager;
 
     @Override
     public void simpleInitApp() {
@@ -216,6 +220,13 @@ public class KepplrApp extends SimpleApplication {
                 com.jme3.math.ColorRGBA.Yellow,
                 KepplrConstants.VECTOR_DEFAULT_SCALE_KM));
 
+        // ── Star field ────────────────────────────────────────────────────────────────────────
+        YaleBrightStarCatalog bsc =
+                YaleBrightStarCatalog.loadFromResource("/resources/kepplr/stars/catalogs/yaleBSC/ybsc5.gz");
+        starFieldManager = new StarFieldManager(farNode, assetManager);
+        starFieldManager.setCatalog(bsc);
+        starFieldManager.setMagnitudeCutoff(KepplrConstants.STAR_DEFAULT_MAGNITUDE_CUTOFF);
+
         // ── HUD and camera input ──────────────────────────────────────────────────────────────
         hud = new KepplrHud(guiNode, assetManager, cam);
         cameraInputHandler = new CameraInputHandler(cam, cameraHelioJ2000, simulationState);
@@ -246,6 +257,7 @@ public class KepplrApp extends SimpleApplication {
         List<BodyInView> inView = bodySceneManager.update(currentEt, cameraHelioJ2000, cam);
         trailManager.update(currentEt, cameraHelioJ2000);
         vectorManager.update(currentEt, cameraHelioJ2000, cam);
+        starFieldManager.update(currentEt, cameraHelioJ2000);
         simulationState.setBodiesInView(inView);
         hud.update(currentEt);
 
