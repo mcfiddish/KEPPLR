@@ -34,6 +34,13 @@ public final class SimulationStateFxBridge {
     private final SimulationState state;
     private final Consumer<Runnable> dispatcher;
 
+    /**
+     * Set to {@code true} by {@link #startPolling()} when the {@link AnimationTimer} is active.
+     * While polling, reactive listeners skip their {@code dispatcher.accept()} calls to avoid
+     * flooding the FX run queue at 60 fps; the AnimationTimer handles all updates instead.
+     */
+    private volatile boolean polling = false;
+
     // ── Bridge properties (set on FX thread via dispatcher) ──────────────────
 
     private final SimpleStringProperty selectedBodyText = new SimpleStringProperty("");
@@ -87,44 +94,57 @@ public final class SimulationStateFxBridge {
                 formatCameraPosition(state.cameraPositionJ2000Property().get()));
         bodiesInViewText.set(formatBodiesInView(state.bodiesInViewProperty().get()));
 
-        // Attach listeners — fire on the thread that mutates state (JME thread)
+        // Attach listeners — fire on the thread that mutates state (JME thread).
+        // In production, polling=true once startPolling() is called; listeners skip dispatcher to
+        // avoid flooding the FX run queue at 60 fps (the AnimationTimer handles all updates).
+        // In tests, polling=false and the injected synchronous dispatcher is used instead.
         state.selectedBodyIdProperty().addListener((obs, oldVal, newVal) -> {
+            if (polling) return;
             String s = formatBodyId(newVal.intValue());
             dispatcher.accept(() -> selectedBodyText.set(s));
         });
         state.focusedBodyIdProperty().addListener((obs, oldVal, newVal) -> {
+            if (polling) return;
             String s = formatBodyId(newVal.intValue());
             dispatcher.accept(() -> focusedBodyText.set(s));
         });
         state.targetedBodyIdProperty().addListener((obs, oldVal, newVal) -> {
+            if (polling) return;
             String s = formatBodyId(newVal.intValue());
             dispatcher.accept(() -> targetedBodyText.set(s));
         });
         state.trackedBodyIdProperty().addListener((obs, oldVal, newVal) -> {
+            if (polling) return;
             String s = formatTracked(newVal.intValue());
             dispatcher.accept(() -> trackedText.set(s));
         });
         state.currentEtProperty().addListener((obs, oldVal, newVal) -> {
+            if (polling) return;
             String s = formatEt(newVal.doubleValue());
             dispatcher.accept(() -> utcTimeText.set(s));
         });
         state.timeRateProperty().addListener((obs, oldVal, newVal) -> {
+            if (polling) return;
             String s = formatTimeRate(newVal.doubleValue());
             dispatcher.accept(() -> timeRateText.set(s));
         });
         state.pausedProperty().addListener((obs, oldVal, newVal) -> {
+            if (polling) return;
             String s = formatPaused(newVal);
             dispatcher.accept(() -> pausedText.set(s));
         });
         state.cameraFrameProperty().addListener((obs, oldVal, newVal) -> {
+            if (polling) return;
             String s = formatCameraFrame(newVal);
             dispatcher.accept(() -> cameraFrameText.set(s));
         });
         state.cameraPositionJ2000Property().addListener((obs, oldVal, newVal) -> {
+            if (polling) return;
             String s = formatCameraPosition(newVal);
             dispatcher.accept(() -> cameraPositionText.set(s));
         });
         state.bodiesInViewProperty().addListener((obs, oldVal, newVal) -> {
+            if (polling) return;
             String s = formatBodiesInView(newVal);
             dispatcher.accept(() -> bodiesInViewText.set(s));
         });
@@ -144,6 +164,7 @@ public final class SimulationStateFxBridge {
      * (tests use a synchronous dispatcher and never call this method).
      */
     public void startPolling() {
+        polling = true;
         new AnimationTimer() {
             @Override
             public void handle(long now) {
