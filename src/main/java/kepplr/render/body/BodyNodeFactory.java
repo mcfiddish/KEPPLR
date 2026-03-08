@@ -87,14 +87,15 @@ public final class BodyNodeFactory {
         fullGeom.setMaterial(createBodyMaterial(naifId, bodyId.getName(), assetManager));
         fullGeom.setCullHint(Spatial.CullHint.Inherit);
 
-        // Texture-alignment node: yaw by center longitude in body-fixed frame
+        // Texture-alignment node: yaw by center longitude + π in body-fixed frame.
+        // JME Sphere (TextureMode.Projected) places texture U=0 at local −X, so the seam is
+        // 180° away from the body-fixed prime meridian (+X). Adding π corrects for that offset
+        // so texture longitude 0 aligns with body-fixed longitude 0 when centerLon = 0.
         Node textureAlignNode = new Node(bodyId.getName() + "-tex-align");
         double centerLonRad = lookupCenterLon(bodyId.getName());
-        if (centerLonRad != 0.0) {
-            Quaternion texRot = new Quaternion();
-            texRot.fromAngleAxis((float) centerLonRad, Vector3f.UNIT_Z);
-            textureAlignNode.setLocalRotation(texRot);
-        }
+        Quaternion texRot = new Quaternion();
+        texRot.fromAngleAxis((float) (centerLonRad + Math.PI), Vector3f.UNIT_Z);
+        textureAlignNode.setLocalRotation(texRot);
         textureAlignNode.attachChild(fullGeom);
 
         // Body-fixed node: updated each frame with J2000 → body-fixed rotation
