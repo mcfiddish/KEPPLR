@@ -109,6 +109,13 @@ public class TrailManager {
                 try {
                     double duration = TrailSampler.computeTrailDurationSec(naifId, currentEt);
                     List<double[]> samples = TrailSampler.sample(naifId, currentEt, duration, "J2000");
+                    // Close the orbital loop: samples[0] and samples[last] are one full period
+                    // apart and occupy the same orbital position. Appending a copy of samples[0]
+                    // fills the seam at the 180° point so no gap is visible.
+                    if (!samples.isEmpty()) {
+                        double[] first = samples.get(0);
+                        samples.add(new double[]{first[0], first[1], first[2]});
+                    }
                     int barycenterId = -1;
                     double[] baryAnchorKm = null;
                     if (isSatellite(naifId)) {

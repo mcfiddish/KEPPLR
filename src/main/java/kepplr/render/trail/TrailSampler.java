@@ -1,6 +1,7 @@
 package kepplr.render.trail;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import kepplr.config.KEPPLRConfiguration;
 import kepplr.ephemeris.KEPPLREphemeris;
@@ -106,10 +107,14 @@ public final class TrailSampler {
     /**
      * Sample trail positions for a body, in heliocentric J2000 coordinates.
      *
-     * <p>Produces up to {@link KepplrConstants#TRAIL_SAMPLES_PER_PERIOD} (180) positions uniformly
-     * spaced over {@code [centerEt − durationSec/2, centerEt + durationSec/2]}. Positions that
-     * cannot be resolved from the ephemeris (null return or exception) are silently skipped, so the
-     * returned list may be shorter than 180 if the SPK has coverage gaps at specific sample times.
+     * <p>Uses adaptive arc-based sampling: segments near {@code centerEt} (the body's current
+     * position) are spaced at {@link KepplrConstants#TRAIL_MIN_ARC_DEG} of orbital arc, widening
+     * to {@link KepplrConstants#TRAIL_MAX_ARC_DEG} at the trail edges. This guarantees smooth,
+     * dense geometry close to the body regardless of zoom level or simulation rate.
+     *
+     * <p>Two passes march outward from {@code centerEt} — one forward and one backward — each
+     * capped at {@link KepplrConstants#TRAIL_SAMPLES_PER_PERIOD} samples. The backward pass is
+     * reversed and prepended to the forward pass to yield a time-ordered list.
      *
      * <h3>Satellite anchoring</h3>
      *
@@ -133,8 +138,6 @@ public final class TrailSampler {
      */
     public static List<double[]> sample(int naifId, double centerEt, double durationSec, String frame) {
         KEPPLREphemeris eph = KEPPLRConfiguration.getInstance().getEphemeris();
-        int n = KepplrConstants.TRAIL_SAMPLES_PER_PERIOD;
-        List<double[]> result = new ArrayList<>(n);
 
         // Satellite path: IDs 100–999 not ending in 99 (same rule as BodyCuller.isSatellite)
         boolean isSatellite = naifId >= 100 && naifId <= 999 && naifId % 100 != 99;
@@ -151,36 +154,66 @@ public final class TrailSampler {
             }
         }
 
-        double startEt = centerEt - durationSec / 2.0;
-        // n points spanning [startEt, startEt + durationSec] inclusive
-        double stepSec = (n > 1) ? durationSec / (n - 1) : 0.0;
+        double omega = 2.0 * Math.PI / durationSec;
+        double minArcRad = Math.toRadians(KepplrConstants.TRAIL_MIN_ARC_DEG);
+        double maxArcRad = Math.toRadians(KepplrConstants.TRAIL_MAX_ARC_DEG);
+        double halfDuration = durationSec / 2.0;
+        int cap = KepplrConstants.TRAIL_SAMPLES_PER_PERIOD;
 
-        for (int i = 0; i < n; i++) {
-            double sampleEt = startEt + i * stepSec;
-            try {
-                if (baryAnchor != null) {
-                    // Satellite: barycenter-relative position at sampleEt, anchored at centerEt
-                    VectorIJK satHelio = eph.getHeliocentricPositionJ2000(naifId, sampleEt);
-                    VectorIJK baryHelio = eph.getHeliocentricPositionJ2000(barycenterId, sampleEt);
-                    if (satHelio != null && baryHelio != null) {
-                        result.add(new double[] {
-                            baryAnchor[0] + satHelio.getI() - baryHelio.getI(),
-                            baryAnchor[1] + satHelio.getJ() - baryHelio.getJ(),
-                            baryAnchor[2] + satHelio.getK() - baryHelio.getK()
-                        });
-                    }
-                } else {
-                    VectorIJK pos = eph.getHeliocentricPositionJ2000(naifId, sampleEt);
-                    if (pos != null) {
-                        result.add(new double[] {pos.getI(), pos.getJ(), pos.getK()});
-                    }
-                }
-            } catch (Exception e) {
-                logger.warn("Trail sample failed for NAIF {} at ET={}: {}", naifId, sampleEt, e.getMessage());
-            }
+        // Forward pass: centerEt → centerEt + halfDuration (inclusive)
+        List<double[]> forward = new ArrayList<>();
+        double et = centerEt;
+        while (et <= centerEt + halfDuration && forward.size() < cap) {
+            double[] p = sampleOnePosition(naifId, barycenterId, baryAnchor, et, eph);
+            if (p != null) forward.add(p);
+            double f = Math.min((et - centerEt) / halfDuration, 1.0);
+            et += (minArcRad + (maxArcRad - minArcRad) * f) / omega;
         }
 
-        return result;
+        // Backward pass: centerEt−firstStep → centerEt−halfDuration (inclusive)
+        List<double[]> backward = new ArrayList<>();
+        et = centerEt - minArcRad / omega;
+        while (et >= centerEt - halfDuration && backward.size() < cap) {
+            double[] p = sampleOnePosition(naifId, barycenterId, baryAnchor, et, eph);
+            if (p != null) backward.add(p);
+            double f = Math.min((centerEt - et) / halfDuration, 1.0);
+            et -= (minArcRad + (maxArcRad - minArcRad) * f) / omega;
+        }
+
+        Collections.reverse(backward);
+        backward.addAll(forward);
+        return backward;
+    }
+
+    /**
+     * Sample the heliocentric J2000 position for a single ET, handling both planet and satellite paths.
+     *
+     * @return {@code double[3]} position in km, or {@code null} if the ephemeris cannot resolve it
+     */
+    private static double[] sampleOnePosition(
+            int naifId, int barycenterId, double[] baryAnchor, double et, KEPPLREphemeris eph) {
+        try {
+            if (baryAnchor != null) {
+                // Satellite: barycenter-relative position at et, anchored at centerEt
+                VectorIJK satHelio = eph.getHeliocentricPositionJ2000(naifId, et);
+                VectorIJK baryHelio = eph.getHeliocentricPositionJ2000(barycenterId, et);
+                if (satHelio != null && baryHelio != null) {
+                    return new double[] {
+                        baryAnchor[0] + satHelio.getI() - baryHelio.getI(),
+                        baryAnchor[1] + satHelio.getJ() - baryHelio.getJ(),
+                        baryAnchor[2] + satHelio.getK() - baryHelio.getK()
+                    };
+                }
+            } else {
+                VectorIJK pos = eph.getHeliocentricPositionJ2000(naifId, et);
+                if (pos != null) {
+                    return new double[] {pos.getI(), pos.getJ(), pos.getK()};
+                }
+            }
+        } catch (Exception e) {
+            logger.warn("Trail sample failed for NAIF {} at ET={}: {}", naifId, et, e.getMessage());
+        }
+        return null;
     }
 
     /**

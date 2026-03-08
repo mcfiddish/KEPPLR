@@ -31,18 +31,23 @@ public class TrailSamplerTest {
     }
 
     @Test
-    @DisplayName("sample() produces 181 positions for Phobos over one full orbital period")
+    @DisplayName("sample() produces adaptively spaced positions for Phobos over one full orbital period")
     void testPhobos180Samples() {
         // The test SPK covers Phobos w.r.t. Mars Barycenter, Mars Barycenter w.r.t. SSB, and
         // Sun w.r.t. SSB for the full day 2015 JUL 14 00:01–JUL 15 00:01. Centering at the
         // test epoch (07:59:00) with one Phobos period (≈7.66 h) spans [04:09, 11:49] — entirely
-        // within the 24-hour heliocentric coverage window, so all 181 samples resolve directly.
+        // within the 24-hour heliocentric coverage window, so all samples resolve directly.
         double et = TestHarness.getTestEpoch(); // 2015 Jul 14 07:59:00 UTC
 
         List<double[]> samples = TrailSampler.sample(PHOBOS, et, PHOBOS_PERIOD_SEC, "J2000");
 
-        assertEquals(KepplrConstants.TRAIL_SAMPLES_PER_PERIOD, samples.size(),
-                "Expected exactly 181 samples over one Phobos orbital period");
+        // Adaptive sampling: count ≈ 568 for one Phobos period with 0.1°–2° arc steps.
+        // Lower bound: if all steps were maxArc → 2π/maxArcRad ≈ 180 samples.
+        // Upper bound: if all steps were minArc → 2π/minArcRad ≈ 3600 samples.
+        int minExpected = (int) Math.floor(2 * Math.PI / Math.toRadians(KepplrConstants.TRAIL_MAX_ARC_DEG));
+        int maxExpected = (int) Math.ceil(2 * Math.PI / Math.toRadians(KepplrConstants.TRAIL_MIN_ARC_DEG));
+        assertTrue(samples.size() >= minExpected && samples.size() <= maxExpected,
+                "Adaptive sample count " + samples.size() + " out of range [" + minExpected + ", " + maxExpected + "]");
 
         // Every position must be a non-null double[3] within a physically plausible range.
         // Samples are anchored at Mars barycenter's heliocentric position at centerEt (≈1.5 AU

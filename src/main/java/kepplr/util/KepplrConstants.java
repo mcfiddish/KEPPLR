@@ -47,8 +47,19 @@ public final class KepplrConstants {
 
     // ── Trail sampling (REDESIGN.md §7.5) ──
 
-    /** Default number of samples per orbital period for trajectory trails. */
-    public static final int TRAIL_SAMPLES_PER_PERIOD = 181;
+    /**
+     * Per-half safety cap on adaptive trail samples.
+     *
+     * <p>Applied independently to the forward and backward passes in {@code TrailSampler.sample()},
+     * so the total sample count is bounded at {@code 2 × TRAIL_SAMPLES_PER_PERIOD}.
+     */
+    public static final int TRAIL_SAMPLES_PER_PERIOD = 1801;
+
+    /** Minimum angular arc per trail segment, used near the body's current position (degrees). */
+    public static final double TRAIL_MIN_ARC_DEG = 0.01;
+
+    /** Maximum angular arc per trail segment, used at the orbit edges far from the body (degrees). */
+    public static final double TRAIL_MAX_ARC_DEG = 2.0;
 
     /** Default trail duration in seconds when orbital period is unknown (30 days). */
     public static final double TRAIL_DEFAULT_DURATION_SEC = 30.0 * 86_400.0;
