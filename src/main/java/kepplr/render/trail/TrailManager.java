@@ -2,6 +2,7 @@ package kepplr.render.trail;
 
 import com.jme3.asset.AssetManager;
 import com.jme3.scene.Node;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
@@ -18,15 +19,19 @@ import picante.math.vectorspace.VectorIJK;
 /**
  * Coordinates trail sampling and rendering for all enabled bodies.
  *
- * <p>Called once per frame from the JME render thread. Sampling ({@link TrailSampler}) is
- * rate-limited by the staleness threshold: SPICE calls are made only for trails whose cached ET
- * has drifted more than {@link KepplrConstants#TRAIL_STALENESS_THRESHOLD_SEC} from the current ET.
- * After a resample the state is fresh and the next resample will not occur until one simulated day
- * has elapsed.
+ * <p>Called once per frame from the JME render thread. The trail for each body has two parts:
  *
- * <p>Geometry is rebuilt from cached samples every frame (camera-relative conversion via floating
- * origin). Bodies with no valid ephemeris are logged and skipped; no exception propagates to the
- * caller.
+ * <ol>
+ *   <li><b>Cached samples</b> — the full adaptive backward pass produced by
+ *       {@link TrailSampler#sample} at the last resample time ({@code sampledEt}). This is
+ *       recomputed only when {@code |currentEt − sampledEt|} exceeds
+ *       {@link KepplrConstants#TRAIL_STALENESS_THRESHOLD_SEC}.
+ *   <li><b>Live segment</b> — bridges the gap between {@code sampledEt} and {@code currentEt}.
+ *       It consists of <em>fixed intermediate points</em> (appended once each time {@code currentEt}
+ *       crosses a {@link KepplrConstants#TRAIL_MAX_ARC_DEG} boundary, then never moved) plus a
+ *       single <em>moving endpoint</em> recomputed at {@code currentEt} every frame. Intermediate
+ *       points are fixed so they do not shimmer; only the final 0–2° segment grows and resets.
+ * </ol>
  *
  * <p>All methods must be called on the JME render thread (CLAUDE.md Rule 4).
  */
@@ -42,8 +47,17 @@ public class TrailManager {
     /** NAIF IDs for which trails are active. Insertion-ordered for deterministic update sequence. */
     private final Set<Integer> enabledIds = new LinkedHashSet<>();
 
-    /** Cached SPICE samples per NAIF ID. Replaced whenever the trail is resampled. */
+    /** Cached SPICE samples per NAIF ID. Replaced on full resample. */
     private final Map<Integer, TrailState> trailStates = new HashMap<>();
+
+    /**
+     * Fixed intermediate live-segment points per NAIF ID.
+     *
+     * <p>Each entry grows by one point every time {@code currentEt} crosses a
+     * {@link KepplrConstants#TRAIL_MAX_ARC_DEG} boundary past {@code sampledEt}. Cleared on full
+     * resample. Points are ordered oldest-first (ascending ET).
+     */
+    private final Map<Integer, List<double[]>> liveFixedMap = new HashMap<>();
 
     /** Renderer per NAIF ID; created on first update after enableTrail. */
     private final Map<Integer, TrailRenderer> renderers = new HashMap<>();
@@ -61,24 +75,14 @@ public class TrailManager {
         this.assetManager = assetManager;
     }
 
-    /**
-     * Enable a trail for the given body.
-     *
-     * <p>The trail will be sampled and rendered on the next {@link #update} call that falls within
-     * the resample window. No ephemeris access occurs here.
-     *
-     * @param naifId NAIF integer ID of the body
-     */
+    /** Enable a trail for the given body. No ephemeris access occurs here. */
     public void enableTrail(int naifId) {
         enabledIds.add(naifId);
     }
 
     /**
      * Disable and remove the trail for the given body.
-     *
-     * <p>If the body has no active trail, this is a no-op (no exception thrown).
-     *
-     * @param naifId NAIF integer ID of the body
+     * If the body has no active trail, this is a no-op.
      */
     public void disableTrail(int naifId) {
         enabledIds.remove(naifId);
@@ -87,14 +91,11 @@ public class TrailManager {
             renderer.detach();
         }
         trailStates.remove(naifId);
+        liveFixedMap.remove(naifId);
     }
 
     /**
      * Update all active trails for the current simulation time.
-     *
-     * <p>SPICE resampling is performed whenever the staleness threshold is exceeded. Geometry is
-     * always rebuilt from cached samples (floating-origin camera conversion). Bodies whose
-     * ephemeris throws are logged and skipped.
      *
      * @param currentEt current simulation ET (TDB seconds past J2000)
      * @param cameraHelioJ2000 camera heliocentric J2000 position in km (length ≥ 3)
@@ -102,20 +103,16 @@ public class TrailManager {
     public void update(double currentEt, double[] cameraHelioJ2000) {
         for (int naifId : enabledIds) {
             TrailState state = trailStates.get(naifId);
+            double stalenessThreshold = state == null ? 0.0 : Math.min(
+                    KepplrConstants.TRAIL_STALENESS_THRESHOLD_SEC,
+                    state.durationSec() * KepplrConstants.TRAIL_STALENESS_FRACTION);
             boolean stale = state == null
-                    || Math.abs(currentEt - state.sampledEt()) > KepplrConstants.TRAIL_STALENESS_THRESHOLD_SEC;
+                    || Math.abs(currentEt - state.sampledEt()) > stalenessThreshold;
 
             if (stale) {
                 try {
                     double duration = TrailSampler.computeTrailDurationSec(naifId, currentEt);
                     List<double[]> samples = TrailSampler.sample(naifId, currentEt, duration, "J2000");
-                    // Close the orbital loop: samples[0] and samples[last] are one full period
-                    // apart and occupy the same orbital position. Appending a copy of samples[0]
-                    // fills the seam at the 180° point so no gap is visible.
-                    if (!samples.isEmpty()) {
-                        double[] first = samples.get(0);
-                        samples.add(new double[]{first[0], first[1], first[2]});
-                    }
                     int barycenterId = -1;
                     double[] baryAnchorKm = null;
                     if (isSatellite(naifId)) {
@@ -126,35 +123,68 @@ public class TrailManager {
                             baryAnchorKm = new double[]{anchor.getI(), anchor.getJ(), anchor.getK()};
                         }
                     }
-                    state = new TrailState(currentEt, samples, barycenterId, baryAnchorKm);
+                    state = new TrailState(currentEt, duration, samples, barycenterId, baryAnchorKm);
                     trailStates.put(naifId, state);
+                    liveFixedMap.put(naifId, new ArrayList<>()); // clear live segment on resample
                 } catch (Exception e) {
                     logger.warn("Trail resample failed for NAIF {}: {}", naifId, e.getMessage());
                 }
             }
 
-            if (state != null && !state.samples().isEmpty()) {
-                TrailRenderer renderer = renderers.computeIfAbsent(
-                        naifId, id -> new TrailRenderer(id, assetManager, nearNode, midNode, farNode));
-                try {
-                    double[] offset = null;
-                    if (state.barycenterId() >= 0 && state.baryAnchorKm() != null) {
-                        KEPPLREphemeris eph = KEPPLRConfiguration.getInstance().getEphemeris();
-                        VectorIJK liveAnchor =
-                                eph.getHeliocentricPositionJ2000(state.barycenterId(), currentEt);
-                        if (liveAnchor != null) {
-                            double[] ba = state.baryAnchorKm();
-                            offset = new double[]{
-                                liveAnchor.getI() - ba[0],
-                                liveAnchor.getJ() - ba[1],
-                                liveAnchor.getK() - ba[2]
-                            };
-                        }
+            if (state == null || state.samples().isEmpty()) continue;
+
+            KEPPLREphemeris eph = KEPPLRConfiguration.getInstance().getEphemeris();
+
+            // ── Live segment ──────────────────────────────────────────────────────────────────
+            // Fixed intermediate points: appended once each time currentEt crosses a stepSec
+            // boundary. Stored permanently so they never move between frames (no shimmer).
+            List<double[]> liveFixed = liveFixedMap.computeIfAbsent(naifId, id -> new ArrayList<>());
+            double stepSec = Math.toRadians(KepplrConstants.TRAIL_MIN_ARC_DEG)
+                    / (2.0 * Math.PI / state.durationSec());
+            double lastFixedEt = liveFixed.isEmpty()
+                    ? state.sampledEt()
+                    : liveFixed.get(liveFixed.size() - 1)[3];
+            while (currentEt - lastFixedEt >= stepSec) {
+                double newFixedEt = lastFixedEt + stepSec;
+                double[] p = TrailSampler.sampleOnePosition(
+                        naifId, state.barycenterId(), state.baryAnchorKm(), newFixedEt, eph);
+                if (p != null) liveFixed.add(p);
+                lastFixedEt = newFixedEt;
+            }
+
+            // Moving endpoint: always at currentEt, recomputed every frame.
+            // Only the final 0–stepSec segment between the last fixed point and the moving
+            // endpoint grows and resets; everything behind it is stable.
+            double[] movingPos = TrailSampler.sampleOnePosition(
+                    naifId, state.barycenterId(), state.baryAnchorKm(), currentEt, eph);
+
+            // ── Render ────────────────────────────────────────────────────────────────────────
+            TrailRenderer renderer = renderers.computeIfAbsent(
+                    naifId, id -> new TrailRenderer(id, assetManager, nearNode, midNode, farNode));
+            try {
+                double[] offset = null;
+                if (state.barycenterId() >= 0 && state.baryAnchorKm() != null) {
+                    VectorIJK liveAnchor =
+                            eph.getHeliocentricPositionJ2000(state.barycenterId(), currentEt);
+                    if (liveAnchor != null) {
+                        double[] ba = state.baryAnchorKm();
+                        offset = new double[]{
+                            liveAnchor.getI() - ba[0],
+                            liveAnchor.getJ() - ba[1],
+                            liveAnchor.getK() - ba[2]
+                        };
                     }
-                    renderer.update(state.samples(), cameraHelioJ2000, offset);
-                } catch (Exception e) {
-                    logger.warn("Trail render failed for NAIF {}: {}", naifId, e.getMessage());
                 }
+
+                List<double[]> combined = new ArrayList<>(
+                        state.samples().size() + liveFixed.size() + 1);
+                combined.addAll(state.samples());
+                combined.addAll(liveFixed);
+                if (movingPos != null) combined.add(movingPos);
+
+                renderer.update(combined, cameraHelioJ2000, offset);
+            } catch (Exception e) {
+                logger.warn("Trail render failed for NAIF {}: {}", naifId, e.getMessage());
             }
         }
     }
@@ -166,9 +196,7 @@ public class TrailManager {
 
     /**
      * Returns an unmodifiable view of the currently enabled NAIF IDs.
-     *
-     * <p>Package-private; intended for use in tests to inspect internal state without triggering
-     * ephemeris or JME calls.
+     * Package-private for tests.
      */
     Set<Integer> getEnabledIds() {
         return Collections.unmodifiableSet(enabledIds);
@@ -177,8 +205,9 @@ public class TrailManager {
     /** Immutable snapshot of a trail's sampled state. */
     private record TrailState(
             double sampledEt,
+            double durationSec,
             List<double[]> samples,
-            int barycenterId,       // naifId/100 for satellites, -1 for planets
-            double[] baryAnchorKm   // H_bary at sampledEt (km), null for planets
+            int barycenterId,
+            double[] baryAnchorKm
     ) {}
 }

@@ -107,14 +107,16 @@ public final class TrailSampler {
     /**
      * Sample trail positions for a body, in heliocentric J2000 coordinates.
      *
-     * <p>Uses adaptive arc-based sampling: segments near {@code centerEt} (the body's current
-     * position) are spaced at {@link KepplrConstants#TRAIL_MIN_ARC_DEG} of orbital arc, widening
-     * to {@link KepplrConstants#TRAIL_MAX_ARC_DEG} at the trail edges. This guarantees smooth,
-     * dense geometry close to the body regardless of zoom level or simulation rate.
+     * <p>Uses adaptive arc-based sampling going <em>backward</em> from {@code centerEt} (the
+     * body's current position) over one full {@code durationSec}. Segments near {@code centerEt}
+     * are spaced at {@link KepplrConstants#TRAIL_MIN_ARC_DEG} of orbital arc, widening to
+     * {@link KepplrConstants#TRAIL_MAX_ARC_DEG} at the oldest edge. The forward direction (times
+     * after {@code centerEt}) is not sampled.
      *
-     * <p>Two passes march outward from {@code centerEt} — one forward and one backward — each
-     * capped at {@link KepplrConstants#TRAIL_SAMPLES_PER_PERIOD} samples. The backward pass is
-     * reversed and prepended to the forward pass to yield a time-ordered list.
+     * <p>The returned list is time-ordered oldest-first: {@code samples.get(0)} is at
+     * {@code centerEt − durationSec} and {@code samples.get(last)} is at {@code centerEt}.
+     * {@link TrailRenderer} uses this ordering to assign per-vertex alpha (newest = opaque,
+     * oldest = transparent).
      *
      * <h3>Satellite anchoring</h3>
      *
@@ -131,10 +133,11 @@ public final class TrailSampler {
      * positions are heliocentric J2000 positions at each sample ET.
      *
      * @param naifId NAIF integer ID of the body
-     * @param centerEt ET at the center of the trail window
-     * @param durationSec total trail duration in seconds
+     * @param centerEt ET at the newest (body's current) end of the trail
+     * @param durationSec total trail duration in seconds (= orbital period for period trails)
      * @param frame reference frame name (reserved; current implementation always uses J2000)
-     * @return list of {@code double[3]} position arrays in km (heliocentric J2000); never null
+     * @return list of {@code double[4]} arrays — [x, y, z] in km (heliocentric J2000) and
+     *     [3] = sample ET — oldest first; never null
      */
     public static List<double[]> sample(int naifId, double centerEt, double durationSec, String frame) {
         KEPPLREphemeris eph = KEPPLRConfiguration.getInstance().getEphemeris();
@@ -157,40 +160,33 @@ public final class TrailSampler {
         double omega = 2.0 * Math.PI / durationSec;
         double minArcRad = Math.toRadians(KepplrConstants.TRAIL_MIN_ARC_DEG);
         double maxArcRad = Math.toRadians(KepplrConstants.TRAIL_MAX_ARC_DEG);
-        double halfDuration = durationSec / 2.0;
         int cap = KepplrConstants.TRAIL_SAMPLES_PER_PERIOD;
 
-        // Forward pass: centerEt → centerEt + halfDuration (inclusive)
-        List<double[]> forward = new ArrayList<>();
-        double et = centerEt;
-        while (et <= centerEt + halfDuration && forward.size() < cap) {
-            double[] p = sampleOnePosition(naifId, barycenterId, baryAnchor, et, eph);
-            if (p != null) forward.add(p);
-            double f = Math.min((et - centerEt) / halfDuration, 1.0);
-            et += (minArcRad + (maxArcRad - minArcRad) * f) / omega;
-        }
-
-        // Backward pass: centerEt−firstStep → centerEt−halfDuration (inclusive)
+        // Single backward pass: centerEt → centerEt − durationSec
+        // Collected newest-first, then reversed to yield oldest-first for TrailRenderer.
         List<double[]> backward = new ArrayList<>();
-        et = centerEt - minArcRad / omega;
-        while (et >= centerEt - halfDuration && backward.size() < cap) {
+        double et = centerEt;
+        while (et >= centerEt - durationSec && backward.size() < cap) {
             double[] p = sampleOnePosition(naifId, barycenterId, baryAnchor, et, eph);
             if (p != null) backward.add(p);
-            double f = Math.min((centerEt - et) / halfDuration, 1.0);
+            double f = Math.min((centerEt - et) / durationSec, 1.0);
             et -= (minArcRad + (maxArcRad - minArcRad) * f) / omega;
         }
 
-        Collections.reverse(backward);
-        backward.addAll(forward);
+        Collections.reverse(backward); // now oldest-first, newest-last
         return backward;
     }
 
     /**
      * Sample the heliocentric J2000 position for a single ET, handling both planet and satellite paths.
      *
-     * @return {@code double[3]} position in km, or {@code null} if the ephemeris cannot resolve it
+     * <p>Package-private so {@link TrailManager} can call it each frame to keep the newest trail
+     * endpoint pinned to the body's live position between full SPICE resamples.
+     *
+     * @return {@code double[4]} — [x, y, z] position in km and [3] = sample ET — or {@code null}
+     *     if the ephemeris cannot resolve it
      */
-    private static double[] sampleOnePosition(
+    static double[] sampleOnePosition(
             int naifId, int barycenterId, double[] baryAnchor, double et, KEPPLREphemeris eph) {
         try {
             if (baryAnchor != null) {
@@ -201,13 +197,14 @@ public final class TrailSampler {
                     return new double[] {
                         baryAnchor[0] + satHelio.getI() - baryHelio.getI(),
                         baryAnchor[1] + satHelio.getJ() - baryHelio.getJ(),
-                        baryAnchor[2] + satHelio.getK() - baryHelio.getK()
+                        baryAnchor[2] + satHelio.getK() - baryHelio.getK(),
+                        et
                     };
                 }
             } else {
                 VectorIJK pos = eph.getHeliocentricPositionJ2000(naifId, et);
                 if (pos != null) {
-                    return new double[] {pos.getI(), pos.getJ(), pos.getK()};
+                    return new double[] {pos.getI(), pos.getJ(), pos.getK(), et};
                 }
             }
         } catch (Exception e) {

@@ -34,9 +34,9 @@ public class TrailSamplerTest {
     @DisplayName("sample() produces adaptively spaced positions for Phobos over one full orbital period")
     void testPhobos180Samples() {
         // The test SPK covers Phobos w.r.t. Mars Barycenter, Mars Barycenter w.r.t. SSB, and
-        // Sun w.r.t. SSB for the full day 2015 JUL 14 00:01–JUL 15 00:01. Centering at the
-        // test epoch (07:59:00) with one Phobos period (≈7.66 h) spans [04:09, 11:49] — entirely
-        // within the 24-hour heliocentric coverage window, so all samples resolve directly.
+        // Sun w.r.t. SSB for the full day 2015 JUL 14 00:01–JUL 15 00:01. The trail now goes
+        // backward only: centerEt (07:59) back one full Phobos period (≈7.66 h) → [00:19, 07:59]
+        // — entirely within the 24-hour heliocentric coverage window, so all samples resolve.
         double et = TestHarness.getTestEpoch(); // 2015 Jul 14 07:59:00 UTC
 
         List<double[]> samples = TrailSampler.sample(PHOBOS, et, PHOBOS_PERIOD_SEC, "J2000");
@@ -53,12 +53,17 @@ public class TrailSamplerTest {
         // Samples are anchored at Mars barycenter's heliocentric position at centerEt (≈1.5 AU
         // ≈ 2.25e8 km). Phobos orbits at ~9400 km from Mars, so each sample is displaced by at
         // most ~9400 km from Mars's position — still well within [1e7, 1e9] km from the Sun.
-        for (double[] pos : samples) {
+        double testEt = et;
+        for (int idx = 0; idx < samples.size(); idx++) {
+            double[] pos = samples.get(idx);
             assertNotNull(pos);
-            assertEquals(3, pos.length);
+            assertEquals(4, pos.length, "Each sample must be double[4] with ET at index 3");
             double distFromSun = Math.sqrt(pos[0] * pos[0] + pos[1] * pos[1] + pos[2] * pos[2]);
             assertTrue(distFromSun > 1e7 && distFromSun < 1e9,
                     "Distance from Sun out of range: " + distFromSun);
+            // ET must be within the trail window [centerEt - period, centerEt]
+            assertTrue(pos[3] >= testEt - PHOBOS_PERIOD_SEC - 1.0 && pos[3] <= testEt + 1.0,
+                    "Sample ET out of trail window: " + pos[3]);
         }
     }
 

@@ -2,8 +2,10 @@ package kepplr.render.trail;
 
 import com.jme3.asset.AssetManager;
 import com.jme3.material.Material;
+import com.jme3.material.RenderState;
 import com.jme3.math.ColorRGBA;
 import com.jme3.math.Vector3f;
+import com.jme3.renderer.queue.RenderQueue;
 import com.jme3.scene.Geometry;
 import com.jme3.scene.Mesh;
 import com.jme3.scene.Node;
@@ -37,6 +39,14 @@ class TrailRenderer {
     private final ColorRGBA color;
     private final Map<FrustumLayer, Node> layerNodes;
 
+    /**
+     * Fraction of the trail (measured from the newest end) beyond which alpha is zero.
+     *
+     * <p>Value 0.9 means the trail fades to fully transparent 90% of the way back in time.
+     * The oldest 10% of samples are drawn with alpha = 0 and contribute no visible pixels.
+     */
+    private static final float FADE_CUTOFF = 0.9f;
+
     /** Currently attached geometries, keyed by layer. Cleared and rebuilt on each update. */
     private final Map<FrustumLayer, Geometry> attached = new EnumMap<>(FrustumLayer.class);
 
@@ -63,7 +73,13 @@ class TrailRenderer {
      * segment to a frustum layer, and attaches the resulting geometries to the layer nodes.
      * Previously attached geometries are detached before rebuilding.
      *
-     * @param samples heliocentric J2000 positions in km (each element is {@code double[3]})
+     * <p>The list is expected to be time-ordered oldest-first (as produced by
+     * {@link TrailSampler#sample}). Alpha is 1.0 at the newest end and fades linearly to 0.0 at
+     * {@link #FADE_CUTOFF} of the way back in time. Segments beyond that fraction are emitted with
+     * alpha 0 and contribute no visible pixels.
+     *
+     * @param samples heliocentric J2000 positions in km, oldest-first (each element is
+     *     {@code double[3]})
      * @param cameraHelioJ2000 camera heliocentric J2000 position in km (length ≥ 3)
      * @param sampleOffsetOrNull offset to add to each sample position before rendering (km), or
      *     {@code null} for no offset; used to shift satellite trails by the live barycenter drift
@@ -79,15 +95,22 @@ class TrailRenderer {
         double oy = sampleOffsetOrNull != null ? sampleOffsetOrNull[1] : 0.0;
         double oz = sampleOffsetOrNull != null ? sampleOffsetOrNull[2] : 0.0;
 
-        // Collect line-segment vertex pairs per frustum layer.
+        int n = samples.size();
+        // ET range: samples[0] = oldest, samples[n-1] = newest (centerEt).
+        double oldestEt = samples.get(0)[3];
+        double newestEt = samples.get(n - 1)[3];
+
+        // Collect line-segment vertex pairs and per-vertex alphas per frustum layer.
         // Each segment is stored as two consecutive vertices (v_start, v_end) so the index buffer
         // can pair them directly in Mesh.Mode.Lines without a strip connection across layers.
         Map<FrustumLayer, List<Vector3f>> layerPairs = new EnumMap<>(FrustumLayer.class);
+        Map<FrustumLayer, List<Float>> layerAlphas = new EnumMap<>(FrustumLayer.class);
         for (FrustumLayer layer : FrustumLayer.values()) {
             layerPairs.put(layer, new ArrayList<>());
+            layerAlphas.put(layer, new ArrayList<>());
         }
 
-        for (int i = 0; i < samples.size() - 1; i++) {
+        for (int i = 0; i < n - 1; i++) {
             double[] p0 = samples.get(i);
             double[] p1 = samples.get(i + 1);
 
@@ -97,9 +120,10 @@ class TrailRenderer {
             double dist = Math.sqrt(midX * midX + midY * midY + midZ * midZ);
 
             FrustumLayer layer = FrustumLayer.assign(dist, 0.0);
-            List<Vector3f> pairs = layerPairs.get(layer);
-            pairs.add(toScene(p0, ox, oy, oz, cameraHelioJ2000));
-            pairs.add(toScene(p1, ox, oy, oz, cameraHelioJ2000));
+            layerPairs.get(layer).add(toScene(p0, ox, oy, oz, cameraHelioJ2000));
+            layerPairs.get(layer).add(toScene(p1, ox, oy, oz, cameraHelioJ2000));
+            layerAlphas.get(layer).add(vertexAlpha(samples.get(i)[3], newestEt, oldestEt));
+            layerAlphas.get(layer).add(vertexAlpha(samples.get(i + 1)[3], newestEt, oldestEt));
         }
 
         // Build and attach one Geometry per layer that has at least one segment.
@@ -115,21 +139,54 @@ class TrailRenderer {
                 indices[i] = i;
             }
 
+            // Build per-vertex color buffer: RGB from trail color, A from fade calculation.
+            List<Float> alphas = layerAlphas.get(layer);
+            float[] colorData = new float[verts.length * 4];
+            for (int i = 0; i < verts.length; i++) {
+                colorData[i * 4]     = color.r;
+                colorData[i * 4 + 1] = color.g;
+                colorData[i * 4 + 2] = color.b;
+                colorData[i * 4 + 3] = alphas.get(i);
+            }
+
             Mesh mesh = new Mesh();
             mesh.setMode(Mesh.Mode.Lines);
             mesh.setBuffer(VertexBuffer.Type.Position, 3, BufferUtils.createFloatBuffer(verts));
+            mesh.setBuffer(VertexBuffer.Type.Color, 4, BufferUtils.createFloatBuffer(colorData));
             mesh.setBuffer(VertexBuffer.Type.Index, 2, BufferUtils.createIntBuffer(indices));
             mesh.updateBound();
 
             Material mat = new Material(assetManager, "Common/MatDefs/Misc/Unshaded.j3md");
-            mat.setColor("Color", color);
+            mat.setBoolean("VertexColor", true);
+            mat.getAdditionalRenderState().setBlendMode(RenderState.BlendMode.Alpha);
 
             Geometry geom = new Geometry("trail-" + layer.name(), mesh);
             geom.setMaterial(mat);
+            geom.setQueueBucket(RenderQueue.Bucket.Transparent);
 
             layerNodes.get(layer).attachChild(geom);
             attached.put(layer, geom);
         }
+    }
+
+    /**
+     * Compute the alpha for a sample at a given ET.
+     *
+     * <p>Alpha is 1.0 at {@code newestEt} and fades linearly to 0.0 at {@link #FADE_CUTOFF} of
+     * the total duration back in time, based on actual elapsed time rather than sample index.
+     * This is correct for non-uniform (adaptive) sampling where index spacing ≠ time spacing.
+     *
+     * @param sampleEt ET of this sample
+     * @param newestEt ET of the newest sample (body's current position, alpha = 1.0)
+     * @param oldestEt ET of the oldest sample (alpha = 0.0 at FADE_CUTOFF fraction)
+     * @return alpha in [0, 1]
+     */
+    private static float vertexAlpha(double sampleEt, double newestEt, double oldestEt) {
+        double totalDuration = newestEt - oldestEt;
+        if (totalDuration <= 0.0) return 1.0f;
+        // ageFraction: 0.0 = newest, 1.0 = oldest
+        double ageFraction = (newestEt - sampleEt) / totalDuration;
+        return (float) Math.max(0.0, 1.0 - ageFraction / FADE_CUTOFF);
     }
 
     /** Detach all trail geometry from scene graph nodes. */
