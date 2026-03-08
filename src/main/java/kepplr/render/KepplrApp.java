@@ -11,6 +11,7 @@ import com.jme3.renderer.ViewPort;
 import com.jme3.scene.Node;
 import com.jme3.system.AppSettings;
 import java.time.Instant;
+import java.util.List;
 import javafx.application.Platform;
 import kepplr.camera.CameraInputHandler;
 import kepplr.commands.DefaultSimulationCommands;
@@ -18,6 +19,7 @@ import kepplr.config.KEPPLRConfiguration;
 import kepplr.core.SimulationClock;
 import kepplr.ephemeris.KEPPLREphemeris;
 import kepplr.render.body.BodySceneManager;
+import kepplr.state.BodyInView;
 import kepplr.render.frustum.FrustumLayer;
 import kepplr.state.DefaultSimulationState;
 import kepplr.ui.KepplrStatusWindow;
@@ -200,6 +202,9 @@ public class KepplrApp extends SimpleApplication {
     public void simpleUpdate(float tpf) {
         simulationClock.advance();
         cameraInputHandler.update();
+        // Clone so SimpleObjectProperty sees a new reference and fires listeners (in-place mutation
+        // would leave the reference unchanged and suppress change notifications)
+        simulationState.setCameraPositionJ2000(cameraHelioJ2000.clone());
 
         // Sync slave cameras to master orientation (position is always ZERO in floating-origin)
         midCam.setLocation(cam.getLocation());
@@ -214,7 +219,8 @@ public class KepplrApp extends SimpleApplication {
         sunLightNear.setPosition(sunScenePos);
 
         double currentEt = simulationState.currentEtProperty().get();
-        bodySceneManager.update(currentEt, cameraHelioJ2000, cam);
+        List<BodyInView> inView = bodySceneManager.update(currentEt, cameraHelioJ2000, cam);
+        simulationState.setBodiesInView(inView);
         hud.update(currentEt);
 
         // JME calls updateGeometricState() only on rootNode and guiNode (SimpleApplication source).

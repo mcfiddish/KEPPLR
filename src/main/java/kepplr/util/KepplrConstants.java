@@ -135,6 +135,15 @@ public final class KepplrConstants {
     public static final float CAMERA_FOV_Y_DEG = 45f;
 
     /**
+     * Cosine threshold used to filter the "bodies in view" status list (§10.2).
+     *
+     * <p>A body's scene-space unit vector must satisfy {@code cam.direction · bodyDir ≥ threshold}
+     * to be included. {@code cos(45°) ≈ 0.707} means within ~45° of the camera centre, which
+     * covers the full diagonal FOV for a 45° vertical FOV at 16:9 aspect with a small margin.
+     */
+    public static final float BODIES_IN_VIEW_COS_THRESHOLD = 0.707f;
+
+    /**
      * Visual size of a point-sprite in screen pixels.
      *
      * <p>Used by {@link kepplr.render.body.BodySceneNode} to scale sprite geometry so it appears

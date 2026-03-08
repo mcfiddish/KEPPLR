@@ -1,11 +1,14 @@
 package kepplr.ui;
 
+import java.util.List;
 import java.util.function.Consumer;
+import javafx.animation.AnimationTimer;
 import javafx.application.Platform;
 import javafx.beans.property.ReadOnlyStringProperty;
 import javafx.beans.property.SimpleStringProperty;
 import kepplr.camera.CameraFrame;
 import kepplr.config.KEPPLRConfiguration;
+import kepplr.state.BodyInView;
 import kepplr.state.SimulationState;
 
 /**
@@ -28,6 +31,7 @@ import kepplr.state.SimulationState;
  */
 public final class SimulationStateFxBridge {
 
+    private final SimulationState state;
     private final Consumer<Runnable> dispatcher;
 
     // ── Bridge properties (set on FX thread via dispatcher) ──────────────────
@@ -41,6 +45,7 @@ public final class SimulationStateFxBridge {
     private final SimpleStringProperty pausedText = new SimpleStringProperty("");
     private final SimpleStringProperty cameraFrameText = new SimpleStringProperty("");
     private final SimpleStringProperty cameraPositionText = new SimpleStringProperty("");
+    private final SimpleStringProperty bodiesInViewText = new SimpleStringProperty("");
 
     // ── Production constructor ────────────────────────────────────────────────
 
@@ -65,6 +70,7 @@ public final class SimulationStateFxBridge {
      * @param dispatcher receives the update {@link Runnable}; called on the JME thread
      */
     SimulationStateFxBridge(SimulationState state, Consumer<Runnable> dispatcher) {
+        this.state = state;
         this.dispatcher = dispatcher;
 
         // Initialise properties with current state values (bridge created on JME thread,
@@ -79,6 +85,7 @@ public final class SimulationStateFxBridge {
         cameraFrameText.set(formatCameraFrame(state.cameraFrameProperty().get()));
         cameraPositionText.set(
                 formatCameraPosition(state.cameraPositionJ2000Property().get()));
+        bodiesInViewText.set(formatBodiesInView(state.bodiesInViewProperty().get()));
 
         // Attach listeners — fire on the thread that mutates state (JME thread)
         state.selectedBodyIdProperty().addListener((obs, oldVal, newVal) -> {
@@ -117,6 +124,45 @@ public final class SimulationStateFxBridge {
             String s = formatCameraPosition(newVal);
             dispatcher.accept(() -> cameraPositionText.set(s));
         });
+        state.bodiesInViewProperty().addListener((obs, oldVal, newVal) -> {
+            String s = formatBodiesInView(newVal);
+            dispatcher.accept(() -> bodiesInViewText.set(s));
+        });
+    }
+
+    // ── FX-thread polling (AnimationTimer) ───────────────────────────────────
+
+    /**
+     * Start an {@link AnimationTimer} that refreshes all display properties each JavaFX frame.
+     *
+     * <p>Must be called on the JavaFX application thread (e.g., from
+     * {@link KepplrStatusWindow#show()}). This is the primary update path in production: it reads
+     * {@link SimulationState} directly on the FX thread, bypassing {@link Platform#runLater} which
+     * can stall on macOS when GLFW holds the main thread.
+     *
+     * <p>The reactive listeners added in the constructor remain active for unit-test compatibility
+     * (tests use a synchronous dispatcher and never call this method).
+     */
+    public void startPolling() {
+        new AnimationTimer() {
+            @Override
+            public void handle(long now) {
+                refreshAll();
+            }
+        }.start();
+    }
+
+    private void refreshAll() {
+        selectedBodyText.set(formatBodyId(state.selectedBodyIdProperty().get()));
+        focusedBodyText.set(formatBodyId(state.focusedBodyIdProperty().get()));
+        targetedBodyText.set(formatBodyId(state.targetedBodyIdProperty().get()));
+        trackedText.set(formatTracked(state.trackedBodyIdProperty().get()));
+        utcTimeText.set(formatEt(state.currentEtProperty().get()));
+        timeRateText.set(formatTimeRate(state.timeRateProperty().get()));
+        pausedText.set(formatPaused(state.pausedProperty().get()));
+        cameraFrameText.set(formatCameraFrame(state.cameraFrameProperty().get()));
+        cameraPositionText.set(formatCameraPosition(state.cameraPositionJ2000Property().get()));
+        bodiesInViewText.set(formatBodiesInView(state.bodiesInViewProperty().get()));
     }
 
     // ── Exposed read-only properties ──────────────────────────────────────────
@@ -164,6 +210,11 @@ public final class SimulationStateFxBridge {
     /** Heliocentric J2000 camera position in km, formatted for display (§1.4). */
     public ReadOnlyStringProperty cameraPositionTextProperty() {
         return cameraPositionText;
+    }
+
+    /** Bodies visible in the scene this frame, formatted as a multi-line string (§7.3, §10.2). */
+    public ReadOnlyStringProperty bodiesInViewTextProperty() {
+        return bodiesInViewText;
     }
 
     // ── Formatting helpers (called on JME thread) ─────────────────────────────
@@ -236,5 +287,22 @@ public final class SimulationStateFxBridge {
     static String formatCameraPosition(double[] pos) {
         if (pos == null || pos.length < 3) return "—";
         return String.format("[%.3e, %.3e, %.3e] km", pos[0], pos[1], pos[2]);
+    }
+
+    /**
+     * Format the bodies-in-view list as a multi-line string, one body per line.
+     *
+     * <p>Each line: {@code NAME  dist km}. Returns {@code "—"} if the list is null or empty.
+     *
+     * @param bodies sorted by ascending distance; may be null
+     */
+    static String formatBodiesInView(List<BodyInView> bodies) {
+        if (bodies == null || bodies.isEmpty()) return "—";
+        StringBuilder sb = new StringBuilder();
+        for (BodyInView b : bodies) {
+            if (sb.length() > 0) sb.append('\n');
+            sb.append(String.format("%-14s  %.3e km", b.name(), b.distanceKm()));
+        }
+        return sb.toString();
     }
 }

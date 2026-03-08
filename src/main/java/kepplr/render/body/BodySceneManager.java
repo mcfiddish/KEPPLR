@@ -4,14 +4,18 @@ import com.jme3.asset.AssetManager;
 import com.jme3.math.Vector3f;
 import com.jme3.renderer.Camera;
 import com.jme3.scene.Node;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import kepplr.config.KEPPLRConfiguration;
 import kepplr.ephemeris.KEPPLREphemeris;
 import kepplr.ephemeris.Spacecraft;
 import kepplr.render.frustum.FrustumLayer;
+import kepplr.state.BodyInView;
 import kepplr.util.KepplrConstants;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -78,11 +82,12 @@ public class BodySceneManager {
      *
      * <p>Ephemeris is acquired at point-of-use per §3.3.
      *
-     * @param et              current ephemeris time (TDB seconds past J2000)
+     * @param et               current ephemeris time (TDB seconds past J2000)
      * @param cameraHelioJ2000 camera heliocentric J2000 position (km), double[3]
-     * @param cam             current render camera (used for apparent-radius calculation)
+     * @param cam              current render camera (used for apparent-radius calculation)
+     * @return non-culled bodies visible this frame, sorted by ascending distance; never null
      */
-    public void update(double et, double[] cameraHelioJ2000, Camera cam) {
+    public List<BodyInView> update(double et, double[] cameraHelioJ2000, Camera cam) {
         KEPPLREphemeris eph = KEPPLRConfiguration.getInstance().getEphemeris();
 
         initSpacecraftSet(eph);
@@ -91,6 +96,7 @@ public class BodySceneManager {
         float fovYDeg = KepplrConstants.CAMERA_FOV_Y_DEG;
 
         Set<EphemerisID> visibleThisFrame = new HashSet<>();
+        List<BodyInView> inView = new ArrayList<>();
 
         // ── Natural bodies (from getKnownBodies()) ─────────────────────────────────────────────
         for (EphemerisID bodyId : eph.getKnownBodies()) {
@@ -128,6 +134,9 @@ public class BodySceneManager {
             }
 
             visibleThisFrame.add(bodyId);
+            if (isInCameraFov(dx, dy, dz, dist, cam)) {
+                inView.add(new BodyInView(bodyId.getName(), naifId, dist));
+            }
 
             // Get or create scene node
             BodySceneNode bsn = bodyNodes.computeIfAbsent(
@@ -154,7 +163,11 @@ public class BodySceneManager {
             double dz = helioPos.getK() - cameraHelioJ2000[2];
             double dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
 
+            int naifId = eph.getSpiceBundle().getObjectCode(sc.id()).orElse(-999);
             visibleThisFrame.add(sc.id());
+            if (isInCameraFov(dx, dy, dz, dist, cam)) {
+                inView.add(new BodyInView(sc.id().getName(), naifId, dist));
+            }
 
             BodySceneNode bsn = bodyNodes.computeIfAbsent(
                     sc.id(), id -> BodyNodeFactory.createSpacecraftNode(sc, assetManager));
@@ -175,6 +188,9 @@ public class BodySceneManager {
             }
             return false;
         });
+
+        inView.sort(Comparator.comparingDouble(BodyInView::distanceKm));
+        return inView;
     }
 
     // ── private helpers ──────────────────────────────────────────────────────────────────────────
@@ -185,6 +201,20 @@ public class BodySceneManager {
         for (Spacecraft sc : eph.getSpacecraft()) {
             spacecraftIdSet.add(sc.id());
         }
+    }
+
+    /**
+     * Returns true if the body at scene-relative offset (dx, dy, dz) is within the camera's
+     * viewing cone, using {@link KepplrConstants#BODIES_IN_VIEW_COS_THRESHOLD} as the cutoff.
+     */
+    private static boolean isInCameraFov(double dx, double dy, double dz, double dist, Camera cam) {
+        if (dist <= 0.0) return false;
+        float bx = (float) (dx / dist);
+        float by = (float) (dy / dist);
+        float bz = (float) (dz / dist);
+        Vector3f camDir = cam.getDirection();
+        float dot = camDir.x * bx + camDir.y * by + camDir.z * bz;
+        return dot >= KepplrConstants.BODIES_IN_VIEW_COS_THRESHOLD;
     }
 
     private static double meanRadius(Ellipsoid shape) {

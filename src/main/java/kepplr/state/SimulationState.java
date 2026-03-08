@@ -1,5 +1,6 @@
 package kepplr.state;
 
+import java.util.List;
 import javafx.beans.property.ReadOnlyBooleanProperty;
 import javafx.beans.property.ReadOnlyDoubleProperty;
 import javafx.beans.property.ReadOnlyIntegerProperty;
@@ -64,6 +65,16 @@ public interface SimulationState {
     ReadOnlyObjectProperty<double[]> cameraPositionJ2000Property();
 
     // ── Tracking state (§4.6, §10.2) ──
+
+    // ── Render state (§7.3, §10.2) ──
+
+    /**
+     * Bodies currently visible in the scene, sorted by ascending camera distance (§7.3, §10.2).
+     *
+     * <p>Populated each frame by {@code BodySceneManager}. Contains only non-culled bodies
+     * (apparent radius &ge; 2 px, or spacecraft). Empty list when nothing is visible.
+     */
+    ReadOnlyObjectProperty<List<BodyInView>> bodiesInViewProperty();
 
     /**
      * Normalized screen coordinates {@code [x, y]} of the tracked body's center (§4.6).
