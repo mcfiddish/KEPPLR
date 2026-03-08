@@ -48,10 +48,24 @@ public final class KepplrConstants {
     // ── Trail sampling (REDESIGN.md §7.5) ──
 
     /** Default number of samples per orbital period for trajectory trails. */
-    public static final int TRAIL_SAMPLES_PER_PERIOD = 180;
+    public static final int TRAIL_SAMPLES_PER_PERIOD = 181;
 
     /** Default trail duration in seconds when orbital period is unknown (30 days). */
     public static final double TRAIL_DEFAULT_DURATION_SEC = 30.0 * 86_400.0;
+
+    /**
+     * Maximum simulation-time drift (seconds) before a cached trail is considered stale and must be
+     * resampled. Trails are rebuilt when {@code |currentEt − sampledEt| > } this value.
+     */
+    public static final double TRAIL_STALENESS_THRESHOLD_SEC = 1_800.0; // 30 simulation minutes
+
+    /**
+     * Minimum wall-clock interval (seconds) between SPICE trail resample passes.
+     *
+     * <p>Prevents saturating the render thread with ephemeris calls when many trails are active and
+     * simulation time is advancing rapidly. Geometry is still rebuilt from cached samples every frame.
+     */
+    public static final double TRAIL_RESAMPLE_WALL_INTERVAL_SEC = 5.0;
 
     // ── Time (REDESIGN.md §2.3) ──
 

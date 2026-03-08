@@ -19,6 +19,7 @@ import kepplr.config.KEPPLRConfiguration;
 import kepplr.core.SimulationClock;
 import kepplr.ephemeris.KEPPLREphemeris;
 import kepplr.render.body.BodySceneManager;
+import kepplr.render.trail.TrailManager;
 import kepplr.render.frustum.FrustumLayer;
 import kepplr.state.BodyInView;
 import kepplr.state.DefaultSimulationState;
@@ -93,6 +94,9 @@ public class KepplrApp extends SimpleApplication {
     // ── Body scene management ─────────────────────────────────────────────────────────────────
     private BodySceneManager bodySceneManager;
 
+    // ── Trail management ──────────────────────────────────────────────────────────────────────
+    private TrailManager trailManager;
+
     @Override
     public void simpleInitApp() {
         setLostFocusBehavior(LostFocusBehavior.Disabled);
@@ -114,19 +118,20 @@ public class KepplrApp extends SimpleApplication {
         }
         Platform.runLater(() -> new KepplrStatusWindow(bridge, commands).show());
 
-        commands.focusBody(EARTH_NAIF_ID);
+        commands.focusBody(499); // TEMP Step 12: focus Mars for trail visual confirmation
 
         // ── Camera initial position: offset above Earth in J2000 +Z ──────────────────────────
+        // TEMP Step 12: position camera near Mars for trail visual confirmation
         KEPPLREphemeris eph = KEPPLRConfiguration.getInstance().getEphemeris();
-        VectorIJK earthHelioPos = eph.getHeliocentricPositionJ2000(EARTH_NAIF_ID, startET);
-        if (earthHelioPos == null) {
-            logger.error("Cannot resolve Earth (NAIF {}) at ET={}; cannot start", EARTH_NAIF_ID, startET);
+        VectorIJK focusHelioPos = eph.getHeliocentricPositionJ2000(499, startET);
+        if (focusHelioPos == null) {
+            logger.error("Cannot resolve Mars (NAIF 499) at ET={}; cannot start", startET);
             stop();
             return;
         }
-        cameraHelioJ2000[0] = earthHelioPos.getI();
-        cameraHelioJ2000[1] = earthHelioPos.getJ();
-        cameraHelioJ2000[2] = earthHelioPos.getK() + CAMERA_OFFSET_KM;
+        cameraHelioJ2000[0] = focusHelioPos.getI();
+        cameraHelioJ2000[1] = focusHelioPos.getJ();
+        cameraHelioJ2000[2] = focusHelioPos.getK() + CAMERA_OFFSET_KM;
         simulationState.setCameraPositionJ2000(cameraHelioJ2000);
 
         // ── Multi-frustum setup (§8) ──────────────────────────────────────────────────────────
@@ -137,7 +142,7 @@ public class KepplrApp extends SimpleApplication {
         cam.setFrustumPerspective(KepplrConstants.CAMERA_FOV_Y_DEG, aspect, (float) FrustumLayer.FAR.nearKm, (float)
                 FrustumLayer.FAR.farKm);
         cam.setLocation(Vector3f.ZERO);
-        cam.lookAt(toScenePosition(earthHelioPos), Vector3f.UNIT_Y);
+        cam.lookAt(toScenePosition(focusHelioPos), Vector3f.UNIT_Y);
 
         farNode = new Node("far");
         viewPort.detachScene(rootNode);
@@ -187,6 +192,12 @@ public class KepplrApp extends SimpleApplication {
         // ── Body scene manager ────────────────────────────────────────────────────────────────
         bodySceneManager = new BodySceneManager(nearNode, midNode, farNode, assetManager);
 
+        // ── Trail manager — enable trails for visual confirmation (Step 12) ──────────────────
+        trailManager = new TrailManager(nearNode, midNode, farNode, assetManager);
+        trailManager.enableTrail(EARTH_NAIF_ID);
+        trailManager.enableTrail(499); // Mars
+        trailManager.enableTrail(401); // TEMP Step 12: Phobos
+
         // ── HUD and camera input ──────────────────────────────────────────────────────────────
         hud = new KepplrHud(guiNode, assetManager, cam);
         cameraInputHandler = new CameraInputHandler(cam, cameraHelioJ2000, simulationState);
@@ -215,6 +226,7 @@ public class KepplrApp extends SimpleApplication {
 
         double currentEt = simulationState.currentEtProperty().get();
         List<BodyInView> inView = bodySceneManager.update(currentEt, cameraHelioJ2000, cam);
+        trailManager.update(currentEt, cameraHelioJ2000);
         simulationState.setBodiesInView(inView);
         hud.update(currentEt);
 
