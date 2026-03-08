@@ -1,15 +1,15 @@
 MaterialDef Star {
-    MaterialParameters {
-        Color Color
-        Float PointSize : 1.0
-    }
-
     Technique {
-        VertexShader GLSL330: kepplr/shaders/Star.vert
+        VertexShader   GLSL330: kepplr/shaders/Star.vert
         FragmentShader GLSL330: kepplr/shaders/Star.frag
 
         WorldParameters {
             WorldViewProjectionMatrix
+        }
+
+        RenderState {
+            Blend Additive
+            DepthWrite Off
         }
     }
 }
