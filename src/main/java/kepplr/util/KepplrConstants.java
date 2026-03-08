@@ -217,4 +217,30 @@ public final class KepplrConstants {
      * radius (6371 km) so vectors are legible when focused on an Earth-class body.
      */
     public static final double VECTOR_DEFAULT_SCALE_KM = 15_000.0;
+
+    // ── Star field (Step 14, REDESIGN.md §7.4) ──
+
+    /** Visual magnitude cutoff — naked-eye limit. Stars dimmer than this are not rendered. */
+    public static final double STAR_DEFAULT_MAGNITUDE_CUTOFF = 6.5;
+
+    /** Brightest point-sprite size (pixels). Applied to stars with vmag ≤ STAR_FIELD_BRIGHT_VMAG. */
+    public static final float STAR_POINT_SIZE_BRIGHT_PX = 4.0f;
+
+    /** Faintest point-sprite size (pixels). Applied to stars at the magnitude cutoff. */
+    public static final float STAR_POINT_SIZE_FAINT_PX = 1.0f;
+
+    /**
+     * Reference visual magnitude used to anchor the bright end of the size/intensity scale.
+     *
+     * <p>Sirius (the brightest star) has vmag ≈ -1.46, so -2 gives a small margin.
+     */
+    public static final double STAR_FIELD_BRIGHT_VMAG = -2.0;
+
+    /**
+     * Distance from the camera at which all stars are placed (km).
+     *
+     * <p>Must be inside the FAR frustum (< FRUSTUM_FAR_MAX_KM) so stars are rendered and depth-tested. Set to 90% of
+     * FAR far clip to keep stars well inside the frustum.
+     */
+    public static final double STAR_FIELD_DISTANCE_KM = 9.0e14;
 }

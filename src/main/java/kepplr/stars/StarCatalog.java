@@ -19,7 +19,7 @@ public interface StarCatalog<S extends Star> extends Iterable<S> {
      *     treats the filter as a view or if it internally caches results. The implementation should specify what, if
      *     any, caching it performs.
      */
-    public Iterable<S> filter(Predicate<? super S> filter);
+    Iterable<S> filter(Predicate<? super S> filter);
 
     /**
      * Retrieves a star with the supplied ID.
@@ -28,5 +28,5 @@ public interface StarCatalog<S extends Star> extends Iterable<S> {
      * @return the star associated with id
      * @throws StarCatalogLookupException if id is not available in the supplied catalog
      */
-    public S getStar(String id);
+    S getStar(String id);
 }

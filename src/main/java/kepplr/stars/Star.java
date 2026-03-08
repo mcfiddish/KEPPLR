@@ -22,14 +22,14 @@ public interface Star {
      *
      * @return a unique, catalog specific identifier for the star
      */
-    public String getID();
+    String getID();
 
     /**
      * Returns the magnitude for the star as configured when the catalog is built.
      *
      * @return the canonical magnitude for the star
      */
-    public double getMagnitude();
+    double getMagnitude();
 
     /**
      * Evaluates the location of the star as configured when the catalog is built.
@@ -38,7 +38,7 @@ public interface Star {
      * @param buffer buffer to receive the resultant position
      * @return reference to buffer for convenience
      */
-    public VectorIJK getLocation(double et, VectorIJK buffer);
+    VectorIJK getLocation(double et, VectorIJK buffer);
 
     /**
      * {@inheritDoc}
@@ -47,7 +47,7 @@ public interface Star {
      * {@link Star#hashCode()}. Generic data structures and services will store stars in maps, etc.
      */
     @Override
-    public boolean equals(Object star);
+    boolean equals(Object star);
 
     /**
      * {@inheritDoc}
@@ -56,5 +56,5 @@ public interface Star {
      * {@link Star#equals(Object)}. Generic data structures and services will store stars in maps, etc.
      */
     @Override
-    public int hashCode();
+    int hashCode();
 }

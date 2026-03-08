@@ -25,5 +25,5 @@ public interface TiledStarCatalog<S extends Star> {
      * @param coneHalfAngle the half angle of the cone of interest
      * @param result a tile set of the resultant tiles that may be covered by the cone of interest
      */
-    public void lookup(UnwritableVectorIJK location, double coneHalfAngle, TileSet<? super S> result);
+    void lookup(UnwritableVectorIJK location, double coneHalfAngle, TileSet<? super S> result);
 }
