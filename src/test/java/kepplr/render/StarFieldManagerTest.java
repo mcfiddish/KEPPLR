@@ -32,14 +32,33 @@ class StarFieldManagerTest {
     /** A star stub with a configurable visual magnitude. */
     private static Star stubStar(String id, double vmag, double x, double y, double z) {
         return new Star() {
-            @Override public String getID() { return id; }
-            @Override public double getMagnitude() { return vmag; }
-            @Override public VectorIJK getLocation(double et, VectorIJK buffer) {
-                buffer.setI(x); buffer.setJ(y); buffer.setK(z);
+            @Override
+            public String getID() {
+                return id;
+            }
+
+            @Override
+            public double getMagnitude() {
+                return vmag;
+            }
+
+            @Override
+            public VectorIJK getLocation(double et, VectorIJK buffer) {
+                buffer.setI(x);
+                buffer.setJ(y);
+                buffer.setK(z);
                 return buffer;
             }
-            @Override public boolean equals(Object o) { return this == o; }
-            @Override public int hashCode() { return System.identityHashCode(this); }
+
+            @Override
+            public boolean equals(Object o) {
+                return this == o;
+            }
+
+            @Override
+            public int hashCode() {
+                return System.identityHashCode(this);
+            }
         };
     }
 
@@ -47,13 +66,24 @@ class StarFieldManagerTest {
 
     private static StarCatalog<Star> catalogOf(Iterable<Star> stars) {
         return new StarCatalog<Star>() {
-            @Override public Iterator<Star> iterator() { return stars.iterator(); }
-            @Override public Iterable<Star> filter(Predicate<? super Star> filter) {
+            @Override
+            public Iterator<Star> iterator() {
+                return stars.iterator();
+            }
+
+            @Override
+            public Iterable<Star> filter(Predicate<? super Star> filter) {
                 java.util.List<Star> result = new java.util.ArrayList<>();
-                for (Star s : stars) { if (filter.apply(s)) result.add(s); }
+                for (Star s : stars) {
+                    if (filter.apply(s)) result.add(s);
+                }
                 return result;
             }
-            @Override public Star getStar(String id) { throw new StarCatalogLookupException("not implemented"); }
+
+            @Override
+            public Star getStar(String id) {
+                throw new StarCatalogLookupException("not implemented");
+            }
         };
     }
 
