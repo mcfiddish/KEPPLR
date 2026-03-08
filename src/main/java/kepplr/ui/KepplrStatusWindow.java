@@ -8,6 +8,7 @@ import javafx.scene.control.Menu;
 import javafx.scene.control.MenuBar;
 import javafx.scene.control.MenuItem;
 import javafx.scene.control.SeparatorMenuItem;
+import javafx.scene.control.TextArea;
 import javafx.scene.layout.ColumnConstraints;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.Priority;
@@ -31,7 +32,8 @@ public final class KepplrStatusWindow {
 
     private static final double WINDOW_MARGIN = 10.0;
     private static final double WINDOW_WIDTH = 520.0;
-    private static final double WINDOW_HEIGHT = 290.0;
+    private static final double WINDOW_HEIGHT = 490.0;
+    private static final double BODIES_TEXT_AREA_HEIGHT = 160.0;
 
     private final SimulationStateFxBridge bridge;
     private final SimulationCommands commands;
@@ -85,13 +87,27 @@ public final class KepplrStatusWindow {
         row = addRow(grid, row, "Camera frame:", bridge.cameraFrameTextProperty());
         row = addRow(grid, row, "Camera pos:", bridge.cameraPositionTextProperty());
 
-        VBox root = new VBox(menuBar, grid);
+        // ── Bodies in view ────────────────────────────────────────────────────
+        Label bodiesLabel = new Label("Bodies in view:");
+        bodiesLabel.setStyle("-fx-font-family: monospace; -fx-font-weight: bold;");
+        bodiesLabel.setPadding(new Insets(8, 14, 2, 14));
+
+        TextArea bodiesArea = new TextArea();
+        bodiesArea.setEditable(false);
+        bodiesArea.setWrapText(false);
+        bodiesArea.setPrefHeight(BODIES_TEXT_AREA_HEIGHT);
+        bodiesArea.setStyle("-fx-font-family: monospace; -fx-font-size: 11px;");
+        bodiesArea.textProperty().bind(bridge.bodiesInViewTextProperty());
+        VBox.setVgrow(bodiesArea, Priority.ALWAYS);
+
+        VBox root = new VBox(menuBar, grid, bodiesLabel, bodiesArea);
         Scene scene = new Scene(root, WINDOW_WIDTH, WINDOW_HEIGHT);
         stage.setScene(scene);
         positionTopLeft();
 
         stage.show();
         stage.toFront();
+        bridge.startPolling();
     }
 
     // ── Private helpers ───────────────────────────────────────────────────────

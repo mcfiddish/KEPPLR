@@ -87,6 +87,10 @@ public final class CameraInputHandler implements ActionListener, AnalogListener,
     private int rawMouseDx = 0;
     private int rawMouseDy = 0;
 
+    // Focus-tracking state — updated every frame to keep camera centred on the focus body (§4.5)
+    private int prevFocusId = -1;
+    private double[] prevFocusPos = null;
+
     /**
      * @param cam JME camera — position and orientation are updated directly on the render thread
      * @param cameraHelioJ2000 heliocentric J2000 camera position array (length 3, km); mutated in place
@@ -261,6 +265,8 @@ public final class CameraInputHandler implements ActionListener, AnalogListener,
      * {@code KepplrApp.simpleUpdate()} after all input events have been processed.
      */
     public void update() {
+        applyFocusTracking();
+
         if (rawMouseDx == 0 && rawMouseDy == 0) return;
 
         int dx = rawMouseDx;
@@ -371,5 +377,42 @@ public final class CameraInputHandler implements ActionListener, AnalogListener,
             }
         }
         return KepplrConstants.CAMERA_ZOOM_FALLBACK_MIN_KM;
+    }
+
+    /**
+     * Apply per-frame focus tracking (§4.5): shift {@code cameraHelioJ2000} by the delta between the focus body's
+     * current and previous heliocentric position so the camera stays centred on the focus body as it moves along its
+     * orbit.
+     *
+     * <p>Resets the tracking anchor when the focus body changes or is cleared.
+     */
+    private void applyFocusTracking() {
+        int focusId = state.focusedBodyIdProperty().get();
+
+        if (focusId != prevFocusId) {
+            // Focus body changed (or was just set / cleared) — reset anchor
+            prevFocusId = focusId;
+            prevFocusPos = null;
+        }
+
+        if (focusId == -1) return;
+
+        double[] currentPos = getFocusBodyPos(focusId);
+        if (currentPos == null) {
+            prevFocusPos = null;
+            return;
+        }
+
+        if (prevFocusPos != null) {
+            double ddx = currentPos[0] - prevFocusPos[0];
+            double ddy = currentPos[1] - prevFocusPos[1];
+            double ddz = currentPos[2] - prevFocusPos[2];
+            cameraHelioJ2000[0] += ddx;
+            cameraHelioJ2000[1] += ddy;
+            cameraHelioJ2000[2] += ddz;
+            state.setCameraPositionJ2000(cameraHelioJ2000);
+        }
+
+        prevFocusPos = currentPos;
     }
 }

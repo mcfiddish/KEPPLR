@@ -1,5 +1,7 @@
 package kepplr.state;
 
+import java.util.Collections;
+import java.util.List;
 import javafx.beans.property.ReadOnlyBooleanProperty;
 import javafx.beans.property.ReadOnlyDoubleProperty;
 import javafx.beans.property.ReadOnlyIntegerProperty;
@@ -43,6 +45,11 @@ public final class DefaultSimulationState implements SimulationState {
     private final SimpleObjectProperty<CameraFrame> cameraFrame = new SimpleObjectProperty<>(CameraFrame.INERTIAL);
     private final SimpleObjectProperty<double[]> cameraPositionJ2000 =
             new SimpleObjectProperty<>(new double[] {0.0, 0.0, 0.0});
+
+    // ── Render state (§7.3, §10.2) ──
+
+    private final SimpleObjectProperty<List<BodyInView>> bodiesInView =
+            new SimpleObjectProperty<>(Collections.emptyList());
 
     // ── Tracking anchor (§4.6) ──
 
@@ -98,6 +105,11 @@ public final class DefaultSimulationState implements SimulationState {
     @Override
     public ReadOnlyObjectProperty<double[]> cameraPositionJ2000Property() {
         return cameraPositionJ2000;
+    }
+
+    @Override
+    public ReadOnlyObjectProperty<List<BodyInView>> bodiesInViewProperty() {
+        return bodiesInView;
     }
 
     @Override
@@ -167,6 +179,17 @@ public final class DefaultSimulationState implements SimulationState {
      */
     public void setCameraPositionJ2000(double[] pos) {
         cameraPositionJ2000.set(pos);
+    }
+
+    /**
+     * Set the list of bodies currently visible in the scene.
+     *
+     * <p>Called by {@code KepplrApp.simpleUpdate()} each frame with the result from {@code BodySceneManager.update()}.
+     *
+     * @param bodies non-null list, sorted by ascending distance; pass an empty list when nothing visible
+     */
+    public void setBodiesInView(List<BodyInView> bodies) {
+        bodiesInView.set(bodies);
     }
 
     /**

@@ -3,7 +3,6 @@ package kepplr.ephemeris;
 import org.immutables.value.Value;
 import picante.mechanics.EphemerisID;
 import picante.mechanics.FrameID;
-import picante.spice.fov.FOV;
 
 @Value.Immutable
 public interface Spacecraft extends Comparable<Spacecraft> {
