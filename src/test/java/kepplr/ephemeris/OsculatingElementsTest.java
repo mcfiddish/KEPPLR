@@ -8,13 +8,13 @@ import kepplr.config.KEPPLRConfiguration;
 import kepplr.ephemeris.spice.SpiceBundle;
 import kepplr.testsupport.TestHarness;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import picante.mechanics.*;
 import picante.mechanics.providers.aberrated.AberrationCorrection;
 import picante.time.TimeConversion;
 
-@Disabled
+@DisplayName("OsculatingElements")
 public class OsculatingElementsTest {
     @BeforeEach
     void setup() {
