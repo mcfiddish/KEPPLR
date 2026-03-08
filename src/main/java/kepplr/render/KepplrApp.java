@@ -21,6 +21,9 @@ import kepplr.ephemeris.KEPPLREphemeris;
 import kepplr.render.body.BodySceneManager;
 import kepplr.render.frustum.FrustumLayer;
 import kepplr.render.trail.TrailManager;
+import kepplr.render.vector.VectorDefinition;
+import kepplr.render.vector.VectorManager;
+import kepplr.render.vector.VectorTypes;
 import kepplr.state.BodyInView;
 import kepplr.state.DefaultSimulationState;
 import kepplr.ui.KepplrStatusWindow;
@@ -97,6 +100,9 @@ public class KepplrApp extends SimpleApplication {
     // ── Trail management ──────────────────────────────────────────────────────────────────────
     private TrailManager trailManager;
 
+    // ── Vector overlay management ──────────────────────────────────────────────────────────────
+    private VectorManager vectorManager;
+
     @Override
     public void simpleInitApp() {
         setLostFocusBehavior(LostFocusBehavior.Disabled);
@@ -118,14 +124,13 @@ public class KepplrApp extends SimpleApplication {
         }
         Platform.runLater(() -> new KepplrStatusWindow(bridge, commands).show());
 
-        commands.focusBody(499); // TEMP Step 12: focus Mars for trail visual confirmation
+        commands.focusBody(EARTH_NAIF_ID);
 
         // ── Camera initial position: offset above Earth in J2000 +Z ──────────────────────────
-        // TEMP Step 12: position camera near Mars for trail visual confirmation
         KEPPLREphemeris eph = KEPPLRConfiguration.getInstance().getEphemeris();
-        VectorIJK focusHelioPos = eph.getHeliocentricPositionJ2000(499, startET);
+        VectorIJK focusHelioPos = eph.getHeliocentricPositionJ2000(EARTH_NAIF_ID, startET);
         if (focusHelioPos == null) {
-            logger.error("Cannot resolve Mars (NAIF 499) at ET={}; cannot start", startET);
+            logger.error("Cannot resolve Earth (NAIF {}) at ET={}; cannot start", EARTH_NAIF_ID, startET);
             stop();
             return;
         }
@@ -192,11 +197,24 @@ public class KepplrApp extends SimpleApplication {
         // ── Body scene manager ────────────────────────────────────────────────────────────────
         bodySceneManager = new BodySceneManager(nearNode, midNode, farNode, assetManager);
 
-        // ── Trail manager — enable trails for visual confirmation (Step 12) ──────────────────
+        // ── Trail manager ─────────────────────────────────────────────────────────────────────
         trailManager = new TrailManager(nearNode, midNode, farNode, assetManager);
         trailManager.enableTrail(EARTH_NAIF_ID);
-        trailManager.enableTrail(499); // Mars
-        trailManager.enableTrail(401); // TEMP Step 12: Phobos
+
+        // ── Vector overlay manager — enable overlays for Step 13 visual confirmation ──────────
+        vectorManager = new VectorManager(nearNode, midNode, farNode, assetManager);
+        vectorManager.enableVector(new VectorDefinition(
+                "Earth velocity",
+                VectorTypes.velocity(),
+                EARTH_NAIF_ID,
+                com.jme3.math.ColorRGBA.Cyan,
+                KepplrConstants.VECTOR_DEFAULT_SCALE_KM));
+        vectorManager.enableVector(new VectorDefinition(
+                "Earth→Sun",
+                VectorTypes.towardBody(10),
+                EARTH_NAIF_ID,
+                com.jme3.math.ColorRGBA.Yellow,
+                KepplrConstants.VECTOR_DEFAULT_SCALE_KM));
 
         // ── HUD and camera input ──────────────────────────────────────────────────────────────
         hud = new KepplrHud(guiNode, assetManager, cam);
@@ -227,6 +245,7 @@ public class KepplrApp extends SimpleApplication {
         double currentEt = simulationState.currentEtProperty().get();
         List<BodyInView> inView = bodySceneManager.update(currentEt, cameraHelioJ2000, cam);
         trailManager.update(currentEt, cameraHelioJ2000);
+        vectorManager.update(currentEt, cameraHelioJ2000, cam);
         simulationState.setBodiesInView(inView);
         hud.update(currentEt);
 
