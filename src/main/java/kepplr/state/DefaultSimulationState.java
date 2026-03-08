@@ -43,8 +43,12 @@ public final class DefaultSimulationState implements SimulationState {
     // ── Camera state (§1.4, §1.5) ──
 
     private final SimpleObjectProperty<CameraFrame> cameraFrame = new SimpleObjectProperty<>(CameraFrame.INERTIAL);
+    private final SimpleObjectProperty<CameraFrame> activeCameraFrame =
+            new SimpleObjectProperty<>(CameraFrame.INERTIAL);
+    private final SimpleBooleanProperty cameraFrameFallbackActive = new SimpleBooleanProperty(false);
     private final SimpleObjectProperty<double[]> cameraPositionJ2000 =
             new SimpleObjectProperty<>(new double[] {0.0, 0.0, 0.0});
+    private final SimpleObjectProperty<double[]> cameraBodyFixedSpherical = new SimpleObjectProperty<>(null);
 
     // ── Render state (§7.3, §10.2) ──
 
@@ -103,8 +107,23 @@ public final class DefaultSimulationState implements SimulationState {
     }
 
     @Override
+    public ReadOnlyObjectProperty<CameraFrame> activeCameraFrameProperty() {
+        return activeCameraFrame;
+    }
+
+    @Override
+    public ReadOnlyBooleanProperty cameraFrameFallbackActiveProperty() {
+        return cameraFrameFallbackActive;
+    }
+
+    @Override
     public ReadOnlyObjectProperty<double[]> cameraPositionJ2000Property() {
         return cameraPositionJ2000;
+    }
+
+    @Override
+    public ReadOnlyObjectProperty<double[]> cameraBodyFixedSphericalProperty() {
+        return cameraBodyFixedSpherical;
     }
 
     @Override
@@ -167,9 +186,19 @@ public final class DefaultSimulationState implements SimulationState {
         deltaSimSeconds.set(delta);
     }
 
-    /** Set the active camera frame (§1.5). */
+    /** Set the requested camera frame (§1.5). */
     public void setCameraFrame(CameraFrame frame) {
         cameraFrame.set(frame);
+    }
+
+    /** Set the camera frame actually in use this frame (§1.5). */
+    public void setActiveCameraFrame(CameraFrame frame) {
+        activeCameraFrame.set(frame);
+    }
+
+    /** Set whether the body-fixed frame fell back to inertial due to missing PCK data (§1.5). */
+    public void setCameraFrameFallbackActive(boolean value) {
+        cameraFrameFallbackActive.set(value);
     }
 
     /**
@@ -179,6 +208,15 @@ public final class DefaultSimulationState implements SimulationState {
      */
     public void setCameraPositionJ2000(double[] pos) {
         cameraPositionJ2000.set(pos);
+    }
+
+    /**
+     * Set the camera position in the focused body's body-fixed frame.
+     *
+     * @param sph {@code [r_km, lat_deg, lon_deg]}, or {@code null} if unavailable
+     */
+    public void setCameraBodyFixedSpherical(double[] sph) {
+        cameraBodyFixedSpherical.set(sph);
     }
 
     /**

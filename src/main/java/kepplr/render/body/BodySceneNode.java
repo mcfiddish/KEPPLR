@@ -56,20 +56,26 @@ public class BodySceneNode {
     }
 
     /**
-     * Update the J2000-to-body-fixed rotation applied to the body geometry.
+     * Update the body-fixed-to-J2000 rotation applied to the body geometry.
+     *
+     * <p>The scene graph transforms local (body-fixed) coordinates to parent (J2000) coordinates: {@code v_J2000 = q *
+     * v_bodyFixed}. The ephemeris provides R = J2000→bodyFixed, so we must apply its transpose R^T (bodyFixed→J2000) to
+     * the node. Applying R directly would invert the rotation direction and produce a 180° phase offset at the J2000
+     * epoch.
      *
      * @param rot J2000-to-body-fixed rotation matrix from {@code KEPPLREphemeris}
      */
     public void updateRotation(RotationMatrixIJK rot) {
+        // Transpose: m[i][j] = rot.get(j, i) — converts J2000→bodyFixed into bodyFixed→J2000
         Matrix3f m = new Matrix3f(
                 (float) rot.get(0, 0),
-                (float) rot.get(0, 1),
-                (float) rot.get(0, 2),
                 (float) rot.get(1, 0),
-                (float) rot.get(1, 1),
-                (float) rot.get(1, 2),
                 (float) rot.get(2, 0),
+                (float) rot.get(0, 1),
+                (float) rot.get(1, 1),
                 (float) rot.get(2, 1),
+                (float) rot.get(0, 2),
+                (float) rot.get(1, 2),
                 (float) rot.get(2, 2));
         Quaternion q = new Quaternion();
         q.fromRotationMatrix(m);

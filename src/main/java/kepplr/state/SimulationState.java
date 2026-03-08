@@ -53,8 +53,22 @@ public interface SimulationState {
 
     // ── Camera state (§1.4, §1.5, §10.2) ──
 
-    /** The active camera frame (§1.5). */
+    /** The requested camera frame (§1.5). */
     ReadOnlyObjectProperty<CameraFrame> cameraFrameProperty();
+
+    /**
+     * The camera frame actually in use this frame (§1.5).
+     *
+     * <p>Equals {@link #cameraFrameProperty()} unless {@link CameraFrame#BODY_FIXED} was requested but the focused body
+     * has no PCK orientation data, in which case the active frame is {@link CameraFrame#INERTIAL}.
+     */
+    ReadOnlyObjectProperty<CameraFrame> activeCameraFrameProperty();
+
+    /**
+     * {@code true} when {@link CameraFrame#BODY_FIXED} was requested but the focused body has no PCK orientation data,
+     * causing automatic fallback to {@link CameraFrame#INERTIAL} (§1.5).
+     */
+    ReadOnlyBooleanProperty cameraFrameFallbackActiveProperty();
 
     /**
      * Heliocentric J2000 camera position in km as {@code [x, y, z]}, or {@code {0,0,0}} if not yet set (§1.4).
@@ -63,6 +77,15 @@ public interface SimulationState {
      * array is always length 3.
      */
     ReadOnlyObjectProperty<double[]> cameraPositionJ2000Property();
+
+    /**
+     * Camera position in the focused body's body-fixed frame, as {@code [r_km, lat_deg, lon_deg]}.
+     *
+     * <p>{@code null} when there is no focused body, the body has no PCK orientation data, or the heliocentric position
+     * is unavailable. Latitude is geodetic (degrees, −90 to +90); longitude is measured from the body-fixed prime
+     * meridian (degrees, −180 to +180). Updated each frame by the JME render thread.
+     */
+    ReadOnlyObjectProperty<double[]> cameraBodyFixedSphericalProperty();
 
     // ── Tracking state (§4.6, §10.2) ──
 

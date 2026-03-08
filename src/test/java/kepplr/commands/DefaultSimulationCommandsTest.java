@@ -278,23 +278,18 @@ class DefaultSimulationCommandsTest {
         }
 
         @Test
-        @DisplayName("setCameraFrame(BODY_FIXED) throws UnsupportedOperationException (deferred, §1.5)")
-        void setBodyFixedThrows() {
-            assertThrows(
-                    UnsupportedOperationException.class,
-                    () -> commands.setCameraFrame(CameraFrame.BODY_FIXED),
-                    "BODY_FIXED frame should throw UnsupportedOperationException until implemented");
+        @DisplayName("setCameraFrame(BODY_FIXED) updates state to BODY_FIXED (§1.5)")
+        void setBodyFixed() {
+            commands.setCameraFrame(CameraFrame.BODY_FIXED);
+            assertEquals(CameraFrame.BODY_FIXED, state.cameraFrameProperty().get());
         }
 
         @Test
-        @DisplayName("setCameraFrame(BODY_FIXED) does not mutate state when it throws")
-        void setBodyFixedDoesNotMutateState() {
+        @DisplayName("setCameraFrame(BODY_FIXED) after SYNODIC updates state to BODY_FIXED")
+        void setBodyFixedAfterSynodic() {
             commands.setCameraFrame(CameraFrame.SYNODIC);
-            assertThrows(UnsupportedOperationException.class, () -> commands.setCameraFrame(CameraFrame.BODY_FIXED));
-            assertEquals(
-                    CameraFrame.SYNODIC,
-                    state.cameraFrameProperty().get(),
-                    "State should remain SYNODIC after failed BODY_FIXED attempt");
+            commands.setCameraFrame(CameraFrame.BODY_FIXED);
+            assertEquals(CameraFrame.BODY_FIXED, state.cameraFrameProperty().get());
         }
     }
 

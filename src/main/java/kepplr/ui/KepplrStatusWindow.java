@@ -7,14 +7,17 @@ import javafx.scene.control.Label;
 import javafx.scene.control.Menu;
 import javafx.scene.control.MenuBar;
 import javafx.scene.control.MenuItem;
+import javafx.scene.control.RadioMenuItem;
 import javafx.scene.control.SeparatorMenuItem;
 import javafx.scene.control.TextArea;
+import javafx.scene.control.ToggleGroup;
 import javafx.scene.layout.ColumnConstraints;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
 import javafx.stage.Screen;
 import javafx.stage.Stage;
+import kepplr.camera.CameraFrame;
 import kepplr.commands.SimulationCommands;
 
 /**
@@ -86,6 +89,7 @@ public final class KepplrStatusWindow {
         row = addRow(grid, row, "Tracking:", bridge.trackedTextProperty());
         row = addRow(grid, row, "Camera frame:", bridge.cameraFrameTextProperty());
         row = addRow(grid, row, "Camera pos:", bridge.cameraPositionTextProperty());
+        row = addRow(grid, row, "BF pos:", bridge.cameraBodyFixedTextProperty());
 
         // ── Bodies in view ────────────────────────────────────────────────────
         Label bodiesLabel = new Label("Bodies in view:");
@@ -134,7 +138,36 @@ public final class KepplrStatusWindow {
         Menu timeMenu = new Menu("Time");
         timeMenu.getItems().addAll(pauseItem, new SeparatorMenuItem(), setTimeItem, setRateItem);
 
-        MenuBar bar = new MenuBar(timeMenu);
+        // ── Camera Frame submenu ──────────────────────────────────────────────
+        ToggleGroup frameGroup = new ToggleGroup();
+        RadioMenuItem inertialItem = new RadioMenuItem("Inertial");
+        RadioMenuItem bodyFixedItem = new RadioMenuItem("Body-Fixed");
+        RadioMenuItem synodicItem = new RadioMenuItem("Synodic");
+        inertialItem.setToggleGroup(frameGroup);
+        bodyFixedItem.setToggleGroup(frameGroup);
+        synodicItem.setToggleGroup(frameGroup);
+
+        inertialItem.setOnAction(e -> commands.setCameraFrame(CameraFrame.INERTIAL));
+        bodyFixedItem.setOnAction(e -> commands.setCameraFrame(CameraFrame.BODY_FIXED));
+        synodicItem.setOnAction(e -> commands.setCameraFrame(CameraFrame.SYNODIC));
+
+        // Keep radio selection in sync with the frame actually in use (not just requested)
+        bridge.activeCameraFrameObjectProperty().addListener((obs, old, val) -> {
+            inertialItem.setSelected(val == CameraFrame.INERTIAL);
+            bodyFixedItem.setSelected(val == CameraFrame.BODY_FIXED);
+            synodicItem.setSelected(val == CameraFrame.SYNODIC);
+        });
+        CameraFrame initial = bridge.activeCameraFrameObjectProperty().get();
+        inertialItem.setSelected(initial == CameraFrame.INERTIAL);
+        bodyFixedItem.setSelected(initial == CameraFrame.BODY_FIXED);
+        synodicItem.setSelected(initial == CameraFrame.SYNODIC);
+
+        Menu frameSubMenu = new Menu("Camera Frame");
+        frameSubMenu.getItems().addAll(inertialItem, bodyFixedItem, synodicItem);
+        Menu cameraMenu = new Menu("Camera");
+        cameraMenu.getItems().add(frameSubMenu);
+
+        MenuBar bar = new MenuBar(timeMenu, cameraMenu);
         bar.setUseSystemMenuBar(false);
         return bar;
     }

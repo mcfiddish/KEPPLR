@@ -13,6 +13,8 @@ import com.jme3.system.AppSettings;
 import java.time.Instant;
 import java.util.List;
 import javafx.application.Platform;
+import kepplr.camera.BodyFixedFrame;
+import kepplr.camera.CameraFrame;
 import kepplr.camera.CameraInputHandler;
 import kepplr.commands.DefaultSimulationCommands;
 import kepplr.config.KEPPLRConfiguration;
@@ -33,6 +35,7 @@ import kepplr.util.KepplrConstants;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.lwjgl.glfw.GLFW;
+import picante.math.vectorspace.RotationMatrixIJK;
 import picante.math.vectorspace.VectorIJK;
 
 /**
@@ -75,6 +78,7 @@ public class KepplrApp extends SimpleApplication {
     private SimulationClock simulationClock;
     private KepplrHud hud;
     private CameraInputHandler cameraInputHandler;
+    private final BodyFixedFrame bodyFixedFrame = new BodyFixedFrame();
 
     // ── Multi-frustum cameras and viewports (§8) ─────────────────────────────────────────────
     /** Mid camera — slave of {@code cam}, mid-range frustum planes. */
@@ -237,9 +241,32 @@ public class KepplrApp extends SimpleApplication {
     public void simpleUpdate(float tpf) {
         simulationClock.advance();
         cameraInputHandler.update();
+
+        // Body-fixed co-rotation (§1.5): apply spin delta after translational tracking
+        CameraFrame requestedFrame = simulationState.cameraFrameProperty().get();
+        if (requestedFrame == CameraFrame.BODY_FIXED) {
+            int focusId = simulationState.focusedBodyIdProperty().get();
+            double et = simulationState.currentEtProperty().get();
+            BodyFixedFrame.ApplyResult bf = bodyFixedFrame.apply(cameraHelioJ2000, cam.getRotation(), focusId, et);
+            cameraHelioJ2000[0] = bf.newCamHelioJ2000()[0];
+            cameraHelioJ2000[1] = bf.newCamHelioJ2000()[1];
+            cameraHelioJ2000[2] = bf.newCamHelioJ2000()[2];
+            cam.setAxes(bf.newOrientation());
+            simulationState.setActiveCameraFrame(bf.fallbackActive() ? CameraFrame.INERTIAL : CameraFrame.BODY_FIXED);
+            simulationState.setCameraFrameFallbackActive(bf.fallbackActive());
+        } else {
+            bodyFixedFrame.reset();
+            simulationState.setActiveCameraFrame(requestedFrame);
+            simulationState.setCameraFrameFallbackActive(false);
+        }
+
         // Clone so SimpleObjectProperty sees a new reference and fires listeners (in-place mutation
         // would leave the reference unchanged and suppress change notifications)
         simulationState.setCameraPositionJ2000(cameraHelioJ2000.clone());
+        simulationState.setCameraBodyFixedSpherical(computeBodyFixedSpherical(
+                simulationState.focusedBodyIdProperty().get(),
+                cameraHelioJ2000,
+                simulationState.currentEtProperty().get()));
 
         // Sync slave cameras to master orientation (position is always ZERO in floating-origin)
         midCam.setLocation(cam.getLocation());
@@ -270,6 +297,40 @@ public class KepplrApp extends SimpleApplication {
     }
 
     // ── private helpers ───────────────────────────────────────────────────────────────────────
+
+    /**
+     * Compute the camera's position in the focused body's body-fixed frame as spherical coordinates.
+     *
+     * @param focusId NAIF ID of the focused body, or -1 for none
+     * @param camHelioJ2000 heliocentric J2000 camera position in km
+     * @param et current simulation ET
+     * @return {@code [r_km, lat_deg, lon_deg]}, or {@code null} if unavailable
+     */
+    private double[] computeBodyFixedSpherical(int focusId, double[] camHelioJ2000, double et) {
+        if (focusId == -1) return null;
+        try {
+            KEPPLREphemeris eph = KEPPLRConfiguration.getInstance().getEphemeris();
+            VectorIJK focusPos = eph.getHeliocentricPositionJ2000(focusId, et);
+            if (focusPos == null) return null;
+            RotationMatrixIJK r = eph.getJ2000ToBodyFixedRotation(focusId, et);
+            if (r == null) return null;
+            // Offset in J2000
+            double dx = camHelioJ2000[0] - focusPos.getI();
+            double dy = camHelioJ2000[1] - focusPos.getJ();
+            double dz = camHelioJ2000[2] - focusPos.getK();
+            // Apply R (J2000→bodyFixed): bodyFixed = R * offset_J2000
+            double bx = r.get(0, 0) * dx + r.get(0, 1) * dy + r.get(0, 2) * dz;
+            double by = r.get(1, 0) * dx + r.get(1, 1) * dy + r.get(1, 2) * dz;
+            double bz = r.get(2, 0) * dx + r.get(2, 1) * dy + r.get(2, 2) * dz;
+            double rKm = Math.sqrt(bx * bx + by * by + bz * bz);
+            if (rKm < 1e-9) return new double[] {0.0, 0.0, 0.0};
+            double latDeg = Math.toDegrees(Math.asin(Math.max(-1.0, Math.min(1.0, bz / rKm))));
+            double lonDeg = Math.toDegrees(Math.atan2(by, bx));
+            return new double[] {rKm, latDeg, lonDeg};
+        } catch (Exception e) {
+            return null;
+        }
+    }
 
     /**
      * Convert a heliocentric J2000 position (km, double) to scene-graph coordinates (camera-relative, float). Floating

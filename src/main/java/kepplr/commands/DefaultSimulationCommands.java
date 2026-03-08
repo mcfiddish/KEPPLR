@@ -122,18 +122,9 @@ public final class DefaultSimulationCommands implements SimulationCommands {
         clock.setUTC(utcString);
     }
 
-    /**
-     * Switch the active camera frame (§1.5).
-     *
-     * <p>{@link CameraFrame#BODY_FIXED} is deferred — throws {@link UnsupportedOperationException} until implemented.
-     *
-     * @throws UnsupportedOperationException if {@code frame} is {@link CameraFrame#BODY_FIXED}
-     */
+    /** Switch the active camera frame (§1.5). All three values are now supported. */
     @Override
     public void setCameraFrame(CameraFrame frame) {
-        if (frame == CameraFrame.BODY_FIXED) {
-            throw new UnsupportedOperationException("BODY_FIXED camera frame is not yet implemented");
-        }
         state.setCameraFrame(frame);
     }
 }

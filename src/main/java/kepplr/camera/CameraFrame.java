@@ -14,8 +14,9 @@ public enum CameraFrame {
     /**
      * Focus-body-fixed frame (§1.5).
      *
-     * <p><b>Deferred:</b> activating this frame throws {@link UnsupportedOperationException}. Implementation is
-     * scheduled for a later step.
+     * <p>Each frame the camera co-rotates with the focused body's spin so that the body surface appears stationary. If
+     * the focused body has no PCK orientation data, the frame falls back to {@link #INERTIAL} and
+     * {@link kepplr.state.SimulationState#cameraFrameFallbackActiveProperty()} becomes {@code true}.
      */
     BODY_FIXED,
 

@@ -4,7 +4,9 @@ import java.util.List;
 import java.util.function.Consumer;
 import javafx.animation.AnimationTimer;
 import javafx.application.Platform;
+import javafx.beans.property.ReadOnlyObjectProperty;
 import javafx.beans.property.ReadOnlyStringProperty;
+import javafx.beans.property.SimpleObjectProperty;
 import javafx.beans.property.SimpleStringProperty;
 import kepplr.camera.CameraFrame;
 import kepplr.config.KEPPLRConfiguration;
@@ -51,7 +53,10 @@ public final class SimulationStateFxBridge {
     private final SimpleStringProperty timeRateText = new SimpleStringProperty("");
     private final SimpleStringProperty pausedText = new SimpleStringProperty("");
     private final SimpleStringProperty cameraFrameText = new SimpleStringProperty("");
+    private final SimpleObjectProperty<CameraFrame> activeCameraFrameObj =
+            new SimpleObjectProperty<>(CameraFrame.INERTIAL);
     private final SimpleStringProperty cameraPositionText = new SimpleStringProperty("");
+    private final SimpleStringProperty cameraBodyFixedText = new SimpleStringProperty("N/A");
     private final SimpleStringProperty bodiesInViewText = new SimpleStringProperty("");
 
     // ── Production constructor ────────────────────────────────────────────────
@@ -90,8 +95,11 @@ public final class SimulationStateFxBridge {
         timeRateText.set(formatTimeRate(state.timeRateProperty().get()));
         pausedText.set(formatPaused(state.pausedProperty().get()));
         cameraFrameText.set(formatCameraFrame(state.cameraFrameProperty().get()));
+        activeCameraFrameObj.set(state.activeCameraFrameProperty().get());
         cameraPositionText.set(
                 formatCameraPosition(state.cameraPositionJ2000Property().get()));
+        cameraBodyFixedText.set(
+                formatBodyFixed(state.cameraBodyFixedSphericalProperty().get()));
         bodiesInViewText.set(formatBodiesInView(state.bodiesInViewProperty().get()));
 
         // Attach listeners — fire on the thread that mutates state (JME thread).
@@ -138,10 +146,19 @@ public final class SimulationStateFxBridge {
             String s = formatCameraFrame(newVal);
             dispatcher.accept(() -> cameraFrameText.set(s));
         });
+        state.activeCameraFrameProperty().addListener((obs, oldVal, newVal) -> {
+            if (polling) return;
+            dispatcher.accept(() -> activeCameraFrameObj.set(newVal));
+        });
         state.cameraPositionJ2000Property().addListener((obs, oldVal, newVal) -> {
             if (polling) return;
             String s = formatCameraPosition(newVal);
             dispatcher.accept(() -> cameraPositionText.set(s));
+        });
+        state.cameraBodyFixedSphericalProperty().addListener((obs, oldVal, newVal) -> {
+            if (polling) return;
+            String s = formatBodyFixed(newVal);
+            dispatcher.accept(() -> cameraBodyFixedText.set(s));
         });
         state.bodiesInViewProperty().addListener((obs, oldVal, newVal) -> {
             if (polling) return;
@@ -181,8 +198,11 @@ public final class SimulationStateFxBridge {
         timeRateText.set(formatTimeRate(state.timeRateProperty().get()));
         pausedText.set(formatPaused(state.pausedProperty().get()));
         cameraFrameText.set(formatCameraFrame(state.cameraFrameProperty().get()));
+        activeCameraFrameObj.set(state.activeCameraFrameProperty().get());
         cameraPositionText.set(
                 formatCameraPosition(state.cameraPositionJ2000Property().get()));
+        cameraBodyFixedText.set(
+                formatBodyFixed(state.cameraBodyFixedSphericalProperty().get()));
         bodiesInViewText.set(formatBodiesInView(state.bodiesInViewProperty().get()));
     }
 
@@ -228,9 +248,19 @@ public final class SimulationStateFxBridge {
         return cameraFrameText;
     }
 
+    /** Camera frame actually in use (may differ from requested frame when BODY_FIXED falls back). */
+    public ReadOnlyObjectProperty<CameraFrame> activeCameraFrameObjectProperty() {
+        return activeCameraFrameObj;
+    }
+
     /** Heliocentric J2000 camera position in km, formatted for display (§1.4). */
     public ReadOnlyStringProperty cameraPositionTextProperty() {
         return cameraPositionText;
+    }
+
+    /** Camera position in focus body's body-fixed frame as r/lat/lon, or "N/A" if unavailable. */
+    public ReadOnlyStringProperty cameraBodyFixedTextProperty() {
+        return cameraBodyFixedText;
     }
 
     /** Bodies visible in the scene this frame, formatted as a multi-line string (§7.3, §10.2). */
@@ -308,6 +338,16 @@ public final class SimulationStateFxBridge {
     static String formatCameraPosition(double[] pos) {
         if (pos == null || pos.length < 3) return "—";
         return String.format("[%.3e, %.3e, %.3e] km", pos[0], pos[1], pos[2]);
+    }
+
+    /**
+     * Format body-fixed spherical coordinates for display.
+     *
+     * @param sph {@code [r_km, lat_deg, lon_deg]}, or {@code null} if unavailable
+     */
+    static String formatBodyFixed(double[] sph) {
+        if (sph == null) return "N/A";
+        return String.format("r=%.3e km  φ=%.2f°  λ=%.2f°", sph[0], sph[1], sph[2]);
     }
 
     /**
