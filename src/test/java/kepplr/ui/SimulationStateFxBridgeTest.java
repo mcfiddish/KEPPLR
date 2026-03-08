@@ -239,8 +239,32 @@ class SimulationStateFxBridgeTest {
         @Test
         @DisplayName("cameraFrameTextProperty updates when cameraFrame changes")
         void cameraFrameUpdates() {
+            // No focus set (focusedBodyId == -1, targetedBodyId == -1) → default Sun target
             state.setCameraFrame(CameraFrame.SYNODIC);
-            assertEquals("SYNODIC", bridge.cameraFrameTextProperty().get());
+            assertEquals(
+                    "SYNODIC [— → NAIF 10 (Sun)]",
+                    bridge.cameraFrameTextProperty().get());
+        }
+
+        @Test
+        @DisplayName("cameraFrameTextProperty shows focus+target when SYNODIC and focus is set")
+        void cameraFrameUpdatesSynodicWithFocus() {
+            state.setFocusedBodyId(399);
+            state.setTargetedBodyId(399); // same as focus → default Sun
+            state.setCameraFrame(CameraFrame.SYNODIC);
+            assertEquals(
+                    "SYNODIC [NAIF 399 → NAIF 10 (Sun)]",
+                    bridge.cameraFrameTextProperty().get());
+        }
+
+        @Test
+        @DisplayName("cameraFrameTextProperty updates when focusedBodyId changes while SYNODIC")
+        void cameraFrameUpdatesSynodicOnFocusChange() {
+            state.setCameraFrame(CameraFrame.SYNODIC);
+            state.setFocusedBodyId(399);
+            assertEquals(
+                    "SYNODIC [NAIF 399 → NAIF 10 (Sun)]",
+                    bridge.cameraFrameTextProperty().get());
         }
 
         @Test

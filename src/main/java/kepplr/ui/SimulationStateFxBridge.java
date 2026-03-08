@@ -94,7 +94,7 @@ public final class SimulationStateFxBridge {
         utcTimeText.set(formatEt(state.currentEtProperty().get()));
         timeRateText.set(formatTimeRate(state.timeRateProperty().get()));
         pausedText.set(formatPaused(state.pausedProperty().get()));
-        cameraFrameText.set(formatCameraFrame(state.cameraFrameProperty().get()));
+        cameraFrameText.set(currentCameraFrameText());
         activeCameraFrameObj.set(state.activeCameraFrameProperty().get());
         cameraPositionText.set(
                 formatCameraPosition(state.cameraPositionJ2000Property().get()));
@@ -143,7 +143,19 @@ public final class SimulationStateFxBridge {
         });
         state.cameraFrameProperty().addListener((obs, oldVal, newVal) -> {
             if (polling) return;
-            String s = formatCameraFrame(newVal);
+            String s = currentCameraFrameText();
+            dispatcher.accept(() -> cameraFrameText.set(s));
+        });
+        state.focusedBodyIdProperty().addListener((obs, oldVal, newVal) -> {
+            if (polling) return;
+            if (state.cameraFrameProperty().get() != CameraFrame.SYNODIC) return;
+            String s = currentCameraFrameText();
+            dispatcher.accept(() -> cameraFrameText.set(s));
+        });
+        state.targetedBodyIdProperty().addListener((obs, oldVal, newVal) -> {
+            if (polling) return;
+            if (state.cameraFrameProperty().get() != CameraFrame.SYNODIC) return;
+            String s = currentCameraFrameText();
             dispatcher.accept(() -> cameraFrameText.set(s));
         });
         state.activeCameraFrameProperty().addListener((obs, oldVal, newVal) -> {
@@ -197,7 +209,7 @@ public final class SimulationStateFxBridge {
         utcTimeText.set(formatEt(state.currentEtProperty().get()));
         timeRateText.set(formatTimeRate(state.timeRateProperty().get()));
         pausedText.set(formatPaused(state.pausedProperty().get()));
-        cameraFrameText.set(formatCameraFrame(state.cameraFrameProperty().get()));
+        cameraFrameText.set(currentCameraFrameText());
         activeCameraFrameObj.set(state.activeCameraFrameProperty().get());
         cameraPositionText.set(
                 formatCameraPosition(state.cameraPositionJ2000Property().get()));
@@ -324,6 +336,18 @@ public final class SimulationStateFxBridge {
 
     static String formatPaused(boolean paused) {
         return paused ? "Paused" : "Running";
+    }
+
+    private String currentCameraFrameText() {
+        CameraFrame frame = state.cameraFrameProperty().get();
+        if (frame == CameraFrame.SYNODIC) {
+            int focusId = state.focusedBodyIdProperty().get();
+            int targetId = state.targetedBodyIdProperty().get();
+            String focusStr = focusId == -1 ? "—" : "NAIF " + focusId;
+            String targetStr = (targetId == -1 || targetId == focusId) ? "NAIF 10 (Sun)" : "NAIF " + targetId;
+            return "SYNODIC [" + focusStr + " → " + targetStr + "]";
+        }
+        return formatCameraFrame(frame);
     }
 
     static String formatCameraFrame(CameraFrame frame) {

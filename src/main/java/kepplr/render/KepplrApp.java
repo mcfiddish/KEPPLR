@@ -16,6 +16,7 @@ import javafx.application.Platform;
 import kepplr.camera.BodyFixedFrame;
 import kepplr.camera.CameraFrame;
 import kepplr.camera.CameraInputHandler;
+import kepplr.camera.SynodicFrameApplier;
 import kepplr.commands.DefaultSimulationCommands;
 import kepplr.config.KEPPLRConfiguration;
 import kepplr.core.SimulationClock;
@@ -79,6 +80,7 @@ public class KepplrApp extends SimpleApplication {
     private KepplrHud hud;
     private CameraInputHandler cameraInputHandler;
     private final BodyFixedFrame bodyFixedFrame = new BodyFixedFrame();
+    private final SynodicFrameApplier synodicFrameApplier = new SynodicFrameApplier();
 
     // ── Multi-frustum cameras and viewports (§8) ─────────────────────────────────────────────
     /** Mid camera — slave of {@code cam}, mid-range frustum planes. */
@@ -242,9 +244,10 @@ public class KepplrApp extends SimpleApplication {
         simulationClock.advance();
         cameraInputHandler.update();
 
-        // Body-fixed co-rotation (§1.5): apply spin delta after translational tracking
+        // Camera frame co-rotation: apply frame delta after translational tracking
         CameraFrame requestedFrame = simulationState.cameraFrameProperty().get();
         if (requestedFrame == CameraFrame.BODY_FIXED) {
+            synodicFrameApplier.reset();
             int focusId = simulationState.focusedBodyIdProperty().get();
             double et = simulationState.currentEtProperty().get();
             BodyFixedFrame.ApplyResult bf = bodyFixedFrame.apply(cameraHelioJ2000, cam.getRotation(), focusId, et);
@@ -254,8 +257,22 @@ public class KepplrApp extends SimpleApplication {
             cam.setAxes(bf.newOrientation());
             simulationState.setActiveCameraFrame(bf.fallbackActive() ? CameraFrame.INERTIAL : CameraFrame.BODY_FIXED);
             simulationState.setCameraFrameFallbackActive(bf.fallbackActive());
+        } else if (requestedFrame == CameraFrame.SYNODIC) {
+            bodyFixedFrame.reset();
+            int focusId = simulationState.focusedBodyIdProperty().get();
+            int targetId = simulationState.targetedBodyIdProperty().get();
+            double et = simulationState.currentEtProperty().get();
+            SynodicFrameApplier.ApplyResult sr =
+                    synodicFrameApplier.apply(cameraHelioJ2000, cam.getRotation(), focusId, targetId, et);
+            cameraHelioJ2000[0] = sr.newCamHelioJ2000()[0];
+            cameraHelioJ2000[1] = sr.newCamHelioJ2000()[1];
+            cameraHelioJ2000[2] = sr.newCamHelioJ2000()[2];
+            cam.setAxes(sr.newOrientation());
+            simulationState.setActiveCameraFrame(sr.fallbackActive() ? CameraFrame.INERTIAL : CameraFrame.SYNODIC);
+            simulationState.setCameraFrameFallbackActive(sr.fallbackActive());
         } else {
             bodyFixedFrame.reset();
+            synodicFrameApplier.reset();
             simulationState.setActiveCameraFrame(requestedFrame);
             simulationState.setCameraFrameFallbackActive(false);
         }
