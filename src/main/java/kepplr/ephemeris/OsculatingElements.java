@@ -16,7 +16,6 @@ import picante.mechanics.StateVector;
  *   LNODE  longitude of ascending node
  *   ARGP   argument of periapsis
  *   M0     mean anomaly at epoch
- *   T0     epoch
  *   MU     gravitational parameter
  *   NU     true anomaly at epoch
  *   A      semi-major axis
@@ -57,7 +56,6 @@ import picante.mechanics.StateVector;
  * @param argp argument of periapsis in radians
  * @param m0 mean anomaly at epoch in radians for elliptic orbits, hyperbolic anomaly expression for hyperbolic orbits,
  *     or Barker parameter expression for parabolic orbits, matching the traditional OSCLTX convention
- * @param t0 epoch associated with the element set
  * @param mu gravitational parameter of the primary body
  * @param nu true anomaly at epoch in radians
  * @param a semi-major axis, or zero if not safely computable
@@ -70,7 +68,6 @@ public record OsculatingElements(
         double lnode,
         double argp,
         double m0,
-        double t0,
         double mu,
         double nu,
         double a,
@@ -94,7 +91,10 @@ public record OsculatingElements(
     /** Array index for mean anomaly at epoch in the SPICE {@code OSCLTX} ordering. */
     public static final int M0 = 5;
 
-    /** Array index for epoch in the SPICE {@code OSCLTX} ordering. */
+    /**
+     * Array index for epoch in the SPICE {@code OSCLTX} ordering. Epoch is not used anywhere in the calculation and is
+     * always set to zero.
+     */
     public static final int T0 = 6;
 
     /** Array index for gravitational parameter in the SPICE {@code OSCLTX} ordering. */
@@ -145,17 +145,16 @@ public record OsculatingElements(
      * Computes extended osculating elements from a Cartesian state.
      *
      * @param state inertial Cartesian state
-     * @param et epoch associated with the input state
      * @param mu gravitational parameter of the primary body
      * @return immutable extended osculating element set
      * @throws NullPointerException if {@code state} is null
      * @throws IllegalArgumentException if the input is degenerate or {@code mu <= 0}
      */
-    public static OsculatingElements oscltx(StateVector state, double et, double mu) {
+    public static OsculatingElements oscltx(StateVector state, double mu) {
         if (state == null) {
             throw new NullPointerException("state must not be null");
         }
-        return oscltx(state.getPosition(), state.getVelocity(), et, mu);
+        return oscltx(state.getPosition(), state.getVelocity(), mu);
     }
 
     /**
@@ -163,14 +162,12 @@ public record OsculatingElements(
      *
      * @param position inertial position vector
      * @param velocity inertial velocity vector
-     * @param et epoch associated with the input state
      * @param mu gravitational parameter of the primary body
      * @return immutable extended osculating element set
      * @throws NullPointerException if {@code position} or {@code velocity} is null
      * @throws IllegalArgumentException if the input is degenerate or {@code mu <= 0}
      */
-    public static OsculatingElements oscltx(
-            UnwritableVectorIJK position, UnwritableVectorIJK velocity, double et, double mu) {
+    public static OsculatingElements oscltx(UnwritableVectorIJK position, UnwritableVectorIJK velocity, double mu) {
 
         if (position == null) {
             throw new NullPointerException("position must not be null");
@@ -318,7 +315,7 @@ public record OsculatingElements(
             }
         }
 
-        return new OsculatingElements(rp, ecc, inc, lnode, argp, m0, et, mu, nu, a, tau);
+        return new OsculatingElements(rp, ecc, inc, lnode, argp, m0, mu, nu, a, tau);
     }
 
     /**
@@ -327,7 +324,7 @@ public record OsculatingElements(
      * @return array in the order {@code [RP, ECC, INC, LNODE, ARGP, M0, T0, MU, NU, A, TAU]}
      */
     public double[] toArray() {
-        return new double[] {rp, ecc, inc, lnode, argp, m0, t0, mu, nu, a, tau};
+        return new double[] {rp, ecc, inc, lnode, argp, m0, 0., mu, nu, a, tau};
     }
 
     /**
@@ -345,7 +342,7 @@ public record OsculatingElements(
             case LNODE -> lnode;
             case ARGP -> argp;
             case M0 -> m0;
-            case T0 -> t0;
+            case T0 -> 0.;
             case MU -> mu;
             case NU -> nu;
             case A -> a;
@@ -475,7 +472,7 @@ public record OsculatingElements(
                 argp,
                 Math.toDegrees(argp),
                 m0,
-                t0,
+                0.,
                 mu,
                 nu,
                 Math.toDegrees(nu),
