@@ -51,6 +51,7 @@ public class BodySceneManager {
     private final Node midNode;
     private final Node farNode;
     private final AssetManager assetManager;
+    private final SaturnRingManager saturnRingManager;
 
     /**
      * Persistent map from EphemerisID to scene node wrapper. Geometry is created once and reused; only
@@ -75,6 +76,7 @@ public class BodySceneManager {
         this.midNode = midNode;
         this.farNode = farNode;
         this.assetManager = assetManager;
+        this.saturnRingManager = new SaturnRingManager(assetManager);
     }
 
     /**
@@ -97,6 +99,7 @@ public class BodySceneManager {
 
         Set<EphemerisID> visibleThisFrame = new HashSet<>();
         List<BodyInView> inView = new ArrayList<>();
+        BodySceneNode saturnBsn = null;
 
         // ── Natural bodies (from getKnownBodies()) ─────────────────────────────────────────────
         for (EphemerisID bodyId : eph.getKnownBodies()) {
@@ -151,7 +154,15 @@ public class BodySceneManager {
 
             FrustumLayer layer = FrustumLayer.assign(dist, bodyRadius);
             bsn.apply(decision, layer, nearNode, midNode, farNode, dist, viewportHeight, fovYDeg);
+
+            // Track Saturn's BSN for ring update (only when rendering full body)
+            if (naifId == KepplrConstants.SATURN_NAIF_ID && decision == CullDecision.DRAW_FULL) {
+                saturnBsn = bsn;
+            }
         }
+
+        // ── Saturn ring update ──────────────────────────────────────────────────────────────────
+        saturnRingManager.update(saturnBsn, cameraHelioJ2000);
 
         // ── Spacecraft (always point sprites) ──────────────────────────────────────────────────
         for (Spacecraft sc : eph.getSpacecraft()) {

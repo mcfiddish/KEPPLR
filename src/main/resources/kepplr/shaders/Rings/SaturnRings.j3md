@@ -1,0 +1,53 @@
+MaterialDef Saturn Rings {
+
+    MaterialParameters {
+
+        // Ring optical profile textures (1-D luminance; inner edge = coord 1.0, outer = 0.0)
+        Texture2D BrightnessTex
+        Texture2D TransparencyTex
+
+        // Overall ring tint color (warm pinkish-tan)
+        Color RingColor
+
+        // Ring radii in body-fixed space (km), matching the mesh geometry
+        Float InnerRadius
+        Float OuterRadius
+
+        // Sun direction in body-fixed (model) space — normalized, updated every frame
+        Vector3 SunDir
+
+        // Observer (camera) position in body-fixed (model) space (km), updated every frame
+        Vector3 ObserverPos
+
+        // Saturn's principal semi-axes in body-fixed space (km); used for shadow ray-ellipsoid test
+        // Default: IAU 2015 Saturn radii (a=60268, b=60268, c=54364 km)
+        Vector3 SaturnRadii
+
+        // ── Step 16b shadow parameters (disabled in 16a; set to 0/false defaults) ─────────────
+
+        // Shadow darkness when ring lies inside Saturn's shadow cone (0 = disabled, 0.9 = default)
+        Float ShadowDarkness : 0
+
+        // Darkness when a moon's shadow falls on the ring (0 = disabled)
+        Float MoonShadowDarkness : 0
+
+        // Number of active moon shadow casters (0 in 16a)
+        Int NumShadowCasters : 0
+
+        // Shadow caster world positions (body-fixed space, km) — up to SHADOW_MAX_OCCLUDERS
+        Vector3Array ShadowCasterPos
+
+        // Shadow caster radii (km)
+        FloatArray ShadowCasterRadius
+    }
+
+    Technique {
+        VertexShader   GLSL150: kepplr/shaders/Rings/SaturnRings.vert
+        FragmentShader GLSL150: kepplr/shaders/Rings/SaturnRings.frag
+
+        WorldParameters {
+            WorldViewProjectionMatrix
+            WorldMatrix
+        }
+    }
+}
