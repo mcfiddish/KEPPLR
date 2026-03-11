@@ -36,14 +36,21 @@ public final class KepplrConstants {
 
     // ── Small-body culling (REDESIGN.md §7.3) ──
 
-    /** Apparent-radius threshold in pixels below which a body may be drawn as a point sprite. */
-    public static final double POINT_SPRITE_THRESHOLD_PX = 2.0;
+    /**
+     * Apparent-radius threshold in pixels at or above which a body is rendered as a full geometry (DRAW_FULL). Bodies
+     * below this threshold are rendered as point sprites. Satellites are not exempt — they also render as sprites (not
+     * culled). See §7.3.
+     */
+    public static final double DRAW_FULL_MIN_APPARENT_RADIUS_PX = 2.0;
 
     /**
-     * Apparent-radius threshold in pixels below which a satellite must not be drawn. Satellites are defined by NAIF ID
-     * rules (see §7.3).
+     * Screen-space proximity threshold in pixels for sprite cluster suppression (§7.3).
+     *
+     * <p>When two sprite-class bodies are within this many pixels of each other on screen, the one with the smaller
+     * physical radius is suppressed. Bodies in an active interaction state (selected/focused/targeted/tracked) are
+     * exempt from suppression.
      */
-    public static final double SATELLITE_CULL_THRESHOLD_PX = 2.0;
+    public static final double SPRITE_CLUSTER_PROXIMITY_PX = 2.0;
 
     // ── Trail sampling (REDESIGN.md §7.5) ──
 
@@ -185,8 +192,8 @@ public final class KepplrConstants {
      * Visual size of a point-sprite in screen pixels.
      *
      * <p>Used by {@link kepplr.render.body.BodySceneNode} to scale sprite geometry so it appears as this many pixels in
-     * diameter regardless of distance. Applied to spacecraft and small non-satellite bodies drawn below the
-     * {@link #POINT_SPRITE_THRESHOLD_PX} threshold.
+     * diameter regardless of distance. Applied to spacecraft and small bodies drawn below the
+     * {@link #DRAW_FULL_MIN_APPARENT_RADIUS_PX} threshold.
      */
     public static final double SPACECRAFT_POINT_SPRITE_SIZE = 4.0;
 

@@ -205,7 +205,7 @@ public class KepplrApp extends SimpleApplication {
         nearNode.addLight(sunLightNear);
 
         // ── Body scene manager ────────────────────────────────────────────────────────────────
-        bodySceneManager = new BodySceneManager(nearNode, midNode, farNode, assetManager);
+        bodySceneManager = new BodySceneManager(nearNode, midNode, farNode, assetManager, simulationState);
 
         // ── Trail manager ─────────────────────────────────────────────────────────────────────
         trailManager = new TrailManager(nearNode, midNode, farNode, assetManager);

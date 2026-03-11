@@ -8,7 +8,8 @@ import org.junit.jupiter.api.Test;
 /**
  * Unit tests for {@link BodyCuller} (REDESIGN.md §7.3).
  *
- * <p>Tests cover: apparent-radius formula, NAIF satellite classification, and the three-way cull decision table.
+ * <p>Tests cover: apparent-radius formula, NAIF satellite classification, and the cull decision table.
+ * Cluster-suppression tests live in {@link CullingRuleTest}.
  */
 class BodyCullerTest {
 
@@ -121,34 +122,26 @@ class BodyCullerTest {
 
     @Test
     void decide_aboveThreshold_drawFull() {
-        double aboveThreshold = KepplrConstants.POINT_SPRITE_THRESHOLD_PX + 1.0;
-        // Satellite above threshold → DRAW_FULL
-        assertEquals(CullDecision.DRAW_FULL, BodyCuller.decide(aboveThreshold, 301));
-        // Planet above threshold → DRAW_FULL
-        assertEquals(CullDecision.DRAW_FULL, BodyCuller.decide(aboveThreshold, 399));
-        // Spacecraft (negative ID) above threshold → DRAW_FULL
-        assertEquals(CullDecision.DRAW_FULL, BodyCuller.decide(aboveThreshold, -98));
+        double aboveThreshold = KepplrConstants.DRAW_FULL_MIN_APPARENT_RADIUS_PX + 1.0;
+        assertEquals(CullDecision.DRAW_FULL, BodyCuller.decide(aboveThreshold));
     }
 
     @Test
-    void decide_belowThreshold_satellite_culled() {
-        double belowThreshold = KepplrConstants.POINT_SPRITE_THRESHOLD_PX - 0.5;
-        assertEquals(CullDecision.CULL, BodyCuller.decide(belowThreshold, 301)); // Moon
-        assertEquals(CullDecision.CULL, BodyCuller.decide(belowThreshold, 401)); // Phobos
-        assertEquals(CullDecision.CULL, BodyCuller.decide(belowThreshold, 501)); // Io
+    void decide_belowThreshold_satellite_drawSprite() {
+        // Satellites are no longer unconditionally culled — they render as sprites (§7.3).
+        double belowThreshold = KepplrConstants.DRAW_FULL_MIN_APPARENT_RADIUS_PX - 0.5;
+        assertEquals(CullDecision.DRAW_SPRITE, BodyCuller.decide(belowThreshold)); // Moon
     }
 
     @Test
     void decide_belowThreshold_nonSatellite_drawSprite() {
-        double belowThreshold = KepplrConstants.POINT_SPRITE_THRESHOLD_PX - 0.5;
-        assertEquals(CullDecision.DRAW_SPRITE, BodyCuller.decide(belowThreshold, 399)); // Earth
-        assertEquals(CullDecision.DRAW_SPRITE, BodyCuller.decide(belowThreshold, 10)); // Sun
-        assertEquals(CullDecision.DRAW_SPRITE, BodyCuller.decide(belowThreshold, -98)); // NH
+        double belowThreshold = KepplrConstants.DRAW_FULL_MIN_APPARENT_RADIUS_PX - 0.5;
+        assertEquals(CullDecision.DRAW_SPRITE, BodyCuller.decide(belowThreshold));
     }
 
     @Test
     void decide_atExactThreshold_drawFull() {
-        // Boundary: exactly at threshold is DRAW_FULL (≥ threshold)
-        assertEquals(CullDecision.DRAW_FULL, BodyCuller.decide(KepplrConstants.POINT_SPRITE_THRESHOLD_PX, 301));
+        // Boundary: exactly at threshold is DRAW_FULL (>= threshold)
+        assertEquals(CullDecision.DRAW_FULL, BodyCuller.decide(KepplrConstants.DRAW_FULL_MIN_APPARENT_RADIUS_PX));
     }
 }
