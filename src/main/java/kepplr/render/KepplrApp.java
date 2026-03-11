@@ -68,8 +68,8 @@ public class KepplrApp extends SimpleApplication {
 
     private static final Logger logger = LogManager.getLogger();
 
-    private static final int EARTH_NAIF_ID = 399;
-    private static final float CAMERA_OFFSET_KM = 50_000f;
+    private static final int EARTH_NAIF_ID = 699;
+    private static final float CAMERA_OFFSET_KM = 500_000f;
 
     /** Camera heliocentric J2000 position in km. Scene positions are {@code helioPos − this}, cast to float for JME. */
     private final double[] cameraHelioJ2000 = new double[3];

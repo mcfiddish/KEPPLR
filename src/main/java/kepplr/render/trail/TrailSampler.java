@@ -137,7 +137,8 @@ public final class TrailSampler {
      * @see #sample(int, double, double, String, int)
      */
     /**
-     * Convenience overload using the default HIGH-quality sample cap ({@link KepplrConstants#TRAIL_SAMPLES_PER_PERIOD}).
+     * Convenience overload using the default HIGH-quality sample cap
+     * ({@link KepplrConstants#TRAIL_SAMPLES_PER_PERIOD}).
      *
      * @see #sample(int, double, double, String, int)
      */

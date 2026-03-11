@@ -329,9 +329,7 @@ public final class KepplrConstants {
      */
     public static final int SHADOW_MAX_OCCLUDERS_LOW = 2;
 
-    /**
-     * Maximum occluders evaluated per receiver per frame at MEDIUM quality.
-     */
+    /** Maximum occluders evaluated per receiver per frame at MEDIUM quality. */
     public static final int SHADOW_MAX_OCCLUDERS_MEDIUM = 4;
 
     /**
@@ -353,9 +351,9 @@ public final class KepplrConstants {
     /**
      * Shadow model for MEDIUM and HIGH quality: extended-source Sun with analytic penumbra.
      *
-     * <p>{@code true} enables the full angular-disk eclipse geometry (§9.3 Option C). Penumbra fraction is a
-     * continuous value in [0, 1] computed from the angular diameters of the Sun and occluder as seen from each surface
-     * point. Corresponds to the {@code ExtendedSource} material parameter being {@code true}.
+     * <p>{@code true} enables the full angular-disk eclipse geometry (§9.3 Option C). Penumbra fraction is a continuous
+     * value in [0, 1] computed from the angular diameters of the Sun and occluder as seen from each surface point.
+     * Corresponds to the {@code ExtendedSource} material parameter being {@code true}.
      */
     public static final boolean SHADOW_EXTENDED_SOURCE_MEDIUM = true;
 
@@ -397,9 +395,8 @@ public final class KepplrConstants {
     /**
      * Beer-Lambert tau scale factor for ring shadow attenuation (Step 16b).
      *
-     * <p>Scales the optical depth {@code τ = 1 − transparency} in the exponent of the ring-shadow attenuation
-     * function: {@code atten = exp(−TauScale × τ / μ₀)}. 1.0 = physically calibrated. Matches prototype
-     * {@code TAU_SCALE}.
+     * <p>Scales the optical depth {@code τ = 1 − transparency} in the exponent of the ring-shadow attenuation function:
+     * {@code atten = exp(−TauScale × τ / μ₀)}. 1.0 = physically calibrated. Matches prototype {@code TAU_SCALE}.
      */
     public static final float RING_TAU_SCALE = 1.0f;
 

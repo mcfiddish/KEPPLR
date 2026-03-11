@@ -188,8 +188,8 @@ void main() {
     float rsf = 1.0;
 #endif
 
-    // Final color: ambient floor + day-side lighting scaled by eclipse and ring shadow
-    // Sun color = white * 2 (matching scene PointLight intensity)
-    float lit = AMBIENT + day * 2.0 * eclipseFactor * rsf;
+    // Final color: ambient floor + day-side illumination scaled by eclipse and ring shadow.
+    // Range: [AMBIENT, 1.0] — no clipping on lit side, dim but visible on night side.
+    float lit = AMBIENT + (1.0 - AMBIENT) * day * eclipseFactor * rsf;
     fragColor = vec4(diffuse.rgb * lit, diffuse.a);
 }

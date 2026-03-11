@@ -8,7 +8,6 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import kepplr.config.KEPPLRConfiguration;
-import kepplr.ephemeris.KEPPLREphemeris;
 import kepplr.render.RenderQuality;
 import kepplr.state.SimulationState;
 import kepplr.util.KepplrConstants;
@@ -79,21 +78,15 @@ class EclipseShadowManager {
      * @param et current simulation ET (TDB seconds past J2000)
      * @param cameraHelioJ2000 camera heliocentric J2000 position in km (length-3 array)
      */
-    void update(
-            Collection<BodySceneNode> bodyNodes,
-            BodySceneNode saturnBsn,
-            double et,
-            double[] cameraHelioJ2000) {
+    void update(Collection<BodySceneNode> bodyNodes, BodySceneNode saturnBsn, double et, double[] cameraHelioJ2000) {
 
         RenderQuality quality = state.renderQualityProperty().get();
         int maxOccluders = quality.maxOccluders();
         boolean extendedSource = quality.extendedSource();
 
         // Sun scene position (floating origin: Sun helio pos = [0,0,0])
-        Vector3f sunScenePos = new Vector3f(
-                (float) -cameraHelioJ2000[0],
-                (float) -cameraHelioJ2000[1],
-                (float) -cameraHelioJ2000[2]);
+        Vector3f sunScenePos =
+                new Vector3f((float) -cameraHelioJ2000[0], (float) -cameraHelioJ2000[1], (float) -cameraHelioJ2000[2]);
 
         // Sun radius from ephemeris at point-of-use (Architecture Rule 3)
         float sunRadius = sunRadiusKm();
@@ -106,7 +99,6 @@ class EclipseShadowManager {
             }
         }
 
-
         // ── Per-body shadow update ────────────────────────────────────────────────────────────
         for (BodySceneNode receiver : fullNodes) {
             if (receiver.naifId == SUN_NAIF_ID) continue; // Sun does not receive shadows
@@ -114,16 +106,20 @@ class EclipseShadowManager {
             // Check if this body's material is an EclipseLighting material (not Unshaded)
             if (!isEclipseMaterial(receiver.fullGeom)) continue;
 
-            Vector3f receiverPos = receiver.ephemerisNode.getWorldTranslation();
+            // Use local translation: always current (set by updatePosition() this frame).
+            // getWorldTranslation() may lag until updateGeometricState() runs at frame end.
+            Vector3f receiverPos = receiver.ephemerisNode.getLocalTranslation();
 
-            // Collect valid shadow casters for this receiver
+            // Collect valid shadow casters for this receiver.
+            // Iterate ALL active bodyNodes (not just fullNodes) so that satellite sprites
+            // can still cast shadows when they are too small to render as DRAW_FULL geometry.
             int count = 0;
-            for (BodySceneNode caster : fullNodes) {
+            for (BodySceneNode caster : bodyNodes) {
                 if (count >= maxOccluders) break;
                 if (caster == receiver) continue;
                 if (caster.naifId == SUN_NAIF_ID) continue; // Sun does not cast shadows on others
 
-                Vector3f casterPos = caster.ephemerisNode.getWorldTranslation();
+                Vector3f casterPos = caster.ephemerisNode.getLocalTranslation();
 
                 // Early-out: caster is behind the receiver relative to the Sun
                 if (!canCastShadow(receiverPos, sunScenePos, casterPos)) continue;
@@ -136,12 +132,11 @@ class EclipseShadowManager {
                 count++;
             }
 
-            setBodyShadowUniforms(
-                    receiver.fullGeom, sunScenePos, sunRadius, count, extendedSource, saturnBsn);
+            setBodyShadowUniforms(receiver.fullGeom, sunScenePos, sunRadius, count, extendedSource, saturnBsn);
         }
 
         // ── Ring material shadow update (Saturn only) ─────────────────────────────────────────
-        updateRingShadow(saturnBsn, fullNodes, sunScenePos, sunRadius, maxOccluders, et);
+        updateRingShadow(saturnBsn, bodyNodes, sunScenePos, sunRadius, maxOccluders, et);
     }
 
     // ── Private helpers ──────────────────────────────────────────────────────────────────────────
@@ -187,7 +182,7 @@ class EclipseShadowManager {
 
     private void updateRingShadow(
             BodySceneNode saturnBsn,
-            List<BodySceneNode> fullNodes,
+            Collection<BodySceneNode> allNodes,
             Vector3f sunScenePos,
             float sunRadius,
             int maxOccluders,
@@ -195,6 +190,12 @@ class EclipseShadowManager {
 
         var ringMaterial = saturnRingManager.getRingMaterial();
         if (ringMaterial == null || saturnBsn == null) return;
+
+        // Saturn ellipsoid radii for the Saturn-on-ring shadow (intersectsSaturn guard needs > 0)
+        Vector3f saturnRadii = saturnBodyRadii();
+        if (saturnRadii != null) {
+            ringMaterial.setVector3("SaturnRadii", saturnRadii);
+        }
 
         // Enable shadow darkness parameters (0 by default in 16a j3md)
         ringMaterial.setFloat("ShadowDarkness", KepplrConstants.RING_SHADOW_DARKNESS);
@@ -209,10 +210,10 @@ class EclipseShadowManager {
         // Collect moon shadow casters for the ring (bodies orbiting Saturn, not Saturn itself)
         // The ring shader works in Saturn body-fixed space, so positions must be transformed.
         Quaternion worldToBodyFixed = saturnBsn.bodyFixedNode.getWorldRotation().inverse();
-        Vector3f saturnWorld = saturnBsn.ephemerisNode.getWorldTranslation();
+        Vector3f saturnWorld = saturnBsn.ephemerisNode.getLocalTranslation();
 
         int moonCount = 0;
-        for (BodySceneNode caster : fullNodes) {
+        for (BodySceneNode caster : allNodes) {
             if (moonCount >= maxOccluders) break;
             if (caster.naifId == SUN_NAIF_ID) continue;
             if (caster.naifId == KepplrConstants.SATURN_NAIF_ID) continue;
@@ -222,7 +223,7 @@ class EclipseShadowManager {
             float moonRadius = bodyMeanRadiusKm(caster.naifId);
             if (!(moonRadius > 0f)) continue;
 
-            Vector3f moonWorld = caster.ephemerisNode.getWorldTranslation();
+            Vector3f moonWorld = caster.ephemerisNode.getLocalTranslation();
             // Transform moon position to Saturn body-fixed space:
             // bodyFixedPos = worldToBodyFixed * (moonWorld - saturnWorld)
             Vector3f relWorld = moonWorld.subtract(saturnWorld);
@@ -241,8 +242,8 @@ class EclipseShadowManager {
     }
 
     /**
-     * Returns the mean radius of a body in km, retrieved from ephemeris at point-of-use.
-     * Returns 0 if the shape is unavailable.
+     * Returns the mean radius of a body in km, retrieved from ephemeris at point-of-use. Returns 0 if the shape is
+     * unavailable.
      */
     private static float bodyMeanRadiusKm(int naifId) {
         try {
@@ -259,6 +260,22 @@ class EclipseShadowManager {
     /** Returns the Sun's mean radius in km from ephemeris at point-of-use. */
     private static float sunRadiusKm() {
         return bodyMeanRadiusKm(SUN_NAIF_ID);
+    }
+
+    /**
+     * Returns Saturn's PCK ellipsoid radii (a, b, c) in km as a Vector3f, or null if unavailable. Used to set
+     * {@code m_SaturnRadii} in the ring shader for the Saturn-on-ring shadow test.
+     */
+    private static Vector3f saturnBodyRadii() {
+        try {
+            var eph = KEPPLRConfiguration.getInstance().getEphemeris();
+            var body = eph.getSpiceBundle().getObject(KepplrConstants.SATURN_NAIF_ID);
+            Ellipsoid shape = eph.getShape(body);
+            if (shape == null) return null;
+            return new Vector3f((float) shape.getA(), (float) shape.getB(), (float) shape.getC());
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     /**
@@ -288,8 +305,8 @@ class EclipseShadowManager {
      * <p>{@link BodySceneNode#apply} sets {@code fullGeom} to {@code CullHint.Always} for DRAW_SPRITE and
      * {@code CullHint.Inherit} for DRAW_FULL. JME 3.8.1's {@link Spatial#getCullHint} resolves inherited hints up the
      * parent chain; a DRAW_FULL fullGeom with stored {@code Inherit} resolves to {@code Dynamic} because the custom
-     * viewport root nodes carry no explicit hint. Testing {@code != Always} is therefore more reliable than
-     * {@code == Inherit}.
+     * viewport root nodes carry no explicit hint. Testing {@code != Always} is therefore more reliable than {@code ==
+     * Inherit}.
      */
     private static boolean isDrawFull(BodySceneNode bsn) {
         return bsn.fullGeom.getCullHint() != Spatial.CullHint.Always;

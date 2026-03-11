@@ -3,8 +3,8 @@ package kepplr.render;
 import kepplr.util.KepplrConstants;
 
 /**
- * Render quality presets that jointly configure shadow fidelity, trail density, and star magnitude cutoff
- * (REDESIGN.md §9.4).
+ * Render quality presets that jointly configure shadow fidelity, trail density, and star magnitude cutoff (REDESIGN.md
+ * §9.4).
  *
  * <p>Each preset controls:
  *
@@ -89,7 +89,8 @@ public enum RenderQuality {
      * Visual magnitude cutoff for the star field.
      *
      * <p>Values: LOW = {@link KepplrConstants#STAR_MAGNITUDE_CUTOFF_LOW}, MEDIUM =
-     * {@link KepplrConstants#STAR_MAGNITUDE_CUTOFF_MEDIUM}, HIGH = {@link KepplrConstants#STAR_DEFAULT_MAGNITUDE_CUTOFF}.
+     * {@link KepplrConstants#STAR_MAGNITUDE_CUTOFF_MEDIUM}, HIGH =
+     * {@link KepplrConstants#STAR_DEFAULT_MAGNITUDE_CUTOFF}.
      */
     public double starMagnitudeCutoff() {
         return switch (this) {

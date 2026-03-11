@@ -3,8 +3,8 @@ package kepplr.render.body;
 /**
  * Pure-math analytic eclipse geometry for solar-system bodies (REDESIGN.md §9.3, hybrid Option C).
  *
- * <p>All computation is in consistent units (km). No JME types, no ephemeris access — this class is
- * intentionally pure so it can be unit-tested without a SPICE kernel.
+ * <p>All computation is in consistent units (km). No JME types, no ephemeris access — this class is intentionally pure
+ * so it can be unit-tested without a SPICE kernel.
  *
  * <h3>Shadow model</h3>
  *
@@ -22,8 +22,8 @@ package kepplr.render.body;
  * <p>Multiple casters are combined by taking the maximum shadow fraction (worst shadow wins). This is conservative but
  * physically correct when casters do not overlap in angular space.
  *
- * <p>Algorithm derived from prototype: {@code SaturnShadowController / EclipseLighting150.frag} — reimplemented for
- * new architecture with generalised caster loop and pure-Java testability.
+ * <p>Algorithm derived from prototype: {@code SaturnShadowController / EclipseLighting150.frag} — reimplemented for new
+ * architecture with generalised caster loop and pure-Java testability.
  */
 public final class ShadowGeometry {
 
@@ -32,8 +32,8 @@ public final class ShadowGeometry {
     /**
      * Returns {@code true} if the caster could geometrically cast a shadow on the receiver.
      *
-     * <p>A caster cannot cast a shadow on a receiver if the caster is on the opposite side of the receiver from the
-     * Sun (i.e., the Sun direction and caster direction from the receiver are in opposing hemispheres). This cheap dot
+     * <p>A caster cannot cast a shadow on a receiver if the caster is on the opposite side of the receiver from the Sun
+     * (i.e., the Sun direction and caster direction from the receiver are in opposing hemispheres). This cheap dot
      * product check is the primary early-out used by {@link EclipseShadowManager}.
      *
      * @param receiverPos receiver surface point in km
@@ -97,8 +97,8 @@ public final class ShadowGeometry {
         double casterDirX = toCasterX / dCaster;
         double casterDirY = toCasterY / dCaster;
         double casterDirZ = toCasterZ / dCaster;
-        double cosTheta = Math.max(-1.0, Math.min(1.0,
-                sunDirX * casterDirX + sunDirY * casterDirY + sunDirZ * casterDirZ));
+        double cosTheta =
+                Math.max(-1.0, Math.min(1.0, sunDirX * casterDirX + sunDirY * casterDirY + sunDirZ * casterDirZ));
         double theta = Math.acos(cosTheta);
 
         if (!extendedSource) {
@@ -108,7 +108,7 @@ public final class ShadowGeometry {
 
         // Extended-source: angular disk computation
         double alphaSun = Math.asin(Math.min(1.0, sunRadius / dSun));
-        double umbraLimit = alphaOcc - alphaSun;     // positive iff a true umbra exists
+        double umbraLimit = alphaOcc - alphaSun; // positive iff a true umbra exists
         double penumbraEnd = alphaOcc + alphaSun;
 
         if (umbraLimit > 0.0 && theta < umbraLimit) {

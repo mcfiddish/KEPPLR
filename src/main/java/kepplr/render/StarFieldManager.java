@@ -5,7 +5,6 @@ import com.jme3.scene.Node;
 import kepplr.stars.Star;
 import kepplr.stars.StarCatalog;
 import kepplr.state.SimulationState;
-import kepplr.util.KepplrConstants;
 
 /**
  * Manages the star field rendered by {@link StarFieldRenderer}.

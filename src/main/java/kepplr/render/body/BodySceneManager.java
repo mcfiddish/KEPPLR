@@ -144,8 +144,6 @@ public class BodySceneManager {
             double apparentPx = BodyCuller.computeApparentRadiusPx(bodyRadius, dist, viewportHeight, fovYDeg);
             CullDecision decision = BodyCuller.decide(apparentPx);
 
-
-
             RotationMatrixIJK rotation = null;
             if (decision == CullDecision.DRAW_FULL) {
                 rotation = eph.getJ2000ToBodyFixedRotation(bodyId, et);

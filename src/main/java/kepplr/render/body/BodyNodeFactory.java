@@ -201,7 +201,8 @@ public final class BodyNodeFactory {
                 try {
                     Path resolved = KEPPLRConfiguration.getInstance().getPathInResources(texPath);
                     assetManager.registerLocator(resolved.getParent().toString(), FileLocator.class);
-                    Texture tex = assetManager.loadTexture(resolved.getFileName().toString());
+                    Texture tex =
+                            assetManager.loadTexture(resolved.getFileName().toString());
                     tex.setWrap(Texture.WrapMode.Repeat);
                     mat.setTexture("DiffuseMap", tex);
                 } catch (Exception e) {

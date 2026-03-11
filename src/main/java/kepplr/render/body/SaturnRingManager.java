@@ -2499,8 +2499,8 @@ class SaturnRingManager {
     }
 
     /**
-     * Returns the ring material for shadow-uniform updates by {@link EclipseShadowManager}, or {@code null} if the
-     * ring geometry has not yet been built (Saturn not yet in DRAW_FULL).
+     * Returns the ring material for shadow-uniform updates by {@link EclipseShadowManager}, or {@code null} if the ring
+     * geometry has not yet been built (Saturn not yet in DRAW_FULL).
      */
     Material getRingMaterial() {
         return ringMaterial;

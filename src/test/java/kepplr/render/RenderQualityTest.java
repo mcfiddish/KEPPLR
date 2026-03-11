@@ -10,8 +10,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 /**
- * Unit tests for {@link RenderQuality} enum and its wiring through
- * {@link DefaultSimulationState} and {@link DefaultSimulationCommands}.
+ * Unit tests for {@link RenderQuality} enum and its wiring through {@link DefaultSimulationState} and
+ * {@link DefaultSimulationCommands}.
  */
 class RenderQualityTest {
 
@@ -48,7 +48,7 @@ class RenderQualityTest {
 
     @Test
     void setRenderQuality_high_reflectedInProperty() {
-        commands.setRenderQuality(RenderQuality.LOW);  // change away from HIGH first
+        commands.setRenderQuality(RenderQuality.LOW); // change away from HIGH first
         commands.setRenderQuality(RenderQuality.HIGH);
         assertEquals(RenderQuality.HIGH, state.renderQualityProperty().get());
     }

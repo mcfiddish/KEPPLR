@@ -58,8 +58,7 @@ public final class DefaultSimulationState implements SimulationState {
 
     // ── Render quality (§9.4) ──
 
-    private final SimpleObjectProperty<RenderQuality> renderQuality =
-            new SimpleObjectProperty<>(RenderQuality.HIGH);
+    private final SimpleObjectProperty<RenderQuality> renderQuality = new SimpleObjectProperty<>(RenderQuality.HIGH);
 
     // ── Tracking anchor (§4.6) ──
 
