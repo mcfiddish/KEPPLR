@@ -56,6 +56,7 @@ public class BodySceneManager {
     private final AssetManager assetManager;
     private final SimulationState state;
     private final SaturnRingManager saturnRingManager;
+    private final EclipseShadowManager eclipseShadowManager;
 
     /**
      * Persistent map from EphemerisID to scene node wrapper. Geometry is created once and reused; only
@@ -99,6 +100,7 @@ public class BodySceneManager {
         this.assetManager = assetManager;
         this.state = state;
         this.saturnRingManager = new SaturnRingManager(assetManager);
+        this.eclipseShadowManager = new EclipseShadowManager(state, saturnRingManager);
     }
 
     /**
@@ -141,6 +143,8 @@ public class BodySceneManager {
 
             double apparentPx = BodyCuller.computeApparentRadiusPx(bodyRadius, dist, viewportHeight, fovYDeg);
             CullDecision decision = BodyCuller.decide(apparentPx);
+
+
 
             RotationMatrixIJK rotation = null;
             if (decision == CullDecision.DRAW_FULL) {
@@ -195,6 +199,9 @@ public class BodySceneManager {
 
         // ── Saturn ring update ──────────────────────────────────────────────────────────────────
         saturnRingManager.update(saturnBsn, cameraHelioJ2000);
+
+        // ── Eclipse shadow update (Step 16b) ───────────────────────────────────────────────────
+        eclipseShadowManager.update(bodyNodes.values(), saturnBsn, et, cameraHelioJ2000);
 
         // ── Spacecraft (always point sprites) ──────────────────────────────────────────────────
         KEPPLREphemeris eph2 = KEPPLRConfiguration.getInstance().getEphemeris();

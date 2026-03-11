@@ -4,6 +4,7 @@ import com.jme3.asset.AssetManager;
 import com.jme3.scene.Node;
 import kepplr.stars.Star;
 import kepplr.stars.StarCatalog;
+import kepplr.state.SimulationState;
 import kepplr.util.KepplrConstants;
 
 /**
@@ -20,15 +21,25 @@ import kepplr.util.KepplrConstants;
 public class StarFieldManager {
 
     private StarCatalog<? extends Star> catalog;
-    private double magnitudeCutoff = KepplrConstants.STAR_DEFAULT_MAGNITUDE_CUTOFF;
     private final StarFieldRenderer renderer;
+
+    /**
+     * Simulation state; read each frame on the JME render thread for the active render quality (§9.4).
+     *
+     * <p>The magnitude cutoff is derived from {@code state.renderQualityProperty().get().starMagnitudeCutoff()} rather
+     * than from a settable field, so quality changes propagate automatically without direct method calls into this
+     * manager (CLAUDE.md Rule 2).
+     */
+    private final SimulationState state;
 
     /**
      * @param farNode far frustum root node; star geometry is attached here
      * @param assetManager JME asset manager for material creation
+     * @param state simulation state; read each frame for render quality (§9.4)
      */
-    public StarFieldManager(Node farNode, AssetManager assetManager) {
+    public StarFieldManager(Node farNode, AssetManager assetManager, SimulationState state) {
         this.renderer = new StarFieldRenderer(farNode, assetManager);
+        this.state = state;
     }
 
     /**
@@ -43,19 +54,10 @@ public class StarFieldManager {
     }
 
     /**
-     * Set the visual magnitude cutoff.
-     *
-     * <p>Stars with {@code vmag > cutoff} are excluded. NaN-magnitude stars are always excluded regardless of this
-     * value.
-     *
-     * @param cutoff visual magnitude cutoff (inclusive upper bound)
-     */
-    public void setMagnitudeCutoff(double cutoff) {
-        this.magnitudeCutoff = cutoff;
-    }
-
-    /**
      * Update the star field for the current simulation time.
+     *
+     * <p>The magnitude cutoff is read each frame from {@code state.renderQualityProperty().get()} so quality changes
+     * propagate without requiring an external setter call (CLAUDE.md Rule 2 — state flows one direction).
      *
      * <p>If no catalog has been set, previously attached geometries are detached and no new ones are created.
      *
@@ -68,6 +70,7 @@ public class StarFieldManager {
             renderer.detach();
             return;
         }
-        renderer.update(catalog, magnitudeCutoff, et);
+        double cutoff = state.renderQualityProperty().get().starMagnitudeCutoff();
+        renderer.update(catalog, cutoff, et);
     }
 }

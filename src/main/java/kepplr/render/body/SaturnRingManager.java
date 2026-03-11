@@ -2498,6 +2498,14 @@ class SaturnRingManager {
         updateUniforms(saturnBsn, cameraHelioJ2000);
     }
 
+    /**
+     * Returns the ring material for shadow-uniform updates by {@link EclipseShadowManager}, or {@code null} if the
+     * ring geometry has not yet been built (Saturn not yet in DRAW_FULL).
+     */
+    Material getRingMaterial() {
+        return ringMaterial;
+    }
+
     /** Detach the ring node from the scene graph. */
     void detach() {
         if (ringNode != null && attachedTo != null) {

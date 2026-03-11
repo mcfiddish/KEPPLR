@@ -2,6 +2,7 @@ package kepplr.commands;
 
 import kepplr.camera.CameraFrame;
 import kepplr.core.SimulationClock;
+import kepplr.render.RenderQuality;
 import kepplr.state.DefaultSimulationState;
 
 /**
@@ -126,5 +127,11 @@ public final class DefaultSimulationCommands implements SimulationCommands {
     @Override
     public void setCameraFrame(CameraFrame frame) {
         state.setCameraFrame(frame);
+    }
+
+    /** Set the render quality preset (§9.4). Takes effect on the next JME frame. */
+    @Override
+    public void setRenderQuality(RenderQuality quality) {
+        state.setRenderQuality(quality);
     }
 }

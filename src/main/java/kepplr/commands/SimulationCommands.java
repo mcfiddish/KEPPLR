@@ -1,6 +1,7 @@
 package kepplr.commands;
 
 import kepplr.camera.CameraFrame;
+import kepplr.render.RenderQuality;
 
 /**
  * All user-initiated actions enter the simulation through this interface (REDESIGN.md §4, CLAUDE.md Rule 2).
@@ -98,4 +99,16 @@ public interface SimulationCommands {
      * @param frame the desired camera frame
      */
     void setCameraFrame(CameraFrame frame);
+
+    // ── Render quality commands (§9.4) ──
+
+    /**
+     * Set the render quality preset (§9.4).
+     *
+     * <p>Adjusts shadow fidelity, trail sample density, and star magnitude cutoff. Takes effect on the next JME render
+     * frame — managers read the property directly from {@link kepplr.state.SimulationState}.
+     *
+     * @param quality the desired quality preset; must not be null
+     */
+    void setRenderQuality(RenderQuality quality);
 }

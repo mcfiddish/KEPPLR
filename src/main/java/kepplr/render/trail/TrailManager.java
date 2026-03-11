@@ -11,6 +11,7 @@ import java.util.Map;
 import java.util.Set;
 import kepplr.config.KEPPLRConfiguration;
 import kepplr.ephemeris.KEPPLREphemeris;
+import kepplr.state.SimulationState;
 import kepplr.util.KepplrConstants;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -43,6 +44,14 @@ public class TrailManager {
     private final Node farNode;
     private final AssetManager assetManager;
 
+    /**
+     * Simulation state; read each frame on the JME render thread for the active render quality (§9.4).
+     *
+     * <p>The sample cap is derived from {@code state.renderQualityProperty().get().trailSamplesPerPeriod()} so quality
+     * changes propagate without requiring an external setter call (CLAUDE.md Rule 2).
+     */
+    private final SimulationState state;
+
     /** NAIF IDs for which trails are active. Insertion-ordered for deterministic update sequence. */
     private final Set<Integer> enabledIds = new LinkedHashSet<>();
 
@@ -65,12 +74,14 @@ public class TrailManager {
      * @param midNode mid frustum root node
      * @param farNode far frustum root node
      * @param assetManager JME asset manager for trail material creation
+     * @param state simulation state; read each frame for render quality (§9.4)
      */
-    public TrailManager(Node nearNode, Node midNode, Node farNode, AssetManager assetManager) {
+    public TrailManager(Node nearNode, Node midNode, Node farNode, AssetManager assetManager, SimulationState state) {
         this.nearNode = nearNode;
         this.midNode = midNode;
         this.farNode = farNode;
         this.assetManager = assetManager;
+        this.state = state;
     }
 
     /** Enable a trail for the given body. No ephemeris access occurs here. */
@@ -108,7 +119,8 @@ public class TrailManager {
             if (stale) {
                 try {
                     double duration = TrailSampler.computeTrailDurationSec(naifId, currentEt);
-                    List<double[]> samples = TrailSampler.sample(naifId, currentEt, duration, "J2000");
+                    int maxSamples = this.state.renderQualityProperty().get().trailSamplesPerPeriod();
+                    List<double[]> samples = TrailSampler.sample(naifId, currentEt, duration, "J2000", maxSamples);
                     int barycenterId = -1;
                     double[] baryAnchorKm = null;
                     if (isSatellite(naifId)) {

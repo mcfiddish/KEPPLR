@@ -19,7 +19,7 @@ public class TrailManagerTest {
      * only method that accesses the nodes or asset manager).
      */
     private TrailManager manager() {
-        return new TrailManager(null, null, null, null);
+        return new TrailManager(null, null, null, null, new kepplr.state.DefaultSimulationState());
     }
 
     @Test
