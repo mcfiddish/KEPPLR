@@ -6,9 +6,7 @@ import kepplr.util.KepplrConstants;
 import org.junit.jupiter.api.Test;
 import picante.math.vectorspace.RotationMatrixIJK;
 
-/**
- * Unit tests for Saturn ring geometry constants and static helpers in SaturnRingManager.
- */
+/** Unit tests for Saturn ring geometry constants and static helpers in SaturnRingManager. */
 class SaturnRingGeometryTest {
 
     @Test
@@ -27,7 +25,7 @@ class SaturnRingGeometryTest {
         assertFalse(SaturnRingManager.appliesToBody(399)); // Earth
         assertFalse(SaturnRingManager.appliesToBody(599)); // Jupiter
         assertFalse(SaturnRingManager.appliesToBody(799)); // Uranus
-        assertFalse(SaturnRingManager.appliesToBody(10));  // Sun
+        assertFalse(SaturnRingManager.appliesToBody(10)); // Sun
         assertFalse(SaturnRingManager.appliesToBody(0));
     }
 
@@ -39,10 +37,7 @@ class SaturnRingGeometryTest {
     @Test
     void extractRingPlaneNormalFromIdentityIsZAxis() {
         // Identity rotation: J2000 == body-fixed. Ring normal = Z = (0,0,1).
-        RotationMatrixIJK identity = new RotationMatrixIJK(
-                1, 0, 0,
-                0, 1, 0,
-                0, 0, 1);
+        RotationMatrixIJK identity = new RotationMatrixIJK(1, 0, 0, 0, 1, 0, 0, 0, 1);
         double[] normal = SaturnRingManager.extractRingPlaneNormal(identity);
 
         assertNotNull(normal);
@@ -63,9 +58,9 @@ class SaturnRingGeometryTest {
         //  col0=(1,0,0), col1=(0,0,1), col2=(0,-1,0)
         // Ring normal = row2 of R = (0, 1, 0) in J2000.
         RotationMatrixIJK rotX90 = new RotationMatrixIJK(
-                1, 0,  0,   // col 0: (ii=1, ji=0, ki=0)
-                0, 0,  1,   // col 1: (ij=0, jj=0, kj=1)
-                0, -1, 0);  // col 2: (ik=0, jk=-1, kk=0)
+                1, 0, 0, // col 0: (ii=1, ji=0, ki=0)
+                0, 0, 1, // col 1: (ij=0, jj=0, kj=1)
+                0, -1, 0); // col 2: (ik=0, jk=-1, kk=0)
         double[] normal = SaturnRingManager.extractRingPlaneNormal(rotX90);
 
         assertNotNull(normal);

@@ -83,7 +83,11 @@ public final class BodyNodeFactory {
         mesh.updateBound();
 
         Geometry fullGeom = new Geometry(bodyId.getName(), mesh);
-        fullGeom.setLocalScale(radiusKm);
+        if (shape != null) {
+            fullGeom.setLocalScale((float) shape.getA(), (float) shape.getB(), (float) shape.getC());
+        } else {
+            fullGeom.setLocalScale(radiusKm);
+        }
         fullGeom.setMaterial(createBodyMaterial(naifId, bodyId.getName(), assetManager));
         fullGeom.setCullHint(Spatial.CullHint.Inherit);
 

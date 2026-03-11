@@ -1,8 +1,7 @@
-// Saturn ring vertex shader — GLSL 150
+// Saturn ring vertex shader (GLSL 150 -- version injected by JME)
 // Passes model-space (body-fixed) position and world-space position to the fragment shader.
 // The ring mesh is built in body-fixed space (XY plane, Z=0), so inPosition.xy gives the
 // radial position needed for texture UV computation in the fragment shader.
-#version 150
 
 uniform mat4 g_WorldViewProjectionMatrix;
 uniform mat4 g_WorldMatrix;

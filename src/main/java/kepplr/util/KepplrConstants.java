@@ -271,8 +271,8 @@ public final class KepplrConstants {
     /**
      * Inner radius of Saturn's ring system (km).
      *
-     * <p>Corresponds to the D ring inner edge (~74,490 km actual; this value matches the Bjorn
-     * Jonsson ring profile used in the prototype SaturnRingsController).
+     * <p>Corresponds to the D ring inner edge (~74,490 km actual; this value matches the Bjorn Jonsson ring profile
+     * used in the prototype SaturnRingsController).
      */
     public static final double SATURN_RING_INNER_RADIUS_KM = 74_400.0;
 
@@ -286,16 +286,15 @@ public final class KepplrConstants {
     /**
      * Angular tessellation segments for the Saturn ring annulus mesh.
      *
-     * <p>2048 segments give a visually smooth circle at close range (near frustum). Matches the
-     * prototype's {@code DEFAULT_ANGULAR_SEGMENTS}.
+     * <p>2048 segments give a visually smooth circle at close range (near frustum). Matches the prototype's
+     * {@code DEFAULT_ANGULAR_SEGMENTS}.
      */
     public static final int SATURN_RING_ANGULAR_SEGMENTS = 2048;
 
     /**
      * Base ring color tint — red channel (0–1).
      *
-     * <p>Warm pinkish-tan tint applied to the brightness texture. Derived from prototype RGB
-     * constants (255, 224, 209).
+     * <p>Warm pinkish-tan tint applied to the brightness texture. Derived from prototype RGB constants (255, 224, 209).
      */
     public static final float SATURN_RING_COLOR_R = 255f / 255f;
 
@@ -310,34 +309,32 @@ public final class KepplrConstants {
     /**
      * Maximum number of shadow-casting occluders evaluated per body per frame.
      *
-     * <p>Applies to both the body eclipse shader (OccluderPositions/Radii arrays) and moon shadow
-     * casters in the ring shader. Matches the prototype's {@code MAX_SHADOW_CASTERS = 8}.
+     * <p>Applies to both the body eclipse shader (OccluderPositions/Radii arrays) and moon shadow casters in the ring
+     * shader. Matches the prototype's {@code MAX_SHADOW_CASTERS = 8}.
      */
     public static final int SHADOW_MAX_OCCLUDERS = 8;
 
     /**
      * Saturn-shadow darkness on the ring surface (Step 16b).
      *
-     * <p>Controls how dark the ring becomes when it lies in Saturn's shadow. 0 = no shadow effect,
-     * 1 = fully dark. Matches prototype {@code SATURN_SHADOW_DARKNESS}.
+     * <p>Controls how dark the ring becomes when it lies in Saturn's shadow. 0 = no shadow effect, 1 = fully dark.
+     * Matches prototype {@code SATURN_SHADOW_DARKNESS}.
      */
     public static final float RING_SHADOW_DARKNESS = 0.9f;
 
     /**
      * Moon-shadow darkness on the ring surface (Step 16b).
      *
-     * <p>Controls how dark the ring becomes when a moon's shadow crosses it. Softer than the
-     * planetary shadow because moon shadows are smaller. Matches prototype
-     * {@code DEFAULT_MOON_SHADOW_DARKNESS}.
+     * <p>Controls how dark the ring becomes when a moon's shadow crosses it. Softer than the planetary shadow because
+     * moon shadows are smaller. Matches prototype {@code DEFAULT_MOON_SHADOW_DARKNESS}.
      */
     public static final float RING_MOON_SHADOW_DARKNESS = 0.6f;
 
     /**
      * Beer-Lambert tau scale factor for ring shadow attenuation (Step 16b).
      *
-     * <p>Scales the optical depth {@code τ = 1 − transparency} in the exponent of the ring-shadow
-     * attenuation function: {@code atten = exp(−TauScale × τ / μ₀)}. 1.0 = physically calibrated.
-     * Matches prototype {@code TAU_SCALE}.
+     * <p>Scales the optical depth {@code τ = 1 − transparency} in the exponent of the ring-shadow attenuation function:
+     * {@code atten = exp(−TauScale × τ / μ₀)}. 1.0 = physically calibrated. Matches prototype {@code TAU_SCALE}.
      */
     public static final float RING_TAU_SCALE = 1.0f;
 }
