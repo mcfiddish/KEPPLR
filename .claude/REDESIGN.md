@@ -48,13 +48,18 @@ This document defines **behavioral requirements** (what the system must do), not
 * The camera pose (position + orientation) **must always be expressible in heliocentric J2000 coordinates**.
 * The camera may be internally represented in other frames (e.g., body-fixed), but it must always be convertible to/from heliocentric J2000 **without loss of meaning**, enabling robust camera frame switching.
 
-### 1.5 Camera Frames
+### 1.5 Camera Frames [D-005]
 
 The simulator must support the following camera frames:
 
 * **Inertial** (J2000)
 * **Body-fixed** (focus-body fixed frame, when a focus exists)
 * **Synodic** (defined in §5)
+
+> **Implementation note:** When PCK orientation data is unavailable for the focus body,
+> the camera silently falls back to the inertial frame. `SimulationState` exposes both
+> the *requested* frame and the *actual* frame as distinct properties so the UI always
+> reflects ground truth. See also §12.3.
 
 ---
 
@@ -80,7 +85,7 @@ The simulator must support the following camera frames:
 
 ---
 
-## 3. Configuration and Ephemeris Access
+## 3. Configuration and Ephemeris Access [D-001]
 
 ### 3.1 Configuration Source of Truth
 
@@ -107,7 +112,7 @@ The simulator must support the following camera frames:
 
 ---
 
-## 4. Object States and Interaction Semantics
+## 4. Object States and Interaction Semantics [D-002]
 
 ### 4.1 Renderable Body Definition
 
@@ -227,12 +232,12 @@ At any time, the application maintains at most:
 
 * Rendering must use **JMonkeyEngine** (pure Java).
 
-### 7.2 Body Rendering Types
+### 7.2 Body Rendering Types [D-007]
 
 * Bodies must be renderable as:
 
   * **spheres with textures**
-  * **Saturn’s rings**
+  * **Saturn’s rings** *(implemented in Step 16a; see also §9 for shadow coupling)*
   * **point sprites** for very small bodies (see §7.3)
 * Textures must be oriented using the **body-fixed frame**:
 
@@ -247,7 +252,7 @@ At any time, the application maintains at most:
 
   * [https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/req/naif_ids.html](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/req/naif_ids.html)
 
-### 7.4 Star Field
+### 7.4 Star Field [D-004]
 
 * A built-in star field must exist using the **Yale Bright Star Catalog** including proper motions.
 * The star catalog must be abstracted behind an interface supplied by the user so catalogs like Tycho-2 or GAIA can be swapped in the future.
@@ -269,7 +274,14 @@ At any time, the application maintains at most:
   * optionally: other frames (for resonance visualization)
 * Trails must be renderable in **segments** such that different segments can be drawn in different frustums if needed.
 
-### 7.6 Illumination and Sun Halo
+### 7.6 Vector Overlays [D-003]
+
+* The renderer must support configurable direction-vector overlays drawn from a body center.
+* Vector types must be defined via a **strategy interface** (`VectorType`), not an enum,
+  to support parameterized types such as `VectorTypes.towardBody(int naifId)`.
+* The set of active overlays must be managed independently of body selection state.
+
+### 7.7 Illumination and Sun Halo
 
 * The **Sun** is the only illumination source.
 * The Sun must have a visible **halo**.
@@ -305,7 +317,7 @@ These thresholds are not user-configurable but must be defined in an easily disc
 
 ---
 
-## 9. Shadows and Eclipses
+## 9. Shadows and Eclipses [D-007]
 
 ### 9.1 Required Phenomena
 
@@ -382,7 +394,7 @@ The goal is to maintain interactive performance by allowing reduced-cost setting
 
 * The texture center longitude must be specified in the configuration file and accessible from `KEPPLRConfiguration`.
 
-### 12.3 Missing Orientation Data
+### 12.3 Missing Orientation Data [D-005]
 
 * If a body lacks PCK/orientation data, it must render as an **untextured sphere** (assuming it otherwise has valid ephemeris coverage).
 

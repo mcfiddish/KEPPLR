@@ -68,8 +68,8 @@ public class KepplrApp extends SimpleApplication {
 
     private static final Logger logger = LogManager.getLogger();
 
-    private static final int DEFAULT_FOCUS_BODY = 10;
-    private static final float CAMERA_OFFSET_KM = 15_000_000f;
+    private static final int DEFAULT_FOCUS_BODY = 399;
+    private static final float CAMERA_OFFSET_KM = 15000f;
 
     /** Camera heliocentric J2000 position in km. Scene positions are {@code helioPos − this}, cast to float for JME. */
     private final double[] cameraHelioJ2000 = new double[3];
