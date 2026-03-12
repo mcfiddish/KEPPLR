@@ -499,4 +499,12 @@ public final class KepplrConstants {
      * <p>Matches the prototype {@code SunHaloController.SUN_HALO_ALPHA = 0.12f}. Visually tuned.
      */
     public static final float SUN_HALO_ALPHA_SCALE_HIGH = 0.12f;
+
+    /**
+     * Minimum apparent half-angle of the Sun halo in radians (= 0.5°, giving a 1° minimum apparent diameter).
+     *
+     * <p>When the camera is far enough from the Sun that the physical billboard subtends less than 1°, the billboard is
+     * enlarged to this angular floor so the halo remains visible at interplanetary distances (e.g. from Pluto).
+     */
+    public static final double SUN_HALO_MIN_APPARENT_HALF_ANGLE_RAD = Math.toRadians(0.5);
 }

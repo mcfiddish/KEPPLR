@@ -37,6 +37,48 @@ class SunHaloRendererTest {
         assertEquals(KepplrConstants.SUN_HALO_MAX_RADIUS_MULTIPLIER, SunHaloRenderer.computeBillboardRadiusKm(r), 1e-9);
     }
 
+    // ── effectiveBillboardRadiusKm ───────────────────────────────────────────────────────────
+
+    private static final double SUN_MEAN_RADIUS_KM = 695_700.0; // IAU mean solar radius
+
+    @Test
+    void effectiveBillboardRadiusKm_nearSun_usesPhysicalRadius() {
+        // At 1 AU (~149.6e6 km) the physical radius is much larger than the 0.5° minimum.
+        double distKm = 149_597_870.7; // 1 AU
+        double physical = SunHaloRenderer.computeBillboardRadiusKm(SUN_MEAN_RADIUS_KM);
+        double effective = SunHaloRenderer.effectiveBillboardRadiusKm(SUN_MEAN_RADIUS_KM, distKm);
+        assertEquals(physical, effective, 1.0, "Physical radius should dominate at 1 AU");
+    }
+
+    @Test
+    void effectiveBillboardRadiusKm_farFromSun_enforcesMinimum() {
+        // At 100 AU the physical billboard subtends ~0.011° half-angle, well below 0.5°.
+        double distKm = 100 * 149_597_870.7;
+        double minimum = distKm * Math.tan(KepplrConstants.SUN_HALO_MIN_APPARENT_HALF_ANGLE_RAD);
+        double effective = SunHaloRenderer.effectiveBillboardRadiusKm(SUN_MEAN_RADIUS_KM, distKm);
+        assertEquals(minimum, effective, 1.0, "Minimum angular floor should dominate at 100 AU");
+    }
+
+    @Test
+    void effectiveBillboardRadiusKm_atCrossoverDistance_isExact() {
+        // Find the crossover distance where physical == minimum, and verify effective == both.
+        double physical = SunHaloRenderer.computeBillboardRadiusKm(SUN_MEAN_RADIUS_KM);
+        double tanHalf = Math.tan(KepplrConstants.SUN_HALO_MIN_APPARENT_HALF_ANGLE_RAD);
+        double crossoverDistKm = physical / tanHalf;
+        double effective = SunHaloRenderer.effectiveBillboardRadiusKm(SUN_MEAN_RADIUS_KM, crossoverDistKm);
+        assertEquals(physical, effective, 1.0);
+    }
+
+    @Test
+    void effectiveBillboardRadiusKm_isNeverLessThanPhysical() {
+        double[] distances = {1e4, 1e6, 1e8, 1e10, 1e12};
+        for (double d : distances) {
+            double physical = SunHaloRenderer.computeBillboardRadiusKm(SUN_MEAN_RADIUS_KM);
+            double effective = SunHaloRenderer.effectiveBillboardRadiusKm(SUN_MEAN_RADIUS_KM, d);
+            assertTrue(effective >= physical - 1e-9, "Effective radius must be >= physical at dist=" + d);
+        }
+    }
+
     // ── RenderQuality halo constants monotonicity ────────────────────────────────────────────
 
     @Test

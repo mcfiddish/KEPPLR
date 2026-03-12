@@ -145,8 +145,8 @@ class SunHaloRenderer {
         haloTimeSec += tpf;
 
         // Acquire Sun mean radius at point-of-use (Architecture Rule 3).
-        double billboardRadiusKm = resolveBillboardRadiusKm();
-        if (billboardRadiusKm <= 0.0) {
+        double sunMeanRadiusKm = resolveSunMeanRadiusKm();
+        if (sunMeanRadiusKm <= 0.0) {
             haloNode.setCullHint(Spatial.CullHint.Always);
             return;
         }
@@ -155,6 +155,8 @@ class SunHaloRenderer {
         double sunDistKm = Math.sqrt(cameraHelioJ2000[0] * cameraHelioJ2000[0]
                 + cameraHelioJ2000[1] * cameraHelioJ2000[1]
                 + cameraHelioJ2000[2] * cameraHelioJ2000[2]);
+
+        double billboardRadiusKm = effectiveBillboardRadiusKm(sunMeanRadiusKm, sunDistKm);
 
         // Re-parent to the correct frustum layer when the assignment changes.
         FrustumLayer targetLayer = FrustumLayer.assign(sunDistKm, 0.0);
@@ -200,6 +202,25 @@ class SunHaloRenderer {
         return sunMeanRadiusKm * KepplrConstants.SUN_HALO_MAX_RADIUS_MULTIPLIER;
     }
 
+    /**
+     * Returns the billboard radius that guarantees a minimum apparent angular diameter of 1° regardless of distance.
+     *
+     * <p>The physical radius ({@link #computeBillboardRadiusKm}) shrinks angularly with distance. When it would subtend
+     * less than {@link KepplrConstants#SUN_HALO_MIN_APPARENT_HALF_ANGLE_RAD}, this method returns the distance-scaled
+     * minimum instead.
+     *
+     * <p>Package-private for unit testing.
+     *
+     * @param sunMeanRadiusKm Sun mean radius in km
+     * @param sunDistKm camera-to-Sun distance in km (must be &gt; 0)
+     * @return effective billboard half-size in km
+     */
+    static double effectiveBillboardRadiusKm(double sunMeanRadiusKm, double sunDistKm) {
+        double physical = computeBillboardRadiusKm(sunMeanRadiusKm);
+        double minimum = sunDistKm * Math.tan(KepplrConstants.SUN_HALO_MIN_APPARENT_HALF_ANGLE_RAD);
+        return Math.max(physical, minimum);
+    }
+
     // ── private helpers ───────────────────────────────────────────────────────────────────────
 
     private Node layerNode(FrustumLayer layer) {
@@ -210,7 +231,7 @@ class SunHaloRenderer {
         };
     }
 
-    private double resolveBillboardRadiusKm() {
+    private double resolveSunMeanRadiusKm() {
         KEPPLREphemeris eph = KEPPLRConfiguration.getInstance().getEphemeris();
         EphemerisID sunId;
         try {
@@ -228,8 +249,7 @@ class SunHaloRenderer {
             logger.warn("SunHaloRenderer: no shape data for Sun (NAIF {})", KepplrConstants.SUN_NAIF_ID);
             return 0.0;
         }
-        double meanRadius = (sunShape.getA() + sunShape.getB() + sunShape.getC()) / 3.0;
-        return computeBillboardRadiusKm(meanRadius);
+        return (sunShape.getA() + sunShape.getB() + sunShape.getC()) / 3.0;
     }
 
     /**
