@@ -141,16 +141,18 @@ void main() {
             }
         }
 
-        // ── Saturn shadow on ring (Step 16b) ──────────────────────────────────────────────────
-        // Uses ellipsoid intersection test. Saturn-on-ring penumbra is geometrically very narrow
+        // ── Shadow on ring (Step 16b) — shadows are absence of sunlight, not additive ─────────
+        // Compute each shadow factor independently (1.0 = fully lit, 0.0 = fully shadowed),
+        // then apply the minimum (darkest wins). Overlapping shadows must not compound.
+
+        // Saturn-on-ring: ellipsoid intersection test. Penumbra is geometrically very narrow
         // at typical ring distances (angular penumbra < 0.01°) so binary umbra is used here.
-        // The ShadowDarkness uniform controls the overall darkness of the shadow band.
+        float shadowFactor = 1.0;
         if (m_ShadowDarkness > 0.0 && intersectsSaturn(vLocalPos.xyz, sunDir)) {
-            ringLightFactor *= (1.0 - clamp(m_ShadowDarkness, 0.0, 1.0));
+            shadowFactor = min(shadowFactor, 1.0 - clamp(m_ShadowDarkness, 0.0, 1.0));
         }
 
-        // ── Moon shadow on ring (Step 16b, analytic penumbra) ────────────────────────────────
-        // Iterate active moon shadow casters; take maximum shadow contribution.
+        // Moon-on-ring: analytic penumbra; take maximum shadow across all casters.
         if (m_MoonShadowDarkness > 0.0 && m_NumShadowCasters > 0) {
             float maxMoonShadow = 0.0;
             for (int i = 0; i < 8; i++) {
@@ -159,8 +161,10 @@ void main() {
                         vLocalPos.xyz, sunDir, m_ShadowCasterPos[i], m_ShadowCasterRadius[i]);
                 maxMoonShadow = max(maxMoonShadow, sf);
             }
-            ringLightFactor *= (1.0 - clamp(m_MoonShadowDarkness * maxMoonShadow, 0.0, 1.0));
+            shadowFactor = min(shadowFactor, 1.0 - clamp(m_MoonShadowDarkness * maxMoonShadow, 0.0, 1.0));
         }
+
+        ringLightFactor *= shadowFactor;
     }
 
     vec3 color = m_RingColor.rgb * brightness;

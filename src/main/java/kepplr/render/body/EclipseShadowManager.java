@@ -6,7 +6,9 @@ import com.jme3.scene.Geometry;
 import com.jme3.scene.Spatial;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import kepplr.config.KEPPLRConfiguration;
 import kepplr.render.RenderQuality;
 import kepplr.state.SimulationState;
@@ -55,11 +57,29 @@ class EclipseShadowManager {
     private final SaturnRingManager saturnRingManager;
 
     // ── Scratch arrays — reused every frame to avoid allocation ─────────────────────────────
+    //
+    // occluderPositionsBuf / occluderRadiiBuf are used as scratch during caster sorting ONLY.
+    // They must NOT be passed directly to mat.setParam because JME stores the array reference,
+    // not a copy: all materials would share the same array and end up with the last receiver's
+    // occluder data at render time.  perGeomOccluderPos/Radii hold one dedicated array per
+    // receiver geometry, allocated once and reused across frames.
 
     private final Vector3f[] occluderPositionsBuf = new Vector3f[KepplrConstants.SHADOW_MAX_OCCLUDERS];
     private final float[] occluderRadiiBuf = new float[KepplrConstants.SHADOW_MAX_OCCLUDERS];
+    /**
+     * Angular-size-squared sort keys (casterRadius²/dist²) for each slot; sorted descending so that the most
+     * shadow-significant caster (largest angular radius as seen from the receiver) is always in slot 0. This ensures
+     * Titan (largest angular radius of Saturn moons) is never evicted by a smaller, closer inner moon.
+     */
+    private final float[] occluderAngSize2Buf = new float[KepplrConstants.SHADOW_MAX_OCCLUDERS];
+
     private final Vector3f[] moonPosBuf = new Vector3f[KepplrConstants.SHADOW_MAX_OCCLUDERS];
     private final float[] moonRadiiBuf = new float[KepplrConstants.SHADOW_MAX_OCCLUDERS];
+
+    /** Per-receiver occluder arrays passed to JME materials; one entry per Geometry, never shared. */
+    private final Map<Geometry, Vector3f[]> perGeomOccluderPos = new HashMap<>();
+
+    private final Map<Geometry, float[]> perGeomOccluderRadii = new HashMap<>();
 
     EclipseShadowManager(SimulationState state, SaturnRingManager saturnRingManager) {
         this.state = state;
@@ -110,12 +130,13 @@ class EclipseShadowManager {
             // getWorldTranslation() may lag until updateGeometricState() runs at frame end.
             Vector3f receiverPos = receiver.ephemerisNode.getLocalTranslation();
 
-            // Collect valid shadow casters for this receiver.
-            // Iterate ALL active bodyNodes (not just fullNodes) so that satellite sprites
-            // can still cast shadows when they are too small to render as DRAW_FULL geometry.
+            // Collect valid shadow casters for this receiver, keeping the closest maxOccluders
+            // by distance to the receiver. Iterating ALL active bodyNodes (not just fullNodes)
+            // ensures satellite sprites can still cast shadows. Proximity sorting guarantees
+            // that local moons fill slots before geometrically-coincident but irrelevant bodies
+            // from other planetary systems (e.g. Earth in Saturn's sunward hemisphere).
             int count = 0;
             for (BodySceneNode caster : bodyNodes) {
-                if (count >= maxOccluders) break;
                 if (caster == receiver) continue;
                 if (caster.naifId == SUN_NAIF_ID) continue; // Sun does not cast shadows on others
 
@@ -127,9 +148,32 @@ class EclipseShadowManager {
                 float casterRadius = bodyMeanRadiusKm(caster.naifId);
                 if (!(casterRadius > 0f)) continue;
 
-                occluderPositionsBuf[count].set(casterPos);
-                occluderRadiiBuf[count] = casterRadius;
-                count++;
+                float dx = casterPos.x - receiverPos.x;
+                float dy = casterPos.y - receiverPos.y;
+                float dz = casterPos.z - receiverPos.z;
+                float dist2 = dx * dx + dy * dy + dz * dz;
+                // Angular size squared = (radius/distance)² — larger means more shadow-significant.
+                float angSize2 = (dist2 > 0f) ? (casterRadius * casterRadius) / dist2 : 0f;
+
+                if (count < maxOccluders) {
+                    // Append then bubble-sort DOWN to maintain descending angSize2 order.
+                    // Slot 0 = most significant caster; last slot = least significant.
+                    occluderPositionsBuf[count].set(casterPos);
+                    occluderRadiiBuf[count] = casterRadius;
+                    occluderAngSize2Buf[count] = angSize2;
+                    for (int j = count; j > 0 && occluderAngSize2Buf[j] > occluderAngSize2Buf[j - 1]; j--) {
+                        swapOccluders(j, j - 1);
+                    }
+                    count++;
+                } else if (angSize2 > occluderAngSize2Buf[count - 1]) {
+                    // New caster is more significant than the current least-significant slot; replace.
+                    occluderPositionsBuf[count - 1].set(casterPos);
+                    occluderRadiiBuf[count - 1] = casterRadius;
+                    occluderAngSize2Buf[count - 1] = angSize2;
+                    for (int j = count - 1; j > 0 && occluderAngSize2Buf[j] > occluderAngSize2Buf[j - 1]; j--) {
+                        swapOccluders(j, j - 1);
+                    }
+                }
             }
 
             setBodyShadowUniforms(receiver.fullGeom, sunScenePos, sunRadius, count, extendedSource, saturnBsn);
@@ -140,6 +184,19 @@ class EclipseShadowManager {
     }
 
     // ── Private helpers ──────────────────────────────────────────────────────────────────────────
+
+    /** Swaps entries a and b in all three occluder scratch arrays in-place. */
+    private void swapOccluders(int a, int b) {
+        Vector3f tmpPos = occluderPositionsBuf[a];
+        occluderPositionsBuf[a] = occluderPositionsBuf[b];
+        occluderPositionsBuf[b] = tmpPos;
+        float tmpR = occluderRadiiBuf[a];
+        occluderRadiiBuf[a] = occluderRadiiBuf[b];
+        occluderRadiiBuf[b] = tmpR;
+        float tmpD = occluderAngSize2Buf[a];
+        occluderAngSize2Buf[a] = occluderAngSize2Buf[b];
+        occluderAngSize2Buf[b] = tmpD;
+    }
 
     private void setBodyShadowUniforms(
             Geometry fullGeom,
@@ -154,8 +211,22 @@ class EclipseShadowManager {
         mat.setFloat("SunRadius", sunRadius);
         mat.setInt("OccluderCount", occluderCount);
         if (occluderCount > 0) {
-            mat.setParam("OccluderPositions", com.jme3.shader.VarType.Vector3Array, occluderPositionsBuf);
-            mat.setParam("OccluderRadii", com.jme3.shader.VarType.FloatArray, occluderRadiiBuf);
+            // Copy scratch data into this geometry's own dedicated arrays before passing to JME.
+            // JME stores the array reference in MatParam; sharing occluderPositionsBuf across
+            // materials would make every body render with the last-processed receiver's data.
+            int n = KepplrConstants.SHADOW_MAX_OCCLUDERS;
+            Vector3f[] posArr = perGeomOccluderPos.computeIfAbsent(fullGeom, k -> {
+                Vector3f[] a = new Vector3f[n];
+                for (int i = 0; i < n; i++) a[i] = new Vector3f();
+                return a;
+            });
+            float[] radArr = perGeomOccluderRadii.computeIfAbsent(fullGeom, k -> new float[n]);
+            for (int i = 0; i < occluderCount; i++) {
+                posArr[i].set(occluderPositionsBuf[i]);
+                radArr[i] = occluderRadiiBuf[i];
+            }
+            mat.setParam("OccluderPositions", com.jme3.shader.VarType.Vector3Array, posArr);
+            mat.setParam("OccluderRadii", com.jme3.shader.VarType.FloatArray, radArr);
         }
         mat.setBoolean("ExtendedSource", extendedSource);
 
