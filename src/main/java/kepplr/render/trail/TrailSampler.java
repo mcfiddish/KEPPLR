@@ -134,8 +134,30 @@ public final class TrailSampler {
      * @param frame reference frame name (reserved; current implementation always uses J2000)
      * @return list of {@code double[4]} arrays — [x, y, z] in km (heliocentric J2000) and [3] = sample ET — oldest
      *     first; never null
+     * @see #sample(int, double, double, String, int)
+     */
+    /**
+     * Convenience overload using the default HIGH-quality sample cap
+     * ({@link KepplrConstants#TRAIL_SAMPLES_PER_PERIOD}).
+     *
+     * @see #sample(int, double, double, String, int)
      */
     public static List<double[]> sample(int naifId, double centerEt, double durationSec, String frame) {
+        return sample(naifId, centerEt, durationSec, frame, KepplrConstants.TRAIL_SAMPLES_PER_PERIOD);
+    }
+
+    /**
+     * Sample the heliocentric J2000 trail for a body over one orbital period (or {@code durationSec}).
+     *
+     * @param naifId NAIF integer ID of the body
+     * @param centerEt ET at the newest (body's current) end of the trail
+     * @param durationSec total trail duration in seconds (= orbital period for period trails)
+     * @param frame reference frame name (reserved; current implementation always uses J2000)
+     * @param maxSamples maximum number of samples to collect (quality-tier cap)
+     * @return list of {@code double[4]} arrays — [x, y, z] in km (heliocentric J2000) and [3] = sample ET — oldest
+     *     first; never null
+     */
+    public static List<double[]> sample(int naifId, double centerEt, double durationSec, String frame, int maxSamples) {
         KEPPLREphemeris eph = KEPPLRConfiguration.getInstance().getEphemeris();
 
         // Satellite path: IDs 100–999 not ending in 99 (same rule as BodyCuller.isSatellite)
@@ -156,13 +178,12 @@ public final class TrailSampler {
         double omega = 2.0 * Math.PI / durationSec;
         double minArcRad = Math.toRadians(KepplrConstants.TRAIL_MIN_ARC_DEG);
         double maxArcRad = Math.toRadians(KepplrConstants.TRAIL_MAX_ARC_DEG);
-        int cap = KepplrConstants.TRAIL_SAMPLES_PER_PERIOD;
 
         // Single backward pass: centerEt → centerEt − durationSec
         // Collected newest-first, then reversed to yield oldest-first for TrailRenderer.
         List<double[]> backward = new ArrayList<>();
         double et = centerEt;
-        while (et >= centerEt - durationSec && backward.size() < cap) {
+        while (et >= centerEt - durationSec && backward.size() < maxSamples) {
             double[] p = sampleOnePosition(naifId, barycenterId, baryAnchor, et, eph);
             if (p != null) backward.add(p);
             double f = Math.min((centerEt - et) / durationSec, 1.0);

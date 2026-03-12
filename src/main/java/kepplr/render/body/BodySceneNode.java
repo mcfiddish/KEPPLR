@@ -35,14 +35,18 @@ public class BodySceneNode {
     final Geometry fullGeom;
     final Geometry spriteGeom;
 
+    /** NAIF integer ID of this body — used by {@link EclipseShadowManager} for ephemeris lookups. */
+    final int naifId;
+
     /** Frustum layer node this body is currently attached to; null when culled. */
     private Node currentParent;
 
-    BodySceneNode(Node ephemerisNode, Node bodyFixedNode, Geometry fullGeom, Geometry spriteGeom) {
+    BodySceneNode(Node ephemerisNode, Node bodyFixedNode, Geometry fullGeom, Geometry spriteGeom, int naifId) {
         this.ephemerisNode = ephemerisNode;
         this.bodyFixedNode = bodyFixedNode;
         this.fullGeom = fullGeom;
         this.spriteGeom = spriteGeom;
+        this.naifId = naifId;
         this.currentParent = null;
     }
 

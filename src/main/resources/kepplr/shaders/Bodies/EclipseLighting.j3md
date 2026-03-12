@@ -1,0 +1,69 @@
+MaterialDef Eclipse Lighting {
+
+    MaterialParameters {
+
+        // Diffuse texture map (equirectangular, §12.1)
+        Texture2D DiffuseMap
+
+        // Flat diffuse color (used when DiffuseMap is absent, §12.3)
+        Color DiffuseColor : 1 1 1 1
+
+        // ── Sun and eclipse uniforms (set each frame by EclipseShadowManager) ────────────────
+        // World-space Sun center (km, floating-origin heliocentric J2000)
+        Vector3 SunPosition
+
+        // Sun radius in km (retrieved from KEPPLREphemeris at point-of-use)
+        Float SunRadius : 695700
+
+        // Number of active shadow-casting occluders (0 = no eclipse computation)
+        Int OccluderCount : 0
+
+        // World-space occluder centers (km); up to SHADOW_MAX_OCCLUDERS entries
+        Vector3Array OccluderPositions
+
+        // Occluder radii (km); parallel array to OccluderPositions
+        FloatArray OccluderRadii
+
+        // ── Quality-tier selector ──────────────────────────────────────────────────────────
+        // When true: extended-source analytic penumbra (MEDIUM/HIGH).
+        // When false: point-source binary shadow (LOW).
+        Boolean ExtendedSource
+
+        // ── Ring shadow (Saturn only) ──────────────────────────────────────────────────────
+        // Enables the ring-shadow ray-plane path in the fragment shader.
+        Boolean HasRings
+
+        // Ring-plane normal in world space (normalized); updated each frame by EclipseShadowManager
+        Vector3 RingNormal
+
+        // Saturn world-space center (km); same as body world position
+        Vector3 RingSaturnCenter
+
+        // Ring annulus inner and outer radii (km, body-fixed = world since mesh is in body-fixed)
+        Float RingInner : 74400
+        Float RingOuter : 140154
+
+        // Beer-Lambert tau scale factor (= KepplrConstants.RING_TAU_SCALE)
+        Float RingTauScale : 1
+
+        // Ring transparency profile (1-D luminance; inner=1.0, outer=0.0)
+        Texture2D RingTransparencyTex
+    }
+
+    Technique {
+        VertexShader   GLSL150: kepplr/shaders/Bodies/EclipseLighting.vert
+        FragmentShader GLSL150: kepplr/shaders/Bodies/EclipseLighting.frag
+
+        WorldParameters {
+            WorldViewProjectionMatrix
+            WorldMatrix
+            WorldMatrixInverseTranspose
+        }
+
+        Defines {
+            DIFFUSE_MAP     : DiffuseMap
+            EXTENDED_SOURCE : ExtendedSource
+            HAS_RINGS       : HasRings
+        }
+    }
+}

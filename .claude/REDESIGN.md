@@ -240,11 +240,10 @@ At any time, the application maintains at most:
 
 ### 7.3 Small Body Culling Rule
 
-* Bodies with apparent radius < **2 pixels** may be drawn as point sprites.
-* Additional rule for satellites:
-
-  * if the body is a **satellite** and its apparent radius < **2 pixels**, it **must not be drawn**.
-* Satellite definition must follow NAIF ID rules documented by NAIF (see sections “Barycenters” and “Planets and Satellites” in NAIF’s NAIF ID reference):
+* Bodies with apparent radius < **2 pixels** must be drawn as point sprites.
+* Satellites are **not** exempt from sprite rendering — they render as sprites, not culled.
+* **Screen-space cluster suppression:** when two or more sprite-class bodies are within **2 pixels** of each other on screen, the body with the smaller physical radius is suppressed (not rendered). Bodies in an active interaction state (selected, focused, targeted, or tracked) are exempt from cluster suppression.
+* Satellite NAIF ID definition must follow NAIF ID rules documented by NAIF (see sections "Barycenters" and "Planets and Satellites" in NAIF's NAIF ID reference):
 
   * [https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/req/naif_ids.html](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/req/naif_ids.html)
 

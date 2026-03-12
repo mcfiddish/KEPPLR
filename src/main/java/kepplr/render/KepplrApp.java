@@ -205,10 +205,10 @@ public class KepplrApp extends SimpleApplication {
         nearNode.addLight(sunLightNear);
 
         // ── Body scene manager ────────────────────────────────────────────────────────────────
-        bodySceneManager = new BodySceneManager(nearNode, midNode, farNode, assetManager);
+        bodySceneManager = new BodySceneManager(nearNode, midNode, farNode, assetManager, simulationState);
 
         // ── Trail manager ─────────────────────────────────────────────────────────────────────
-        trailManager = new TrailManager(nearNode, midNode, farNode, assetManager);
+        trailManager = new TrailManager(nearNode, midNode, farNode, assetManager, simulationState);
         trailManager.enableTrail(EARTH_NAIF_ID);
 
         // ── Vector overlay manager — enable overlays for Step 13 visual confirmation ──────────
@@ -229,9 +229,8 @@ public class KepplrApp extends SimpleApplication {
         // ── Star field ────────────────────────────────────────────────────────────────────────
         YaleBrightStarCatalog bsc =
                 YaleBrightStarCatalog.loadFromResource("/resources/kepplr/stars/catalogs/yaleBSC/ybsc5.gz");
-        starFieldManager = new StarFieldManager(farNode, assetManager);
+        starFieldManager = new StarFieldManager(farNode, assetManager, simulationState);
         starFieldManager.setCatalog(bsc);
-        starFieldManager.setMagnitudeCutoff(KepplrConstants.STAR_DEFAULT_MAGNITUDE_CUTOFF);
 
         // ── HUD and camera input ──────────────────────────────────────────────────────────────
         hud = new KepplrHud(guiNode, assetManager, cam);

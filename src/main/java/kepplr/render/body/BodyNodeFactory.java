@@ -83,9 +83,16 @@ public final class BodyNodeFactory {
         mesh.updateBound();
 
         Geometry fullGeom = new Geometry(bodyId.getName(), mesh);
-        fullGeom.setLocalScale(radiusKm);
+        if (shape != null) {
+            fullGeom.setLocalScale((float) shape.getA(), (float) shape.getB(), (float) shape.getC());
+        } else {
+            fullGeom.setLocalScale(radiusKm);
+        }
         fullGeom.setMaterial(createBodyMaterial(naifId, bodyId.getName(), assetManager));
         fullGeom.setCullHint(Spatial.CullHint.Inherit);
+        if (naifId != SUN_NAIF_ID) {
+            fullGeom.setUserData("eclipseMaterial", true);
+        }
 
         // Texture-alignment node: yaw by center longitude + π in body-fixed frame.
         // JME Sphere (TextureMode.Projected) places texture U=0 at local −X, so the seam is
@@ -110,7 +117,7 @@ public final class BodyNodeFactory {
         ephemerisNode.attachChild(bodyFixedNode);
         ephemerisNode.attachChild(spriteGeom);
 
-        return new BodySceneNode(ephemerisNode, bodyFixedNode, fullGeom, spriteGeom);
+        return new BodySceneNode(ephemerisNode, bodyFixedNode, fullGeom, spriteGeom, naifId);
     }
 
     /**
@@ -145,7 +152,7 @@ public final class BodyNodeFactory {
         ephemerisNode.attachChild(bodyFixedNode);
         ephemerisNode.attachChild(spriteGeom);
 
-        return new BodySceneNode(ephemerisNode, bodyFixedNode, fullGeom, spriteGeom);
+        return new BodySceneNode(ephemerisNode, bodyFixedNode, fullGeom, spriteGeom, naifId);
     }
 
     // ── private helpers ──────────────────────────────────────────────────────────────────────────
@@ -161,18 +168,31 @@ public final class BodyNodeFactory {
     /**
      * Create the surface material for a body.
      *
-     * <p>The Sun uses {@code Unshaded.j3md} (fully emissive; §7.6). All other bodies use {@code Lighting.j3md} with a
-     * texture if one is configured, otherwise a flat diffuse color (§12.3).
+     * <p>The Sun (NAIF ID 10) uses {@code Unshaded.j3md} — fully emissive, not self-shadowed (§7.6). All other bodies
+     * use the custom {@code EclipseLighting.j3md} shader which computes analytic eclipse shadows and smooth day/night
+     * terminator (§9.3). Shadow-specific uniforms ({@code SunPosition}, {@code OccluderPositions}, etc.) are set each
+     * frame by {@link EclipseShadowManager}; only material-constant uniforms are set here at creation time.
+     *
+     * <p>Gate on NAIF ID 10, not on body name, per the project-wide NAIF ID convention.
      */
     private static Material createBodyMaterial(int naifId, String bodyName, AssetManager assetManager) {
         if (naifId == SUN_NAIF_ID) {
             return createSunMaterial(bodyName, assetManager);
         }
+        return createEclipseMaterial(naifId, bodyName, assetManager);
+    }
 
-        Material mat = new Material(assetManager, "Common/MatDefs/Light/Lighting.j3md");
-        mat.setBoolean("UseMaterialColors", true);
-        mat.setColor("Diffuse", ColorRGBA.White);
-        mat.setColor("Ambient", new ColorRGBA(0.05f, 0.05f, 0.05f, 1f));
+    /**
+     * Create an EclipseLighting material for a non-Sun body.
+     *
+     * <p>Sets the diffuse texture (if configured) or diffuse color. Shadow uniforms are left at shader defaults (zero
+     * occluders, no shadow) and will be overwritten by {@link EclipseShadowManager} every frame.
+     *
+     * <p>The {@code HasRings} material parameter is set to {@code true} only for Saturn (NAIF ID
+     * {@link kepplr.util.KepplrConstants#SATURN_NAIF_ID}) to enable the ring-shadow path in the shader.
+     */
+    private static Material createEclipseMaterial(int naifId, String bodyName, AssetManager assetManager) {
+        Material mat = new Material(assetManager, "kepplr/shaders/Bodies/EclipseLighting.j3md");
 
         BodyBlock block = bodyBlockFor(bodyName);
         if (block != null) {
@@ -185,14 +205,21 @@ public final class BodyNodeFactory {
                             assetManager.loadTexture(resolved.getFileName().toString());
                     tex.setWrap(Texture.WrapMode.Repeat);
                     mat.setTexture("DiffuseMap", tex);
-                    return mat;
                 } catch (Exception e) {
                     logger.warn("Could not load texture for {}: {}", bodyName, e.getMessage());
+                    if (block.color() != null) {
+                        mat.setColor("DiffuseColor", toColorRGBA(block.color()));
+                    }
                 }
+            } else if (block.color() != null) {
+                mat.setColor("DiffuseColor", toColorRGBA(block.color()));
             }
-            // No texture — use configured body color (§12.3 untextured sphere)
-            mat.setColor("Diffuse", toColorRGBA(block.color()));
         }
+
+        if (naifId == kepplr.util.KepplrConstants.SATURN_NAIF_ID) {
+            mat.setBoolean("HasRings", true);
+        }
+
         return mat;
     }
 

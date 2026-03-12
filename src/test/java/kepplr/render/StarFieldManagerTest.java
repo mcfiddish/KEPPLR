@@ -24,7 +24,7 @@ class StarFieldManagerTest {
 
     /** Create a StarFieldManager with null JME nodes — valid for non-rendering tests. */
     private StarFieldManager manager() {
-        return new StarFieldManager(null, null);
+        return new StarFieldManager(null, null, new kepplr.state.DefaultSimulationState());
     }
 
     // ── Minimal Star implementation ────────────────────────────────────────────────────────
@@ -106,13 +106,6 @@ class StarFieldManagerTest {
     void testSetCatalogDoesNotThrow() {
         StarFieldManager mgr = manager();
         assertDoesNotThrow(() -> mgr.setCatalog(emptyCatalog()));
-    }
-
-    @Test
-    @DisplayName("setMagnitudeCutoff() does not throw")
-    void testSetMagnitudeCutoffDoesNotThrow() {
-        StarFieldManager mgr = manager();
-        assertDoesNotThrow(() -> mgr.setMagnitudeCutoff(5.0));
     }
 
     @Test

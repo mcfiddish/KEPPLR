@@ -1,18 +1,28 @@
 package kepplr.render.body;
 
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 import kepplr.util.KepplrConstants;
 
 /**
  * Small-body culling logic per REDESIGN.md §7.3.
  *
- * <p>Computes apparent angular size in pixels and returns a {@link CullDecision} based on the body's NAIF ID class and
- * the {@link KepplrConstants#POINT_SPRITE_THRESHOLD_PX 2-pixel threshold}.
+ * <p>Computes apparent angular size in pixels and returns a {@link CullDecision} based on the
+ * {@link KepplrConstants#DRAW_FULL_MIN_APPARENT_RADIUS_PX 2-pixel threshold}. All bodies below the threshold render as
+ * sprites — satellites are not exempt.
+ *
+ * <p>A second pass ({@link #computeClusterCulls}) suppresses the smaller-radius body in any pair of sprites within
+ * {@link KepplrConstants#SPRITE_CLUSTER_PROXIMITY_PX} pixels of each other on screen. Bodies in an active interaction
+ * state (selected/focused/targeted/tracked) are exempt from suppression.
  *
  * <p>All methods are static; this class is not instantiated.
  */
 public final class BodyCuller {
 
     private BodyCuller() {}
+
+    // ── Per-body classification ────────────────────────────────────────────────────────────────
 
     /**
      * Compute the body's apparent radius in viewport pixels.
@@ -58,22 +68,79 @@ public final class BodyCuller {
      * Decide how to render a body given its apparent size (§7.3).
      *
      * <ul>
-     *   <li>Apparent radius &ge; threshold → {@link CullDecision#DRAW_FULL}
-     *   <li>Apparent radius &lt; threshold and satellite → {@link CullDecision#CULL}
-     *   <li>Apparent radius &lt; threshold and not satellite → {@link CullDecision#DRAW_SPRITE}
+     *   <li>Apparent radius &ge; {@link KepplrConstants#DRAW_FULL_MIN_APPARENT_RADIUS_PX} →
+     *       {@link CullDecision#DRAW_FULL}
+     *   <li>Apparent radius &lt; threshold → {@link CullDecision#DRAW_SPRITE} (satellites included)
      * </ul>
      *
      * @param apparentRadiusPx apparent radius in pixels
-     * @param naifId NAIF integer ID of the body
      * @return rendering decision
      */
-    public static CullDecision decide(double apparentRadiusPx, int naifId) {
-        if (apparentRadiusPx >= KepplrConstants.POINT_SPRITE_THRESHOLD_PX) {
+    public static CullDecision decide(double apparentRadiusPx) {
+        if (apparentRadiusPx >= KepplrConstants.DRAW_FULL_MIN_APPARENT_RADIUS_PX) {
             return CullDecision.DRAW_FULL;
         }
-        if (isSatellite(naifId)) {
-            return CullDecision.CULL;
-        }
         return CullDecision.DRAW_SPRITE;
+    }
+
+    // ── Cluster suppression ────────────────────────────────────────────────────────────────────
+
+    /**
+     * Lightweight descriptor for a body classified as {@link CullDecision#DRAW_SPRITE}, carrying the screen-space
+     * position needed for cluster suppression.
+     *
+     * @param naifId NAIF integer ID
+     * @param screenX screen X coordinate in pixels
+     * @param screenY screen Y coordinate in pixels
+     * @param physicalRadiusKm body mean physical radius in km (used to pick which body to suppress)
+     * @param exempt true if the body is in an active interaction state and must never be suppressed
+     */
+    public record SpriteCandidate(
+            int naifId, double screenX, double screenY, double physicalRadiusKm, boolean exempt) {}
+
+    /**
+     * Compute the set of sprite NAIF IDs that should be suppressed due to screen-space clustering (§7.3).
+     *
+     * <p>For each pair of candidates within {@code proximityPx} pixels, the one with the smaller physical radius is
+     * added to the suppression set — unless it is marked {@code exempt}, in which case the larger body is never
+     * suppressed on its behalf and the smaller body survives. When both bodies have equal physical radius, the one with
+     * the lower NAIF ID is suppressed (deterministic tie-break).
+     *
+     * <p>Suppression is not transitive: if A suppresses B and B would suppress C, C is evaluated independently against
+     * the remaining non-suppressed candidates.
+     *
+     * @param candidates list of sprite candidates with screen positions; may be empty
+     * @param proximityPx pixel distance threshold; pairs closer than this are considered clustered
+     * @return set of NAIF IDs to suppress; never null, may be empty
+     */
+    public static Set<Integer> computeClusterCulls(List<SpriteCandidate> candidates, double proximityPx) {
+        Set<Integer> culled = new HashSet<>();
+        int n = candidates.size();
+        for (int i = 0; i < n; i++) {
+            for (int j = i + 1; j < n; j++) {
+                SpriteCandidate a = candidates.get(i);
+                SpriteCandidate b = candidates.get(j);
+                if (culled.contains(a.naifId()) || culled.contains(b.naifId())) continue;
+
+                double dx = a.screenX() - b.screenX();
+                double dy = a.screenY() - b.screenY();
+                if (Math.sqrt(dx * dx + dy * dy) >= proximityPx) continue;
+
+                // Pick the smaller body; tie-break by lower NAIF ID
+                SpriteCandidate smaller;
+                if (a.physicalRadiusKm() < b.physicalRadiusKm()) {
+                    smaller = a;
+                } else if (b.physicalRadiusKm() < a.physicalRadiusKm()) {
+                    smaller = b;
+                } else {
+                    smaller = a.naifId() <= b.naifId() ? a : b;
+                }
+
+                if (!smaller.exempt()) {
+                    culled.add(smaller.naifId());
+                }
+            }
+        }
+        return culled;
     }
 }

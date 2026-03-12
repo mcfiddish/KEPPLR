@@ -6,6 +6,7 @@ import javafx.beans.property.ReadOnlyDoubleProperty;
 import javafx.beans.property.ReadOnlyIntegerProperty;
 import javafx.beans.property.ReadOnlyObjectProperty;
 import kepplr.camera.CameraFrame;
+import kepplr.render.RenderQuality;
 
 /**
  * Single source of truth for all UI-visible simulation state (REDESIGN.md §4, §10).
@@ -88,6 +89,19 @@ public interface SimulationState {
     ReadOnlyObjectProperty<double[]> cameraBodyFixedSphericalProperty();
 
     // ── Tracking state (§4.6, §10.2) ──
+
+    // ── Render quality (§9.4) ──
+
+    /**
+     * Current render quality preset (§9.4).
+     *
+     * <p>Controls shadow fidelity, trail sample density, and star magnitude cutoff. Updated on the JME thread via
+     * {@link kepplr.commands.SimulationCommands#setRenderQuality(RenderQuality)}; read each frame by
+     * {@link kepplr.render.StarFieldManager} and {@link kepplr.render.trail.TrailManager} on the JME render thread.
+     *
+     * <p>Default: {@link RenderQuality#HIGH}.
+     */
+    ReadOnlyObjectProperty<RenderQuality> renderQualityProperty();
 
     // ── Render state (§7.3, §10.2) ──
 

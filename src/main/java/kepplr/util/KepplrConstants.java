@@ -36,14 +36,21 @@ public final class KepplrConstants {
 
     // ── Small-body culling (REDESIGN.md §7.3) ──
 
-    /** Apparent-radius threshold in pixels below which a body may be drawn as a point sprite. */
-    public static final double POINT_SPRITE_THRESHOLD_PX = 2.0;
+    /**
+     * Apparent-radius threshold in pixels at or above which a body is rendered as a full geometry (DRAW_FULL). Bodies
+     * below this threshold are rendered as point sprites. Satellites are not exempt — they also render as sprites (not
+     * culled). See §7.3.
+     */
+    public static final double DRAW_FULL_MIN_APPARENT_RADIUS_PX = 2.0;
 
     /**
-     * Apparent-radius threshold in pixels below which a satellite must not be drawn. Satellites are defined by NAIF ID
-     * rules (see §7.3).
+     * Screen-space proximity threshold in pixels for sprite cluster suppression (§7.3).
+     *
+     * <p>When two sprite-class bodies are within this many pixels of each other on screen, the one with the smaller
+     * physical radius is suppressed. Bodies in an active interaction state (selected/focused/targeted/tracked) are
+     * exempt from suppression.
      */
-    public static final double SATELLITE_CULL_THRESHOLD_PX = 2.0;
+    public static final double SPRITE_CLUSTER_PROXIMITY_PX = 2.0;
 
     // ── Trail sampling (REDESIGN.md §7.5) ──
 
@@ -185,8 +192,8 @@ public final class KepplrConstants {
      * Visual size of a point-sprite in screen pixels.
      *
      * <p>Used by {@link kepplr.render.body.BodySceneNode} to scale sprite geometry so it appears as this many pixels in
-     * diameter regardless of distance. Applied to spacecraft and small non-satellite bodies drawn below the
-     * {@link #POINT_SPRITE_THRESHOLD_PX} threshold.
+     * diameter regardless of distance. Applied to spacecraft and small bodies drawn below the
+     * {@link #DRAW_FULL_MIN_APPARENT_RADIUS_PX} threshold.
      */
     public static final double SPACECRAFT_POINT_SPRITE_SIZE = 4.0;
 
@@ -257,4 +264,178 @@ public final class KepplrConstants {
 
     /** Maximum halo radius in pixels. */
     public static final float STAR_HALO_MAX_PX = 4.0f;
+
+    // ── Saturn rings (REDESIGN.md §7.2, Step 16) ──────────────────────────────────────────────
+
+    /**
+     * NAIF ID of Saturn.
+     *
+     * <p>Used to guard ring geometry creation — rings are only produced for this body. Guards in
+     * {@code SaturnRingManager.appliesToBody(int)} and related tests reference this constant.
+     */
+    public static final int SATURN_NAIF_ID = 699;
+
+    /**
+     * Inner radius of Saturn's ring system (km).
+     *
+     * <p>Corresponds to the D ring inner edge (~74,490 km actual; this value matches the Bjorn Jonsson ring profile
+     * used in the prototype SaturnRingsController).
+     */
+    public static final double SATURN_RING_INNER_RADIUS_KM = 74_400.0;
+
+    /**
+     * Outer radius of Saturn's ring system (km).
+     *
+     * <p>Corresponds to the F ring outer edge. Matches the prototype SaturnRingsController.
+     */
+    public static final double SATURN_RING_OUTER_RADIUS_KM = 140_154.0;
+
+    /**
+     * Angular tessellation segments for the Saturn ring annulus mesh.
+     *
+     * <p>2048 segments give a visually smooth circle at close range (near frustum). Matches the prototype's
+     * {@code DEFAULT_ANGULAR_SEGMENTS}.
+     */
+    public static final int SATURN_RING_ANGULAR_SEGMENTS = 2048;
+
+    /**
+     * Base ring color tint — red channel (0–1).
+     *
+     * <p>Warm pinkish-tan tint applied to the brightness texture. Derived from prototype RGB constants (255, 224, 209).
+     */
+    public static final float SATURN_RING_COLOR_R = 255f / 255f;
+
+    /** Base ring color tint — green channel (0–1). */
+    public static final float SATURN_RING_COLOR_G = 224f / 255f;
+
+    /** Base ring color tint — blue channel (0–1). */
+    public static final float SATURN_RING_COLOR_B = 209f / 255f;
+
+    // ── Shadows and eclipses (REDESIGN.md §9, Step 16) ────────────────────────────────────────
+
+    /**
+     * Maximum number of shadow-casting occluders evaluated per body per frame (absolute cap).
+     *
+     * <p>Quality-tier-specific limits ({@link #SHADOW_MAX_OCCLUDERS_LOW}, {@link #SHADOW_MAX_OCCLUDERS_MEDIUM},
+     * {@link #SHADOW_MAX_OCCLUDERS_HIGH}) must not exceed this value.
+     */
+    public static final int SHADOW_MAX_OCCLUDERS = 8;
+
+    /**
+     * Maximum occluders evaluated per receiver per frame at LOW quality.
+     *
+     * <p>Reducing the occluder count is the cheapest way to limit shadow computation at low quality — most bodies have
+     * at most 1–2 significant casters at any time.
+     */
+    public static final int SHADOW_MAX_OCCLUDERS_LOW = 2;
+
+    /** Maximum occluders evaluated per receiver per frame at MEDIUM quality. */
+    public static final int SHADOW_MAX_OCCLUDERS_MEDIUM = 4;
+
+    /**
+     * Maximum occluders evaluated per receiver per frame at HIGH quality.
+     *
+     * <p>Must equal {@link #SHADOW_MAX_OCCLUDERS} so array sizes remain consistent with the shader.
+     */
+    public static final int SHADOW_MAX_OCCLUDERS_HIGH = 8;
+
+    /**
+     * Shadow model for LOW quality: point-source Sun (binary umbra/penumbra, no extended-source computation).
+     *
+     * <p>{@code false} means the Sun is treated as a point; shadows are binary (in or out of umbra). This is the
+     * cheapest option and disables penumbra gradients entirely. Corresponds to the {@code ExtendedSource} material
+     * parameter being {@code false}, selecting the point-source shader variant.
+     */
+    public static final boolean SHADOW_EXTENDED_SOURCE_LOW = false;
+
+    /**
+     * Shadow model for MEDIUM and HIGH quality: extended-source Sun with analytic penumbra.
+     *
+     * <p>{@code true} enables the full angular-disk eclipse geometry (§9.3 Option C). Penumbra fraction is a continuous
+     * value in [0, 1] computed from the angular diameters of the Sun and occluder as seen from each surface point.
+     * Corresponds to the {@code ExtendedSource} material parameter being {@code true}.
+     */
+    public static final boolean SHADOW_EXTENDED_SOURCE_MEDIUM = true;
+
+    /**
+     * Smooth-step half-width for the day/night terminator blend (radians, measured in terms of N·L).
+     *
+     * <p>The terminator transition is applied as {@code smoothstep(−w, +w, NdotL)}, producing a smooth gradient across
+     * ±{@code SHADOW_TERMINATOR_WIDTH_RAD} of the geometric terminator (N·L = 0). At ~3° this gives a physically
+     * plausible atmospheric scattering transition width at solar-system scales.
+     */
+    public static final float SHADOW_TERMINATOR_WIDTH_RAD = 0.05f;
+
+    /**
+     * Night-side ambient luminance factor for body surface shading.
+     *
+     * <p>The minimum base illumination applied to fragments where N·L ≤ 0 (full night side). Set to 5% of the diffuse
+     * color so night-side geometry remains faintly visible without appearing artificially bright.
+     */
+    public static final float BODY_AMBIENT_FACTOR = 0.05f;
+
+    /**
+     * Saturn-shadow darkness on the ring surface (Step 16b).
+     *
+     * <p>Controls how dark the ring becomes when it lies in Saturn's umbra. Applied as a scale factor on the ring light
+     * contribution: {@code ringLightFactor *= (1 − shadowFraction × RING_SHADOW_DARKNESS)}. Matches prototype
+     * {@code SATURN_SHADOW_DARKNESS}.
+     */
+    public static final float RING_SHADOW_DARKNESS = 0.9f;
+
+    /**
+     * Moon-shadow darkness on the ring surface (Step 16b).
+     *
+     * <p>Controls how dark the ring becomes when a moon's shadow crosses it. Softer than the planetary shadow because
+     * moon shadows are physically smaller and the penumbra zone is proportionally wider. Matches prototype
+     * {@code DEFAULT_MOON_SHADOW_DARKNESS}.
+     */
+    public static final float RING_MOON_SHADOW_DARKNESS = 0.6f;
+
+    /**
+     * Beer-Lambert tau scale factor for ring shadow attenuation (Step 16b).
+     *
+     * <p>Scales the optical depth {@code τ = 1 − transparency} in the exponent of the ring-shadow attenuation function:
+     * {@code atten = exp(−TauScale × τ / μ₀)}. 1.0 = physically calibrated. Matches prototype {@code TAU_SCALE}.
+     */
+    public static final float RING_TAU_SCALE = 1.0f;
+
+    // ── Quality-preset trail samples (REDESIGN.md §9.4, Step 16b) ─────────────────────────────
+
+    /**
+     * Trail samples per orbital period at LOW render quality.
+     *
+     * <p>Proportionate reduction from the REDESIGN §7.5 baseline (180 samples/period). At LOW quality, trail geometry
+     * is coarser to reduce SPICE call frequency.
+     */
+    public static final int TRAIL_SAMPLES_PER_PERIOD_LOW = 60;
+
+    /**
+     * Trail samples per orbital period at MEDIUM render quality.
+     *
+     * <p>Intermediate density between LOW and the HIGH baseline. At MEDIUM quality, trail geometry is denser than LOW
+     * but still below the full HIGH resolution.
+     */
+    public static final int TRAIL_SAMPLES_PER_PERIOD_MEDIUM = 90;
+
+    // HIGH: use existing TRAIL_SAMPLES_PER_PERIOD (1801) unchanged.
+
+    // ── Quality-preset star magnitude cutoffs (REDESIGN.md §9.4, Step 16b) ────────────────────
+
+    /**
+     * Visual magnitude cutoff at LOW render quality — bright stars only (naked-eye limit ≈ 4.5).
+     *
+     * <p>At this cutoff only the ~900 brightest stars are rendered, roughly halving star vertex count compared to
+     * MEDIUM.
+     */
+    public static final double STAR_MAGNITUDE_CUTOFF_LOW = 4.5;
+
+    /**
+     * Visual magnitude cutoff at MEDIUM render quality.
+     *
+     * <p>Includes stars to magnitude 5.5, giving ~3 000 stars — a good balance between visual quality and vertex count.
+     */
+    public static final double STAR_MAGNITUDE_CUTOFF_MEDIUM = 5.5;
+
+    // HIGH: use existing STAR_DEFAULT_MAGNITUDE_CUTOFF (6.5) unchanged.
 }

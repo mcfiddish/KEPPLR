@@ -11,6 +11,7 @@ import javafx.beans.property.SimpleDoubleProperty;
 import javafx.beans.property.SimpleIntegerProperty;
 import javafx.beans.property.SimpleObjectProperty;
 import kepplr.camera.CameraFrame;
+import kepplr.render.RenderQuality;
 import kepplr.util.KepplrConstants;
 
 /**
@@ -54,6 +55,10 @@ public final class DefaultSimulationState implements SimulationState {
 
     private final SimpleObjectProperty<List<BodyInView>> bodiesInView =
             new SimpleObjectProperty<>(Collections.emptyList());
+
+    // ── Render quality (§9.4) ──
+
+    private final SimpleObjectProperty<RenderQuality> renderQuality = new SimpleObjectProperty<>(RenderQuality.HIGH);
 
     // ── Tracking anchor (§4.6) ──
 
@@ -129,6 +134,11 @@ public final class DefaultSimulationState implements SimulationState {
     @Override
     public ReadOnlyObjectProperty<List<BodyInView>> bodiesInViewProperty() {
         return bodiesInView;
+    }
+
+    @Override
+    public ReadOnlyObjectProperty<RenderQuality> renderQualityProperty() {
+        return renderQuality;
     }
 
     @Override
@@ -228,6 +238,11 @@ public final class DefaultSimulationState implements SimulationState {
      */
     public void setBodiesInView(List<BodyInView> bodies) {
         bodiesInView.set(bodies);
+    }
+
+    /** Set the render quality preset (§9.4). */
+    public void setRenderQuality(RenderQuality quality) {
+        renderQuality.set(quality);
     }
 
     /**
