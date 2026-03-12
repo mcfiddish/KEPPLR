@@ -68,8 +68,8 @@ public class KepplrApp extends SimpleApplication {
 
     private static final Logger logger = LogManager.getLogger();
 
-    private static final int EARTH_NAIF_ID = 699;
-    private static final float CAMERA_OFFSET_KM = 500_000f;
+    private static final int DEFAULT_FOCUS_BODY = 10;
+    private static final float CAMERA_OFFSET_KM = 15_000_000f;
 
     /** Camera heliocentric J2000 position in km. Scene positions are {@code helioPos − this}, cast to float for JME. */
     private final double[] cameraHelioJ2000 = new double[3];
@@ -113,6 +113,9 @@ public class KepplrApp extends SimpleApplication {
     // ── Star field management ──────────────────────────────────────────────────────────────────
     private StarFieldManager starFieldManager;
 
+    // ── Sun halo ───────────────────────────────────────────────────────────────────────────────
+    private SunHaloRenderer sunHaloRenderer;
+
     @Override
     public void simpleInitApp() {
         setLostFocusBehavior(LostFocusBehavior.Disabled);
@@ -134,13 +137,14 @@ public class KepplrApp extends SimpleApplication {
         }
         Platform.runLater(() -> new KepplrStatusWindow(bridge, commands).show());
 
-        commands.focusBody(EARTH_NAIF_ID);
+        int focusBodyId = DEFAULT_FOCUS_BODY;
+        commands.focusBody(focusBodyId);
 
         // ── Camera initial position: offset above Earth in J2000 +Z ──────────────────────────
         KEPPLREphemeris eph = KEPPLRConfiguration.getInstance().getEphemeris();
-        VectorIJK focusHelioPos = eph.getHeliocentricPositionJ2000(EARTH_NAIF_ID, startET);
+        VectorIJK focusHelioPos = eph.getHeliocentricPositionJ2000(focusBodyId, startET);
         if (focusHelioPos == null) {
-            logger.error("Cannot resolve Earth (NAIF {}) at ET={}; cannot start", EARTH_NAIF_ID, startET);
+            logger.error("cannot resolve NAIF {} position at ET={}; cannot start", focusBodyId, startET);
             stop();
             return;
         }
@@ -209,20 +213,28 @@ public class KepplrApp extends SimpleApplication {
 
         // ── Trail manager ─────────────────────────────────────────────────────────────────────
         trailManager = new TrailManager(nearNode, midNode, farNode, assetManager, simulationState);
-        trailManager.enableTrail(EARTH_NAIF_ID);
+        trailManager.enableTrail(focusBodyId);
 
         // ── Vector overlay manager — enable overlays for Step 13 visual confirmation ──────────
         vectorManager = new VectorManager(nearNode, midNode, farNode, assetManager);
         vectorManager.enableVector(new VectorDefinition(
-                "Earth velocity", VectorTypes.velocity(), EARTH_NAIF_ID, com.jme3.math.ColorRGBA.Cyan, 1.0));
+                "velocity direction", VectorTypes.velocity(), focusBodyId, com.jme3.math.ColorRGBA.Cyan, 1.0));
         vectorManager.enableVector(new VectorDefinition(
-                "Earth→Sun", VectorTypes.towardBody(10), EARTH_NAIF_ID, com.jme3.math.ColorRGBA.Yellow, 1.0));
+                "Sun direction",
+                VectorTypes.towardBody(KepplrConstants.SUN_NAIF_ID),
+                focusBodyId,
+                com.jme3.math.ColorRGBA.Yellow,
+                1.0));
 
         // ── Star field ────────────────────────────────────────────────────────────────────────
         YaleBrightStarCatalog bsc =
                 YaleBrightStarCatalog.loadFromResource("/resources/kepplr/stars/catalogs/yaleBSC/ybsc5.gz");
         starFieldManager = new StarFieldManager(farNode, assetManager, simulationState);
         starFieldManager.setCatalog(bsc);
+
+        // ── Sun halo ──────────────────────────────────────────────────────────────────────────
+        sunHaloRenderer = new SunHaloRenderer(farNode, midNode, nearNode, assetManager, simulationState);
+        sunHaloRenderer.init();
 
         // ── HUD and camera input ──────────────────────────────────────────────────────────────
         hud = new KepplrHud(guiNode, assetManager, cam);
@@ -297,6 +309,7 @@ public class KepplrApp extends SimpleApplication {
                 cam,
                 simulationState.focusedBodyIdProperty().get());
         starFieldManager.update(currentEt, cameraHelioJ2000);
+        sunHaloRenderer.update(cameraHelioJ2000, cam, tpf);
         simulationState.setBodiesInView(inView);
         hud.update(currentEt);
 

@@ -5,6 +5,7 @@ import com.jme3.math.Quaternion;
 import com.jme3.math.Vector3f;
 import kepplr.config.KEPPLRConfiguration;
 import kepplr.ephemeris.KEPPLREphemeris;
+import kepplr.util.KepplrConstants;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import picante.math.vectorspace.VectorIJK;
@@ -29,9 +30,6 @@ import picante.math.vectorspace.VectorIJK;
 public class SynodicFrameApplier {
 
     private static final Logger logger = LogManager.getLogger();
-
-    /** NAIF ID for the Sun, used as the effective target when none is specified. */
-    private static final int SUN_NAIF_ID = 10;
 
     /** Result of a single {@link #apply} call. */
     public record ApplyResult(double[] newCamHelioJ2000, Quaternion newOrientation, boolean fallbackActive) {}
@@ -66,7 +64,7 @@ public class SynodicFrameApplier {
             return fallback(cameraHelioJ2000, camOrientation);
         }
 
-        int effectiveTargetId = (targetId == -1 || targetId == focusId) ? SUN_NAIF_ID : targetId;
+        int effectiveTargetId = (targetId == -1 || targetId == focusId) ? KepplrConstants.SUN_NAIF_ID : targetId;
 
         SynodicFrame.Basis basis = SynodicFrame.compute(focusId, effectiveTargetId, et);
         if (basis == null) {

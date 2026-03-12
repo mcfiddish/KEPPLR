@@ -15,7 +15,10 @@ import kepplr.util.KepplrConstants;
  *       {@link KepplrConstants#TRAIL_SAMPLES_PER_PERIOD_MEDIUM} / {@link KepplrConstants#TRAIL_SAMPLES_PER_PERIOD}.
  *   <li><b>Star magnitude cutoff:</b> {@link KepplrConstants#STAR_MAGNITUDE_CUTOFF_LOW} /
  *       {@link KepplrConstants#STAR_MAGNITUDE_CUTOFF_MEDIUM} / {@link KepplrConstants#STAR_DEFAULT_MAGNITUDE_CUTOFF}.
- *   <li><b>Sun halo quality:</b> stub — Step 17.
+ *   <li><b>Sun halo alpha scale:</b> {@link KepplrConstants#SUN_HALO_ALPHA_SCALE_LOW} /
+ *       {@link KepplrConstants#SUN_HALO_ALPHA_SCALE_MEDIUM} / {@link KepplrConstants#SUN_HALO_ALPHA_SCALE_HIGH}.
+ *   <li><b>Sun halo falloff:</b> {@link KepplrConstants#SUN_HALO_FALLOFF_LOW} /
+ *       {@link KepplrConstants#SUN_HALO_FALLOFF_MEDIUM} / {@link KepplrConstants#SUN_HALO_FALLOFF_HIGH}.
  * </ul>
  *
  * <p>All enum methods are pure accessors over {@link KepplrConstants}. No logic beyond constant lookup.
@@ -97,6 +100,36 @@ public enum RenderQuality {
             case LOW -> KepplrConstants.STAR_MAGNITUDE_CUTOFF_LOW;
             case MEDIUM -> KepplrConstants.STAR_MAGNITUDE_CUTOFF_MEDIUM;
             case HIGH -> KepplrConstants.STAR_DEFAULT_MAGNITUDE_CUTOFF;
+        };
+    }
+
+    /**
+     * Overall Sun halo brightness scale factor.
+     *
+     * <p>Values: LOW = {@link KepplrConstants#SUN_HALO_ALPHA_SCALE_LOW}, MEDIUM =
+     * {@link KepplrConstants#SUN_HALO_ALPHA_SCALE_MEDIUM}, HIGH = {@link KepplrConstants#SUN_HALO_ALPHA_SCALE_HIGH}.
+     * Visually tuned — adjust after observing the halo in-engine.
+     */
+    public float sunHaloAlphaScale() {
+        return switch (this) {
+            case LOW -> KepplrConstants.SUN_HALO_ALPHA_SCALE_LOW;
+            case MEDIUM -> KepplrConstants.SUN_HALO_ALPHA_SCALE_MEDIUM;
+            case HIGH -> KepplrConstants.SUN_HALO_ALPHA_SCALE_HIGH;
+        };
+    }
+
+    /**
+     * Sun halo radial falloff exponent.
+     *
+     * <p>Values: LOW = {@link KepplrConstants#SUN_HALO_FALLOFF_LOW}, MEDIUM =
+     * {@link KepplrConstants#SUN_HALO_FALLOFF_MEDIUM}, HIGH = {@link KepplrConstants#SUN_HALO_FALLOFF_HIGH}. Smaller
+     * value → faster falloff → tighter halo. Visually tuned.
+     */
+    public float sunHaloFalloff() {
+        return switch (this) {
+            case LOW -> KepplrConstants.SUN_HALO_FALLOFF_LOW;
+            case MEDIUM -> KepplrConstants.SUN_HALO_FALLOFF_MEDIUM;
+            case HIGH -> KepplrConstants.SUN_HALO_FALLOFF_HIGH;
         };
     }
 }

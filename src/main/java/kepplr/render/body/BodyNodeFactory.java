@@ -54,9 +54,6 @@ public final class BodyNodeFactory {
 
     private static final Logger logger = LogManager.getLogger();
 
-    /** NAIF ID of the Sun — used to select the emissive (Unshaded) material. */
-    private static final int SUN_NAIF_ID = 10;
-
     /** Fallback mean radius (km) used when a body has no PCK shape data. Logged as a warning. */
     private static final float DEFAULT_RADIUS_KM = 1.0f;
 
@@ -90,7 +87,7 @@ public final class BodyNodeFactory {
         }
         fullGeom.setMaterial(createBodyMaterial(naifId, bodyId.getName(), assetManager));
         fullGeom.setCullHint(Spatial.CullHint.Inherit);
-        if (naifId != SUN_NAIF_ID) {
+        if (naifId != KepplrConstants.SUN_NAIF_ID) {
             fullGeom.setUserData("eclipseMaterial", true);
         }
 
@@ -176,7 +173,7 @@ public final class BodyNodeFactory {
      * <p>Gate on NAIF ID 10, not on body name, per the project-wide NAIF ID convention.
      */
     private static Material createBodyMaterial(int naifId, String bodyName, AssetManager assetManager) {
-        if (naifId == SUN_NAIF_ID) {
+        if (naifId == KepplrConstants.SUN_NAIF_ID) {
             return createSunMaterial(bodyName, assetManager);
         }
         return createEclipseMaterial(naifId, bodyName, assetManager);

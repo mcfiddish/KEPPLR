@@ -48,8 +48,6 @@ import picante.surfaces.Ellipsoid;
  */
 class EclipseShadowManager {
 
-    private static final int SUN_NAIF_ID = 10;
-
     /** Simulation state; read each frame for render quality (§9.4). */
     private final SimulationState state;
 
@@ -121,7 +119,7 @@ class EclipseShadowManager {
 
         // ── Per-body shadow update ────────────────────────────────────────────────────────────
         for (BodySceneNode receiver : fullNodes) {
-            if (receiver.naifId == SUN_NAIF_ID) continue; // Sun does not receive shadows
+            if (receiver.naifId == KepplrConstants.SUN_NAIF_ID) continue; // Sun does not receive shadows
 
             // Check if this body's material is an EclipseLighting material (not Unshaded)
             if (!isEclipseMaterial(receiver.fullGeom)) continue;
@@ -138,7 +136,7 @@ class EclipseShadowManager {
             int count = 0;
             for (BodySceneNode caster : bodyNodes) {
                 if (caster == receiver) continue;
-                if (caster.naifId == SUN_NAIF_ID) continue; // Sun does not cast shadows on others
+                if (caster.naifId == KepplrConstants.SUN_NAIF_ID) continue; // Sun does not cast shadows on others
 
                 Vector3f casterPos = caster.ephemerisNode.getLocalTranslation();
 
@@ -286,7 +284,7 @@ class EclipseShadowManager {
         int moonCount = 0;
         for (BodySceneNode caster : allNodes) {
             if (moonCount >= maxOccluders) break;
-            if (caster.naifId == SUN_NAIF_ID) continue;
+            if (caster.naifId == KepplrConstants.SUN_NAIF_ID) continue;
             if (caster.naifId == KepplrConstants.SATURN_NAIF_ID) continue;
             // Satellites of Saturn: NAIF IDs 600–699 (not ending in 00)
             if (!isSaturnMoon(caster.naifId)) continue;
@@ -330,7 +328,7 @@ class EclipseShadowManager {
 
     /** Returns the Sun's mean radius in km from ephemeris at point-of-use. */
     private static float sunRadiusKm() {
-        return bodyMeanRadiusKm(SUN_NAIF_ID);
+        return bodyMeanRadiusKm(KepplrConstants.SUN_NAIF_ID);
     }
 
     /**

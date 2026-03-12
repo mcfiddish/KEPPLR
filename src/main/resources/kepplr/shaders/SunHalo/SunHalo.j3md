@@ -1,0 +1,29 @@
+// Algorithm derived from prototype: SunHaloFilter / SunHalo.j3md — reimplemented for new architecture.
+// World-space additive billboard. Depth-tested (occluded by planets/rings); no depth write.
+
+MaterialDef SunHalo {
+
+    MaterialParameters {
+        Color SunColor
+        Float Falloff
+        Float MaxRadiusInR
+        Float AlphaScale
+        Float Time
+    }
+
+    Technique {
+        VertexShader   GLSL150: kepplr/shaders/SunHalo/SunHalo.vert
+        FragmentShader GLSL150: kepplr/shaders/SunHalo/SunHalo.frag
+
+        WorldParameters {
+            WorldViewProjectionMatrix
+        }
+
+        RenderState {
+            DepthWrite Off
+            DepthTest  On
+            FaceCull   Off
+            Blend      Additive
+        }
+    }
+}

@@ -268,6 +268,14 @@ public final class KepplrConstants {
     /** Maximum halo radius in pixels. */
     public static final float STAR_HALO_MAX_PX = 4.0f;
 
+    // ── NAIF body IDs ─────────────────────────────────────────────────────────────────────────
+
+    /** NAIF ID of the Sun. */
+    public static final int SUN_NAIF_ID = 10;
+
+    /** NAIF ID of Earth. */
+    public static final int EARTH_NAIF_ID = 399;
+
     // ── Saturn rings (REDESIGN.md §7.2, Step 16) ──────────────────────────────────────────────
 
     /**
@@ -441,4 +449,54 @@ public final class KepplrConstants {
     public static final double STAR_MAGNITUDE_CUTOFF_MEDIUM = 5.5;
 
     // HIGH: use existing STAR_DEFAULT_MAGNITUDE_CUTOFF (6.5) unchanged.
+
+    // ── Sun halo (REDESIGN.md §7.6, Step 17) ──────────────────────────────────────────────────
+    //
+    // These are visually tuned values derived from the prototype SunHaloController/SunHaloFilter.
+    // They are NOT physically derived — adjust after visual confirmation.
+
+    /**
+     * Halo billboard radius expressed as a multiple of the Sun's mean radius.
+     *
+     * <p>The world-space billboard half-size = Sun mean radius × this value. At the prototype value of 2.5, the halo
+     * outer edge is at 2.5 Sun radii from the Sun centre (1.5 radii above the limb). Constant across all quality tiers
+     * — changing this alters the physical extent of the halo, not rendering cost.
+     */
+    public static final float SUN_HALO_MAX_RADIUS_MULTIPLIER = 2.5f;
+
+    /**
+     * Radial falloff exponent for the Sun halo at LOW render quality.
+     *
+     * <p>Controls how quickly the corona brightness fades from the limb outward: {@code radial = exp(-rNorm /
+     * falloff)}. Smaller value → faster falloff → tighter, subtler halo. Visually tuned.
+     */
+    public static final float SUN_HALO_FALLOFF_LOW = 0.25f;
+
+    /** Radial falloff exponent at MEDIUM render quality. Visually tuned. */
+    public static final float SUN_HALO_FALLOFF_MEDIUM = 0.30f;
+
+    /**
+     * Radial falloff exponent at HIGH render quality.
+     *
+     * <p>Matches the prototype {@code SunHaloController.SUN_HALO_FALLOFF = 0.35f}. Visually tuned.
+     */
+    public static final float SUN_HALO_FALLOFF_HIGH = 0.35f;
+
+    /**
+     * Overall halo brightness scale at LOW render quality.
+     *
+     * <p>Multiplied against the shader intensity before alpha clamping: a lower value produces a dimmer, less prominent
+     * halo. Visually tuned.
+     */
+    public static final float SUN_HALO_ALPHA_SCALE_LOW = 0.08f;
+
+    /** Overall halo brightness scale at MEDIUM render quality. Visually tuned. */
+    public static final float SUN_HALO_ALPHA_SCALE_MEDIUM = 0.10f;
+
+    /**
+     * Overall halo brightness scale at HIGH render quality.
+     *
+     * <p>Matches the prototype {@code SunHaloController.SUN_HALO_ALPHA = 0.12f}. Visually tuned.
+     */
+    public static final float SUN_HALO_ALPHA_SCALE_HIGH = 0.12f;
 }
