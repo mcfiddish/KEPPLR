@@ -241,6 +241,7 @@ At the start of each session, before writing code:
 1. Re-read this file
 2. Run `mvn test` and note any pre-existing failures
 3. State which section of `REDESIGN.md` you are implementing
-4. Identify which existing classes you expect to touch
-5. Check whether any of those classes are user-owned (see User-Owned Classes above)
-6. Flag any conflicts between the task and these instructions before proceeding
+4. Read `DECISIONS.md` and note any entries relevant to the current task
+5. Identify which existing classes you expect to touch
+6. Check whether any of those classes are user-owned (see User-Owned Classes above)
+7. Flag any conflicts between the task and these instructions before proceeding
