@@ -22,15 +22,15 @@ import picante.time.TimeConversion;
 import picante.units.FundamentalPhysicalConstants;
 
 /**
- * Sole authority for all ephemeris and frame data (REDESIGN.md §1.1).
+ * Primary high-level access point for ephemeris and frame data (REDESIGN.md §1.1).
  *
- * <p>All body positions, frame transforms, time conversions, and aberration-corrected states must be obtained through
- * this interface. Implementations wrap the Picante (SPICE-compatible) ephemeris provider.
+ * <p>This class centralizes body positions, frame transforms, time conversions, and aberration-corrected states on top
+ * of the Picante SPICE-compatible ephemeris provider.
  *
  * <h3>Threading</h3>
  *
- * <p>Instances are accessed via {@code KEPPLRConfiguration.getInstance().getEphemeris()}, which returns a thread-local
- * instance. Callers must <strong>never</strong> store or pass a reference to this interface (REDESIGN.md §3.3).
+ * <p>Instances are typically accessed via {@code KEPPLRConfiguration.getInstance().getEphemeris()}, which returns a
+ * thread-local instance. Callers should avoid storing or passing references across threads (REDESIGN.md §3.3).
  *
  * <h3>Units</h3>
  *
@@ -61,10 +61,13 @@ public class KEPPLREphemeris {
             FundamentalPhysicalConstants.getInstance().getSpeedOfLightInKmPerSec();
 
     /**
-     * Ephemeris object containing commonly used methods. It's usually best to access this using
-     * {@link KEPPLRConfiguration#getEphemeris()}.
+     * Creates a new ephemeris service backed by the supplied metakernels.
      *
-     * @param metakernels metakernels to load
+     * <p>In addition to the provided metakernel list, this constructor loads the default leap-seconds and planetary
+     * constants kernels required by the application. It then initializes the known-body set, available body shapes,
+     * J2000-to-body-fixed transforms, instrument definitions, and configured spacecraft metadata.
+     *
+     * @param metakernels metakernel paths to load into the backing {@link SpiceBundle}
      */
     public KEPPLREphemeris(List<String> metakernels) {
         SpiceBundle.Builder builder = new SpiceBundle.Builder();
@@ -203,16 +206,26 @@ public class KEPPLREphemeris {
     }
 
     /**
-     * @param frame destination frame of the transform
-     * @return function to transform a state vector in J2000 to the supplied frame
+     * Returns a transform function from J2000 to a named destination frame.
+     *
+     * <p>This overload first resolves the frame name through the backing {@link SpiceBundle} and then delegates to
+     * {@link #j2000ToFrame(FrameID)}.
+     *
+     * @param frame destination frame name
+     * @return function that transforms a state from J2000 into the resolved frame
      */
     public StateTransformFunction j2000ToFrame(String frame) {
         return j2000ToFrame(spiceBundle.getFrame(frame));
     }
 
     /**
-     * @param frame destination frame of the transform
-     * @return function to transform a state vector in J2000 to the supplied frame
+     * Returns a transform function from J2000 to a destination frame.
+     *
+     * <p>The transform is created on first use and cached in {@code additionalStateTransformMap} for reuse on
+     * subsequent calls.
+     *
+     * @param frame destination frame identifier
+     * @return function that transforms a state from J2000 into {@code frame}
      */
     public StateTransformFunction j2000ToFrame(FrameID frame) {
         return additionalStateTransformMap.computeIfAbsent(frame, frameID -> spiceBundle
@@ -269,8 +282,10 @@ public class KEPPLREphemeris {
     }
 
     /**
-     * @param body body
-     * @return {@link StateTransformFunction} to transform a state in J2000 to object's body fixed frame
+     * Returns the J2000-to-body-fixed transform for a body.
+     *
+     * @param body body identifier
+     * @return transform from J2000 into the body's body-fixed frame, or {@code null} if no body-fixed frame is known
      */
     public StateTransformFunction getJ2000ToBodyFixed(EphemerisID body) {
         FrameID bodyFixed = spiceBundle.getBodyFixedFrame(body);
@@ -279,11 +294,11 @@ public class KEPPLREphemeris {
     }
 
     /**
-     * Return a heliocentric J2000 position for a body NAIF ID.
+     * Returns the heliocentric J2000 position for a NAIF body code.
      *
-     * @param bodyId NAIF ID
-     * @param et ephemeris time (TDB/ET)
-     * @return Sun-centered J2000 position or null if unavailable
+     * @param bodyId NAIF body code
+     * @param et ephemeris time in TDB seconds past J2000
+     * @return vector from the Sun to the body in J2000, or {@code null} if the body cannot be resolved or evaluated
      */
     public VectorIJK getHeliocentricPositionJ2000(int bodyId, double et) {
         EphemerisID body = spiceBundle.getObject(bodyId);
@@ -291,11 +306,12 @@ public class KEPPLREphemeris {
     }
 
     /**
-     * Return a heliocentric J2000 position for a body.
+     * Returns the heliocentric J2000 position for a body.
      *
      * @param body body identifier
-     * @param et ephemeris time (TDB/ET)
-     * @return Sun-centered J2000 position or null if unavailable
+     * @param et ephemeris time in TDB seconds past J2000
+     * @return vector from the Sun to {@code body} in J2000; returns the zero vector for the Sun itself, or
+     *         {@code null} if the body is {@code null}, missing from the loaded kernels, or cannot be evaluated
      */
     public VectorIJK getHeliocentricPositionJ2000(EphemerisID body, double et) {
         if (body == null) {
@@ -319,11 +335,11 @@ public class KEPPLREphemeris {
     }
 
     /**
-     * Return a heliocentric J2000 position for a body NAIF ID.
+     * Returns the heliocentric J2000 state for a NAIF body code.
      *
-     * @param bodyId NAIF ID
-     * @param et ephemeris time (TDB/ET)
-     * @return Sun-centered J2000 position or null if unavailable
+     * @param bodyId NAIF body code
+     * @param et ephemeris time in TDB seconds past J2000
+     * @return state from the Sun to the body in J2000, or {@code null} if the body cannot be resolved or evaluated
      */
     public StateVector getHeliocentricStateJ2000(int bodyId, double et) {
         EphemerisID body = spiceBundle.getObject(bodyId);
@@ -331,11 +347,12 @@ public class KEPPLREphemeris {
     }
 
     /**
-     * Return a heliocentric J2000 state for a body.
+     * Returns the heliocentric J2000 state for a body.
      *
      * @param body body identifier
-     * @param et ephemeris time (TDB/ET)
-     * @return Sun-centered J2000 position or null if unavailable
+     * @param et ephemeris time in TDB seconds past J2000
+     * @return state from the Sun to {@code body} in J2000; returns a zero state for the Sun itself, or {@code null} if
+     *         the body is {@code null}, missing from the loaded kernels, or cannot be evaluated
      */
     public StateVector getHeliocentricStateJ2000(EphemerisID body, double et) {
         if (body == null) {
@@ -359,13 +376,14 @@ public class KEPPLREphemeris {
     }
 
     /**
-     * Return an observer-to-target J2000 position for NAIF IDs.
+     * Returns the observer-to-target J2000 position for NAIF body codes.
      *
-     * @param observerId observer NAIF ID
-     * @param targetId target NAIF ID
-     * @param et ephemeris time (TDB/ET)
+     * @param observerId observer NAIF body code
+     * @param targetId target NAIF body code
+     * @param et ephemeris time in TDB seconds past J2000
      * @param abCorr aberration correction
-     * @return observer-to-target J2000 position or null if unavailable
+     * @return vector from the observer to the target in J2000, or {@code null} if either body cannot be resolved or the
+     *         state cannot be evaluated
      */
     public VectorIJK getObserverToTargetJ2000(int observerId, int targetId, double et, AberrationCorrection abCorr) {
         EphemerisID observer = spiceBundle.getObject(observerId);
@@ -374,13 +392,14 @@ public class KEPPLREphemeris {
     }
 
     /**
-     * Return an observer-to-target J2000 position.
+     * Returns the observer-to-target J2000 position.
      *
      * @param observer observer body
      * @param target target body
-     * @param et ephemeris time (TDB/ET)
+     * @param et ephemeris time in TDB seconds past J2000
      * @param abCorr aberration correction
-     * @return observer-to-target J2000 position or null if unavailable
+     * @return vector from {@code observer} to {@code target} in J2000, or {@code null} if either argument is
+     *         {@code null}, no function can be created, or the state cannot be evaluated
      */
     public VectorIJK getObserverToTargetJ2000(
             EphemerisID observer, EphemerisID target, double et, AberrationCorrection abCorr) {
@@ -406,10 +425,11 @@ public class KEPPLREphemeris {
     }
 
     /**
-     * Compute one-way light time in seconds for an observer-to-target vector.
+     * Computes the one-way light time for an observer-to-target vector.
      *
      * @param observerToTargetJ2000 observer-to-target vector in km
-     * @return light time in seconds, or 0 if unavailable
+     * @return light time in seconds, or {@code 0} if the vector is {@code null}, zero-length, non-finite, or the speed
+     *         of light constant is unavailable
      */
     public double computeLightTimeSeconds(VectorIJK observerToTargetJ2000) {
         if (observerToTargetJ2000 == null || speedOfLightKmPerSec <= 0.0) {
@@ -422,12 +442,14 @@ public class KEPPLREphemeris {
     }
 
     /**
-     * Resolve the J2000-to-body-fixed rotation at the evaluation time.
+     * Resolves the J2000-to-body-fixed rotation at the appropriate evaluation time.
      *
-     * @param bodyId NAIF ID
-     * @param et ephemeris time (TDB/ET)
-     * @param lightTimeSecondsOrNull light time seconds for observer mode, or null
-     * @return rotation matrix or null if unavailable
+     * @param bodyId NAIF body code
+     * @param et ephemeris time in TDB seconds past J2000
+     * @param lightTimeSecondsOrNull light time in seconds to subtract from {@code et}, or {@code null} to evaluate at
+     *        {@code et}
+     * @return rotation matrix from J2000 into the body's fixed frame, or {@code null} if the body cannot be resolved or
+     *         no body-fixed transform exists
      */
     public RotationMatrixIJK getJ2000ToBodyFixedAtEvalTime(int bodyId, double et, Double lightTimeSecondsOrNull) {
         EphemerisID body = spiceBundle.getObject(bodyId);
@@ -435,12 +457,14 @@ public class KEPPLREphemeris {
     }
 
     /**
-     * Resolve the J2000-to-body-fixed rotation at the evaluation time.
+     * Resolves the J2000-to-body-fixed rotation at the appropriate evaluation time.
      *
      * @param body body identifier
-     * @param et ephemeris time (TDB/ET)
-     * @param lightTimeSecondsOrNull light time seconds for observer mode, or null
-     * @return rotation matrix or null if unavailable
+     * @param et ephemeris time in TDB seconds past J2000
+     * @param lightTimeSecondsOrNull light time in seconds to subtract from {@code et}, or {@code null} to evaluate at
+     *        {@code et}
+     * @return rotation matrix from J2000 into the body's fixed frame, or {@code null} if {@code body} is {@code null}
+     *         or no body-fixed transform exists
      */
     public RotationMatrixIJK getJ2000ToBodyFixedAtEvalTime(EphemerisID body, double et, Double lightTimeSecondsOrNull) {
         if (body == null) {
@@ -455,14 +479,16 @@ public class KEPPLREphemeris {
     }
 
     /**
-     * Transform a J2000 position to body-fixed at the correct evaluation time.
+     * Transforms a J2000 position into body-fixed coordinates using the appropriate evaluation time.
      *
-     * @param bodyId NAIF ID
-     * @param et ephemeris time (TDB/ET)
+     * @param bodyId NAIF body code
+     * @param et ephemeris time in TDB seconds past J2000
      * @param posJ2000 position in J2000 km
      * @param observerMode true when observer-centered rendering is active
-     * @param lightTimeSecondsOrNull light time seconds if observer mode is active
-     * @return position in body-fixed km, or null if unavailable
+     * @param lightTimeSecondsOrNull light time in seconds to subtract from {@code et} when {@code observerMode} is
+     *        {@code true}; ignored otherwise
+     * @return position in body-fixed kilometers, or {@code null} if the body cannot be resolved, {@code posJ2000} is
+     *         {@code null}, or no body-fixed transform exists
      */
     public VectorIJK toBodyFixedPosition(
             int bodyId, double et, VectorIJK posJ2000, boolean observerMode, Double lightTimeSecondsOrNull) {
@@ -471,14 +497,16 @@ public class KEPPLREphemeris {
     }
 
     /**
-     * Transform a J2000 position to body-fixed at the correct evaluation time.
+     * Transforms a J2000 position into body-fixed coordinates using the appropriate evaluation time.
      *
      * @param body body identifier
-     * @param et ephemeris time (TDB/ET)
+     * @param et ephemeris time in TDB seconds past J2000
      * @param posJ2000 position in J2000 km
      * @param observerMode true when observer-centered rendering is active
-     * @param lightTimeSecondsOrNull light time seconds if observer mode is active
-     * @return position in body-fixed km, or null if unavailable
+     * @param lightTimeSecondsOrNull light time in seconds to subtract from {@code et} when {@code observerMode} is
+     *        {@code true}; ignored otherwise
+     * @return position in body-fixed kilometers, or {@code null} if {@code body} or {@code posJ2000} is {@code null},
+     *         or no body-fixed transform exists
      */
     public VectorIJK toBodyFixedPosition(
             EphemerisID body, double et, VectorIJK posJ2000, boolean observerMode, Double lightTimeSecondsOrNull) {
@@ -506,8 +534,10 @@ public class KEPPLREphemeris {
     }
 
     /**
-     * @param body body
-     * @return triaxial ellipsoid for the body shape
+     * Returns the triaxial ellipsoid shape model for a body.
+     *
+     * @param body body identifier
+     * @return body's ellipsoid shape model, or {@code null} if the loaded kernels do not provide radii for the body
      */
     public Ellipsoid getShape(EphemerisID body) {
         return shapeMap.get(body);
@@ -526,8 +556,13 @@ public class KEPPLREphemeris {
     }
 
     /**
-     * @param body body
-     * @return Cartesian coordinates of subsolar point on body in body fixed coordinates
+     * Returns a function that evaluates the sub-solar point on a body's reference ellipsoid.
+     *
+     * <p>The returned function computes the point where the ray from the body toward the Sun intersects the body's
+     * shape model, expressed in the body's fixed frame.
+     *
+     * @param body body identifier
+     * @return function that evaluates the sub-solar point in body-fixed Cartesian coordinates
      */
     public VectorIJKFunction getSubSolarPoint(EphemerisID body) {
         FrameTransformFunction ftf = getJ2000ToBodyFixed(body);
@@ -541,18 +576,24 @@ public class KEPPLREphemeris {
     }
 
     /**
-     * @param body body
-     * @return body's state relative to Sun, in J2000, with {@link AberrationCorrection#NONE}
+     * Returns the cached Sun-to-body state function in J2000.
+     *
+     * @param body body identifier
+     * @return function that evaluates the state vector from the Sun to {@code body} in J2000 with
+     *         {@link AberrationCorrection#NONE}, or {@code null} if no such function was initialized
      */
     public StateVectorFunction getSunToBodyJ2000(EphemerisID body) {
         return sunToBodyMap.get(body);
     }
 
     /**
-     * @param observer observer
-     * @param target target
-     * @param abCorr usually either {@link AberrationCorrection#NONE} or {@link AberrationCorrection#LT_S}
-     * @return function to evaluate target state relative to observer in J2000
+     * Creates an observer-to-target state function in J2000.
+     *
+     * @param observer observer body
+     * @param target target body
+     * @param abCorr aberration correction, typically {@link AberrationCorrection#NONE} or
+     *        {@link AberrationCorrection#LT_S}
+     * @return function that evaluates the state vector from {@code observer} to {@code target} in J2000
      */
     public StateVectorFunction getObserverToTargetJ2000(
             EphemerisID observer, EphemerisID target, AberrationCorrection abCorr) {
