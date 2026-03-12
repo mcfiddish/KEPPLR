@@ -68,8 +68,8 @@ public class KepplrApp extends SimpleApplication {
 
     private static final Logger logger = LogManager.getLogger();
 
-    private static final int EARTH_NAIF_ID = 399;
-    private static final float CAMERA_OFFSET_KM = 50_000f;
+    private static final int EARTH_NAIF_ID = 699;
+    private static final float CAMERA_OFFSET_KM = 500_000f;
 
     /** Camera heliocentric J2000 position in km. Scene positions are {@code helioPos − this}, cast to float for JME. */
     private final double[] cameraHelioJ2000 = new double[3];
@@ -214,17 +214,9 @@ public class KepplrApp extends SimpleApplication {
         // ── Vector overlay manager — enable overlays for Step 13 visual confirmation ──────────
         vectorManager = new VectorManager(nearNode, midNode, farNode, assetManager);
         vectorManager.enableVector(new VectorDefinition(
-                "Earth velocity",
-                VectorTypes.velocity(),
-                EARTH_NAIF_ID,
-                com.jme3.math.ColorRGBA.Cyan,
-                KepplrConstants.VECTOR_DEFAULT_SCALE_KM));
+                "Earth velocity", VectorTypes.velocity(), EARTH_NAIF_ID, com.jme3.math.ColorRGBA.Cyan, 1.0));
         vectorManager.enableVector(new VectorDefinition(
-                "Earth→Sun",
-                VectorTypes.towardBody(10),
-                EARTH_NAIF_ID,
-                com.jme3.math.ColorRGBA.Yellow,
-                KepplrConstants.VECTOR_DEFAULT_SCALE_KM));
+                "Earth→Sun", VectorTypes.towardBody(10), EARTH_NAIF_ID, com.jme3.math.ColorRGBA.Yellow, 1.0));
 
         // ── Star field ────────────────────────────────────────────────────────────────────────
         YaleBrightStarCatalog bsc =
@@ -299,7 +291,11 @@ public class KepplrApp extends SimpleApplication {
         double currentEt = simulationState.currentEtProperty().get();
         List<BodyInView> inView = bodySceneManager.update(currentEt, cameraHelioJ2000, cam);
         trailManager.update(currentEt, cameraHelioJ2000);
-        vectorManager.update(currentEt, cameraHelioJ2000, cam);
+        vectorManager.update(
+                currentEt,
+                cameraHelioJ2000,
+                cam,
+                simulationState.focusedBodyIdProperty().get());
         starFieldManager.update(currentEt, cameraHelioJ2000);
         simulationState.setBodiesInView(inView);
         hud.update(currentEt);

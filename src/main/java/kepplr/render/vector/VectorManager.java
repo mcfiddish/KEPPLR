@@ -104,13 +104,17 @@ public class VectorManager {
      * (floating origin), which change whenever the camera moves. The {@link VectorType#computeDirection} calls are
      * inexpensive (single SPICE lookup per vector), so rebuilding every frame is negligible in cost.
      *
+     * <p>No vectors are rendered when {@code focusedBodyId == -1} (no focus body) or when the focused body has no shape
+     * data — see {@link VectorRenderer#update}.
+     *
      * @param et current simulation ET (TDB seconds past J2000)
      * @param cameraHelioJ2000 camera heliocentric J2000 position in km (length ≥ 3)
      * @param cam active JME camera (used for screen-space length projection)
+     * @param focusedBodyId NAIF ID of the currently focused body, or −1 if none
      */
-    public void update(double et, double[] cameraHelioJ2000, Camera cam) {
+    public void update(double et, double[] cameraHelioJ2000, Camera cam, int focusedBodyId) {
         try {
-            renderer.update(List.copyOf(orderedDefinitions), et, cameraHelioJ2000, cam);
+            renderer.update(List.copyOf(orderedDefinitions), et, cameraHelioJ2000, cam, focusedBodyId);
             dirty = false;
         } catch (Exception e) {
             logger.warn("VectorManager.update() failed at ET={}: {}", et, e.getMessage());
