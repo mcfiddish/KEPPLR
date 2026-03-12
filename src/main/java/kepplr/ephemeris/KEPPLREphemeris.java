@@ -165,14 +165,39 @@ public class KEPPLREphemeris {
         spacecraftMap = Collections.unmodifiableMap(spacecraftMap);
     }
 
+    /**
+     * Returns the configured spacecraft metadata for a specific ephemeris object.
+     *
+     * <p>This lookup only includes spacecraft declared in the active {@link KEPPLRConfiguration}. Bodies that exist in
+     * the loaded SPICE kernels but are not configured as spacecraft will return {@code null}.
+     *
+     * @param id spacecraft ephemeris identifier
+     * @return spacecraft metadata for {@code id}, or {@code null} if the identifier is not configured as a spacecraft
+     */
     public Spacecraft getSpacecraft(EphemerisID id) {
         return spacecraftMap.get(id);
     }
 
+    /**
+     * Returns all configured spacecraft metadata objects.
+     *
+     * <p>The returned collection is backed by an unmodifiable map and reflects the spacecraft entries resolved during
+     * construction from {@link KEPPLRConfiguration}.
+     *
+     * @return unmodifiable collection of configured spacecraft
+     */
     public Collection<Spacecraft> getSpacecraft() {
         return spacecraftMap.values();
     }
 
+    /**
+     * Returns the instrument definitions discovered from the loaded kernel pool.
+     *
+     * <p>Each instrument includes its NAIF code, field-of-view definition, and resolved center body when those data are
+     * available from SPICE kernel metadata.
+     *
+     * @return unmodifiable set of known instruments
+     */
     public Set<Instrument> getInstruments() {
         return instruments;
     }
@@ -195,21 +220,49 @@ public class KEPPLREphemeris {
                 .createStateTransformFunction(CelestialFrames.J2000, frame, Coverage.ALL_TIME));
     }
 
+    /**
+     * Determines whether a NAIF object code has a resolvable body-fixed frame transform from J2000.
+     *
+     * @param id NAIF body code
+     * @return {@code true} if a body-fixed frame exists and a J2000-to-body-fixed transform was created
+     */
     public boolean hasBodyFixedFrame(int id) {
         EphemerisID body = spiceBundle.getObject(id);
         FrameID bodyFixed = spiceBundle.getBodyFixedFrame(body);
         return stateTransformMap.containsKey(bodyFixed);
     }
 
+    /**
+     * Determines whether a body has a resolvable body-fixed frame transform from J2000.
+     *
+     * @param id body identifier
+     * @return {@code true} if a body-fixed frame exists and a J2000-to-body-fixed transform was created
+     */
     public boolean hasBodyFixedFrame(EphemerisID id) {
         FrameID bodyFixed = spiceBundle.getBodyFixedFrame(id);
         return stateTransformMap.containsKey(bodyFixed);
     }
 
+    /**
+     * Evaluates the J2000-to-body-fixed rotation for a body at a specific ephemeris time.
+     *
+     * @param id body identifier
+     * @param et ephemeris time in TDB seconds past J2000
+     * @return rotation matrix from J2000 into the body's fixed frame
+     * @throws NullPointerException if no body-fixed transform is available for {@code id}
+     */
     public RotationMatrixIJK getJ2000ToBodyFixedRotation(EphemerisID id, double et) {
         return getJ2000ToBodyFixed(id).getTransform(et);
     }
 
+    /**
+     * Evaluates the J2000-to-body-fixed rotation for a NAIF body code at a specific ephemeris time.
+     *
+     * @param id NAIF body code
+     * @param et ephemeris time in TDB seconds past J2000
+     * @return rotation matrix from J2000 into the body's fixed frame
+     * @throws NullPointerException if no body-fixed transform is available for {@code id}
+     */
     public RotationMatrixIJK getJ2000ToBodyFixedRotation(int id, double et) {
         EphemerisID body = spiceBundle.getObject(id);
         return getJ2000ToBodyFixed(body).getTransform(et);
@@ -440,6 +493,14 @@ public class KEPPLREphemeris {
         return j2bf.getTransform(evalEt).mxv(posJ2000);
     }
 
+    /**
+     * Returns the complete set of ephemeris objects known to the loaded aberrated ephemeris provider.
+     *
+     * <p>This includes bodies made available by the loaded kernels, not just configured spacecraft or bodies with shape
+     * models.
+     *
+     * @return unmodifiable set of known ephemeris identifiers
+     */
     public Set<EphemerisID> getKnownBodies() {
         return knownBodies;
     }
@@ -452,6 +513,14 @@ public class KEPPLREphemeris {
         return shapeMap.get(body);
     }
 
+    /**
+     * Returns the underlying SPICE bundle used by this ephemeris service.
+     *
+     * <p>This exposes lower-level SPICE and Picante access for callers that need capabilities not wrapped directly by
+     * {@code KEPPLREphemeris}.
+     *
+     * @return backing SPICE bundle for this ephemeris instance
+     */
     public SpiceBundle getSpiceBundle() {
         return spiceBundle;
     }
