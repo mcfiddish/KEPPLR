@@ -217,13 +217,16 @@ public final class KepplrConstants {
     public static final double VECTOR_MIN_VISIBLE_LENGTH_PX = 5.0;
 
     /**
-     * Default visual scale of a vector overlay in km.
+     * Arrow length expressed as a multiple of the focused body's mean radius.
      *
-     * <p>The rendered line segment extends {@code VECTOR_DEFAULT_SCALE_KM} km from the origin body centre in the
-     * computed direction. Callers may override this per-{@code VectorDefinition}. Chosen as roughly twice Earth's mean
-     * radius (6371 km) so vectors are legible when focused on an Earth-class body.
+     * <p>Arrow length in km = focused body mean radius × {@code VECTOR_ARROW_FOCUS_BODY_RADIUS_MULTIPLE} ×
+     * {@link kepplr.render.vector.VectorDefinition#getScaleFactor()}. A value of 3.0 places the arrow tip at 3× the
+     * mean radius from the body centre (i.e., 2× the mean radius above the surface).
+     *
+     * <p>Vectors are not rendered when no body is focused (focus body ID == −1) or when the focused body has no shape
+     * data.
      */
-    public static final double VECTOR_DEFAULT_SCALE_KM = 15_000.0;
+    public static final double VECTOR_ARROW_FOCUS_BODY_RADIUS_MULTIPLE = 3.0;
 
     // ── Star field (Step 14, REDESIGN.md §7.4) ──
 

@@ -5,7 +5,6 @@ import static org.junit.jupiter.api.Assertions.*;
 import com.jme3.math.ColorRGBA;
 import kepplr.config.KEPPLRConfiguration;
 import kepplr.testsupport.TestHarness;
-import kepplr.util.KepplrConstants;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -29,7 +28,7 @@ class VectorManagerTest {
 
     /** Convenience factory for a minimal VectorDefinition. */
     private VectorDefinition def(String label, VectorType type, int naifId) {
-        return new VectorDefinition(label, type, naifId, ColorRGBA.White, KepplrConstants.VECTOR_DEFAULT_SCALE_KM);
+        return new VectorDefinition(label, type, naifId, ColorRGBA.White, 1.0);
     }
 
     @BeforeEach

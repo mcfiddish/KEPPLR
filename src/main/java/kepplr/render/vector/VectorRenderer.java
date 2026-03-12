@@ -20,6 +20,8 @@ import kepplr.util.KepplrConstants;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import picante.math.vectorspace.VectorIJK;
+import picante.mechanics.EphemerisID;
+import picante.surfaces.Ellipsoid;
 
 /**
  * Renders a list of {@link VectorDefinition} objects as line segments in the JME scene graph.
@@ -72,27 +74,71 @@ class VectorRenderer {
     /**
      * Rebuild all vector geometries for the current simulation time.
      *
-     * <p>Detaches all previously attached geometries, then renders each definition in {@code definitions}. Definitions
-     * whose direction is unavailable or whose projected length falls below
+     * <p>Detaches all previously attached geometries. Returns immediately (no vectors rendered) if {@code focusedBodyId
+     * == -1}, if the focused body has no shape data, or if {@code definitions} is empty. Arrow length is computed each
+     * call as focused-body mean radius × {@link KepplrConstants#VECTOR_ARROW_FOCUS_BODY_RADIUS_MULTIPLE} ×
+     * {@link VectorDefinition#getScaleFactor()}.
+     *
+     * <p>Definitions whose direction is unavailable or whose projected length falls below
      * {@link KepplrConstants#VECTOR_MIN_VISIBLE_LENGTH_PX} are silently skipped.
      *
      * @param definitions active vector definitions to render
      * @param et current simulation ET (TDB seconds past J2000)
      * @param cameraHelioJ2000 camera heliocentric J2000 position in km (length ≥ 3)
      * @param cam active JME camera (used for screen-space length projection)
+     * @param focusedBodyId NAIF ID of the currently focused body, or −1 if none
      */
-    void update(List<VectorDefinition> definitions, double et, double[] cameraHelioJ2000, Camera cam) {
+    void update(
+            List<VectorDefinition> definitions, double et, double[] cameraHelioJ2000, Camera cam, int focusedBodyId) {
         detachAll();
+        if (focusedBodyId == -1) {
+            return;
+        }
         if (definitions == null || definitions.isEmpty()) {
             return;
         }
+
+        // Resolve focused body mean radius at point-of-use (Architecture Rule 3).
+        KEPPLREphemeris eph = KEPPLRConfiguration.getInstance().getEphemeris();
+        EphemerisID focusedBodyEphId;
+        try {
+            focusedBodyEphId = eph.getSpiceBundle().getObject(focusedBodyId);
+        } catch (Exception e) {
+            logger.warn("VectorRenderer: no EphemerisID for focused body NAIF {}: {}", focusedBodyId, e.getMessage());
+            return;
+        }
+        if (focusedBodyEphId == null) {
+            logger.warn("VectorRenderer: no EphemerisID for focused body NAIF {}", focusedBodyId);
+            return;
+        }
+        Ellipsoid shape = eph.getShape(focusedBodyEphId);
+        if (shape == null) {
+            logger.warn("VectorRenderer: no shape data for focused body NAIF {}", focusedBodyId);
+            return;
+        }
+        double meanRadiusKm = (shape.getA() + shape.getB() + shape.getC()) / 3.0;
+
         for (VectorDefinition def : definitions) {
             try {
-                renderOne(def, et, cameraHelioJ2000, cam);
+                double arrowLengthKm = computeArrowLengthKm(meanRadiusKm, def.getScaleFactor());
+                renderOne(def, arrowLengthKm, et, cameraHelioJ2000, cam);
             } catch (Exception e) {
                 logger.warn("Vector render failed for '{}': {}", def.getLabel(), e.getMessage());
             }
         }
+    }
+
+    /**
+     * Computes arrow length in km from the focused body mean radius and the definition's scale factor.
+     *
+     * <p>Package-private for unit testing.
+     *
+     * @param meanRadiusKm focused body mean radius in km
+     * @param scaleFactor dimensionless multiplier from {@link VectorDefinition#getScaleFactor()}
+     * @return arrow length in km
+     */
+    static double computeArrowLengthKm(double meanRadiusKm, double scaleFactor) {
+        return meanRadiusKm * KepplrConstants.VECTOR_ARROW_FOCUS_BODY_RADIUS_MULTIPLE * scaleFactor;
     }
 
     /** Detach all geometries currently in the scene graph. Called by {@link VectorManager#disableVector}. */
@@ -102,7 +148,8 @@ class VectorRenderer {
 
     // ── private helpers ───────────────────────────────────────────────────────────────────────
 
-    private void renderOne(VectorDefinition def, double et, double[] cameraHelioJ2000, Camera cam) {
+    private void renderOne(
+            VectorDefinition def, double arrowLengthKm, double et, double[] cameraHelioJ2000, Camera cam) {
         // 1. Resolve direction via the strategy — no type branching here.
         VectorIJK dir = def.getVectorType().computeDirection(def.getOriginNaifId(), et);
         if (dir == null) {
@@ -124,19 +171,18 @@ class VectorRenderer {
         double distKm = Math.sqrt(ox * ox + oy * oy + oz * oz);
 
         // 3. Skip if projected screen length < threshold (avoids sub-pixel clutter).
-        double scaleKm = def.getScaleKm();
         if (distKm > 0.0) {
             double halfFovRad = Math.toRadians(KepplrConstants.CAMERA_FOV_Y_DEG / 2.0);
-            double screenLengthPx = (scaleKm / distKm) * (cam.getHeight() / 2.0) / Math.tan(halfFovRad);
+            double screenLengthPx = (arrowLengthKm / distKm) * (cam.getHeight() / 2.0) / Math.tan(halfFovRad);
             if (screenLengthPx < KepplrConstants.VECTOR_MIN_VISIBLE_LENGTH_PX) {
                 return;
             }
         }
 
         // 4. Endpoint in camera-relative scene space.
-        double ex = ox + dir.getI() * scaleKm;
-        double ey = oy + dir.getJ() * scaleKm;
-        double ez = oz + dir.getK() * scaleKm;
+        double ex = ox + dir.getI() * arrowLengthKm;
+        double ey = oy + dir.getJ() * arrowLengthKm;
+        double ez = oz + dir.getK() * arrowLengthKm;
 
         // 5. Frustum layer assignment (same logic as body rendering, §8.3).
         FrustumLayer layer = FrustumLayer.assign(distKm, 0.0);
