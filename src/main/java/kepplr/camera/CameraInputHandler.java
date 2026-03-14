@@ -80,6 +80,13 @@ public final class CameraInputHandler implements ActionListener, AnalogListener,
     private boolean leftDragging = false;
     private boolean rightDragging = false;
 
+    /**
+     * Set to {@code true} whenever a navigation action fires (mouse drag, scroll, keyboard). Reset by
+     * {@link #consumeManualNavigation()}. Used by {@code KepplrApp.simpleUpdate()} to cancel any active camera
+     * transition when the user takes manual control (Step 18).
+     */
+    private boolean manualNavigationThisFrame = false;
+
     // Keyboard shift modifier
     private boolean shiftDown = false;
 
@@ -179,39 +186,73 @@ public final class CameraInputHandler implements ActionListener, AnalogListener,
     @Override
     public void onAnalog(String name, float value, float tpf) {
         switch (name) {
-            case SCROLL_UP -> applyZoom(1.0);
-            case SCROLL_DOWN -> applyZoom(-1.0);
+            case SCROLL_UP -> {
+                applyZoom(1.0);
+                manualNavigationThisFrame = true;
+            }
+            case SCROLL_DOWN -> {
+                applyZoom(-1.0);
+                manualNavigationThisFrame = true;
+            }
 
             case TILT_UP -> {
-                if (!shiftDown) applyTilt(-(float) (value * KepplrConstants.CAMERA_KEYBOARD_ROTATE_RATE_RAD_PER_SEC));
+                if (!shiftDown) {
+                    applyTilt(-(float) (value * KepplrConstants.CAMERA_KEYBOARD_ROTATE_RATE_RAD_PER_SEC));
+                    manualNavigationThisFrame = true;
+                }
             }
             case TILT_DOWN -> {
-                if (!shiftDown) applyTilt((float) (value * KepplrConstants.CAMERA_KEYBOARD_ROTATE_RATE_RAD_PER_SEC));
+                if (!shiftDown) {
+                    applyTilt((float) (value * KepplrConstants.CAMERA_KEYBOARD_ROTATE_RATE_RAD_PER_SEC));
+                    manualNavigationThisFrame = true;
+                }
             }
             case ROLL_LEFT -> {
-                if (!shiftDown) applyRoll(-(float) (value * KepplrConstants.CAMERA_KEYBOARD_ROTATE_RATE_RAD_PER_SEC));
+                if (!shiftDown) {
+                    applyRoll(-(float) (value * KepplrConstants.CAMERA_KEYBOARD_ROTATE_RATE_RAD_PER_SEC));
+                    manualNavigationThisFrame = true;
+                }
             }
             case ROLL_RIGHT -> {
-                if (!shiftDown) applyRoll((float) (value * KepplrConstants.CAMERA_KEYBOARD_ROTATE_RATE_RAD_PER_SEC));
+                if (!shiftDown) {
+                    applyRoll((float) (value * KepplrConstants.CAMERA_KEYBOARD_ROTATE_RATE_RAD_PER_SEC));
+                    manualNavigationThisFrame = true;
+                }
             }
 
             case ORBIT_UP -> {
-                if (shiftDown) applyOrbit((float) (value * KepplrConstants.CAMERA_KEYBOARD_ORBIT_RATE_RAD_PER_SEC), 0f);
+                if (shiftDown) {
+                    applyOrbit((float) (value * KepplrConstants.CAMERA_KEYBOARD_ORBIT_RATE_RAD_PER_SEC), 0f);
+                    manualNavigationThisFrame = true;
+                }
             }
             case ORBIT_DOWN -> {
-                if (shiftDown)
+                if (shiftDown) {
                     applyOrbit(-(float) (value * KepplrConstants.CAMERA_KEYBOARD_ORBIT_RATE_RAD_PER_SEC), 0f);
+                    manualNavigationThisFrame = true;
+                }
             }
             case ORBIT_LEFT -> {
-                if (shiftDown) applyOrbit(0f, (float) (value * KepplrConstants.CAMERA_KEYBOARD_ORBIT_RATE_RAD_PER_SEC));
+                if (shiftDown) {
+                    applyOrbit(0f, (float) (value * KepplrConstants.CAMERA_KEYBOARD_ORBIT_RATE_RAD_PER_SEC));
+                    manualNavigationThisFrame = true;
+                }
             }
             case ORBIT_RIGHT -> {
-                if (shiftDown)
+                if (shiftDown) {
                     applyOrbit(0f, -(float) (value * KepplrConstants.CAMERA_KEYBOARD_ORBIT_RATE_RAD_PER_SEC));
+                    manualNavigationThisFrame = true;
+                }
             }
 
-            case ZOOM_IN -> applyZoom(value * KepplrConstants.CAMERA_KEYBOARD_ZOOM_RATE_STEPS_PER_SEC);
-            case ZOOM_OUT -> applyZoom(-value * KepplrConstants.CAMERA_KEYBOARD_ZOOM_RATE_STEPS_PER_SEC);
+            case ZOOM_IN -> {
+                applyZoom(value * KepplrConstants.CAMERA_KEYBOARD_ZOOM_RATE_STEPS_PER_SEC);
+                manualNavigationThisFrame = true;
+            }
+            case ZOOM_OUT -> {
+                applyZoom(-value * KepplrConstants.CAMERA_KEYBOARD_ZOOM_RATE_STEPS_PER_SEC);
+                manualNavigationThisFrame = true;
+            }
         }
     }
 
@@ -279,12 +320,27 @@ public final class CameraInputHandler implements ActionListener, AnalogListener,
             float deltaUp = (float) (dx * KepplrConstants.CAMERA_MOUSE_ROTATE_SENSITIVITY);
             float deltaRight = -(float) (dy * KepplrConstants.CAMERA_MOUSE_ROTATE_SENSITIVITY);
             applyRotateInPlace(deltaRight, deltaUp);
+            manualNavigationThisFrame = true;
         } else if (rightDragging) {
             // Right drag: orbit around focus.  dx → orbit around screenUp, dy → around screenRight
             float deltaUp = -(float) (dx * KepplrConstants.CAMERA_MOUSE_ORBIT_SENSITIVITY);
             float deltaRight = (float) (dy * KepplrConstants.CAMERA_MOUSE_ORBIT_SENSITIVITY);
             applyOrbit(deltaRight, deltaUp);
+            manualNavigationThisFrame = true;
         }
+    }
+
+    /**
+     * Returns {@code true} if any manual navigation action fired since the last call to this method, then resets the
+     * flag to {@code false}.
+     *
+     * <p>Called from {@code KepplrApp.simpleUpdate()} after {@link #update()} to detect whether the user has taken
+     * manual control and any active camera transition should be cancelled (Step 18).
+     */
+    public boolean consumeManualNavigation() {
+        boolean result = manualNavigationThisFrame;
+        manualNavigationThisFrame = false;
+        return result;
     }
 
     // ─────────────────────────────────────────────────────────────────────────

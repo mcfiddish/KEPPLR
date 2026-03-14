@@ -123,4 +123,25 @@ public interface SimulationState {
      * being tracked (§10.2).
      */
     ReadOnlyObjectProperty<double[]> trackingAnchorProperty();
+
+    // ── Transition state (Step 18) ──
+
+    /**
+     * {@code true} while a {@code pointAt} or {@code goTo} camera transition is in progress (Step 18).
+     *
+     * <p>Updated each frame by {@link kepplr.camera.TransitionController} on the JME render thread. Set to
+     * {@code false} when no transition is active (including the single frame after completion). Propagated to the
+     * JavaFX layer via {@link kepplr.ui.SimulationStateFxBridge}.
+     */
+    ReadOnlyBooleanProperty transitionActiveProperty();
+
+    /**
+     * Progress of the active camera transition as a value in {@code [0.0, 1.0]} (Step 18).
+     *
+     * <p>{@code 0.0} when no transition is active. Advances monotonically each frame while a transition runs. Set to
+     * {@code 1.0} on the frame when the transition completes, then back to {@code 0.0} on the next frame.
+     *
+     * <p>Updated each frame by {@link kepplr.camera.TransitionController} on the JME render thread.
+     */
+    ReadOnlyDoubleProperty transitionProgressProperty();
 }

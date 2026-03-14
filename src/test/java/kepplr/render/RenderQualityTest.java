@@ -2,6 +2,7 @@ package kepplr.render;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import kepplr.camera.TransitionController;
 import kepplr.commands.DefaultSimulationCommands;
 import kepplr.core.SimulationClock;
 import kepplr.state.DefaultSimulationState;
@@ -22,7 +23,8 @@ class RenderQualityTest {
     void setUp() {
         state = new DefaultSimulationState();
         SimulationClock clock = new SimulationClock(state, 0.0);
-        commands = new DefaultSimulationCommands(state, clock);
+        TransitionController tc = new TransitionController(state);
+        commands = new DefaultSimulationCommands(state, clock, tc);
     }
 
     // ── Default value ────────────────────────────────────────────────────────────────────────
