@@ -252,6 +252,16 @@ public class KEPPLRConfiguration implements KEPPLRConfigBlock {
     }
 
     /**
+     * Null out the present configuration and reload from a configuration file
+     *
+     * @param filename configuration file to load
+     * @return new configuration
+     */
+    public static KEPPLRConfiguration reload(Path filename) {
+        instance = null;
+        return load(filename);
+    }
+    /**
      * @param pc properties configuration
      * @return configuration object
      */
