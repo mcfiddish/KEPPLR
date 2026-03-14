@@ -133,16 +133,17 @@ At any time, the application maintains at most:
 * Selected affects only the **HUD information display**.
 * Selection **must not** change camera pose or camera dynamics.
 
-### 4.4 Targeted (“Point At”)
+### 4.4 Targeted ("Point At")
 
 * Targeted means:
 
   * it **is selected**, and
-  * camera orientation is updated to point at the **target body center** (SPICE-computed position).
+  * camera orientation slews to point at the **target body center** (SPICE-computed position)
+    via `pointAt(naifId, duration)` over a configurable duration. [D-010]
 * When a body is targeted:
 
   * **camera position remains fixed**
-  * **camera orientation changes** to point to target center.
+  * **camera orientation slews** to point to target center over the default slew duration.
 * In the GUI this corresponds to **Point At**.
 
 ### 4.5 Focused (Orbit Camera)
@@ -155,6 +156,11 @@ At any time, the application maintains at most:
 
   * it also becomes the **selected** body
   * and becomes the **targeted** body
+  * the camera slews to point at the body via `pointAt`, then translates along its
+    line of sight to a default apparent radius via `goTo`. [D-010, D-013]
+    Both transitions are non-blocking; `waitTransition()` is available in the
+    scripting layer to sequence subsequent commands. [D-015]
+
 * After focusing, the user may choose another body as the **target** (distinct from focus).
 
 #### Focused camera pose persistence
@@ -352,9 +358,14 @@ The goal is to maintain interactive performance by allowing reduced-cost setting
 
 ## 10. UI Requirements (JavaFX Control Window)
 
-### 10.1 JavaFX Window
+### 10.1 JavaFX Control Window
 
-* A JavaFX control window must exist.
+* A JavaFX control panel must exist as a transparent overlay stage positioned over the
+  JME render window. The JME window renders at full performance; the overlay is kept in
+  sync via GLFW position and focus callbacks managed by `WindowManager`.
+* On Linux, GLFW must run in X11 mode; native Wayland is not supported.
+* On macOS, JME runs on the OS main thread; JavaFX is launched from a background thread.
+* The Linux launcher script (`kepplr.sh`) is a production deliverable.
 
 ### 10.2 Status Field
 
@@ -378,8 +389,9 @@ The goal is to maintain interactive performance by allowing reduced-cost setting
 
 * The scripting API must include:
 
-  * `waitSim(...)` (wait based on simulation time)
-  * `waitWall(...)` (wait based on wall time)
+  * `waitSim(...)` — block until simulation time has advanced by the given amount
+  * `waitWall(...)` — block until wall time has advanced by the given amount
+  * `waitTransition()` — block until the active camera transition completes [D-015]
 * The scripting API must **not** include a generic `wait(...)` function.
 
 ---

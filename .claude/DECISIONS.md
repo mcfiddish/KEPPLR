@@ -192,6 +192,153 @@ straightforward.
 
 ---
 
-*Last updated: Step 16 planning*  
+## D-010: Camera transitions are non-blocking; pointAt uses slerp, goTo uses linear interpolation
+**Status:** Accepted  
+**Roadmap step:** 18
+
+**Context:** Step 18 added `pointAt` and `goTo` as camera transition primitives. Two
+interpolation choices were required: one for orientation slews, one for distance
+translation.
+
+**Decision:** Both primitives are non-blocking — they return immediately and progress
+advances in `simpleUpdate()`. `pointAt` uses spherical linear interpolation (slerp) on
+quaternions to produce a smooth, constant-angular-rate slew. `goTo` uses linear
+interpolation on camera distance. Easing (acceleration/deceleration) is deferred.
+
+**Alternatives considered:** Blocking transitions — rejected because they would stall
+the simulation loop and prevent the Groovy scripting layer from interleaving other
+commands. Easing curves — deferred, not rejected; recorded in the roadmap as a known
+refinement.
+
+**Consequences:** `waitTransition()` is required in the Groovy scripting layer to
+sequence camera moves in scripts. `transitionActiveProperty()` and
+`transitionProgressProperty()` are exposed on `SimulationState` so the UI and scripting
+layer can observe completion.
+
+---
+
+## D-011: Transition applied before camera frame block in simpleUpdate()
+**Status:** Accepted  
+**Roadmap step:** 18
+
+**Context:** The `simpleUpdate()` loop contains a camera frame block that rotates the
+camera's inertial pose into the active frame (BODY_FIXED, SYNODIC, or INERTIAL). The
+question was whether `TransitionController.update()` should run before or after this
+block.
+
+**Decision:** Transitions are applied before the camera frame block. The transition
+moves the camera's inertial J2000 pose toward its target. The frame block then applies
+its rotation on top of that inertial pose. This means a slew targets a fixed inertial
+direction and the active frame rotation layers on top consistently each frame.
+
+**Alternatives considered:** Applying transitions after the frame block — rejected
+because it would interpolate in the already-rotated frame space, causing a `pointAt`
+slew in SYNODIC or BODY_FIXED frame to drift as the frame itself rotates during the
+transition.
+
+**Consequences:** The call order in `simpleUpdate()` is fixed as: input handler update
+→ manual navigation check → transition update → camera frame block → state update. This
+ordering must not be changed without explicit discussion.
+
+---
+
+## D-012: Manual navigation input cancels in-progress transitions immediately
+**Status:** Accepted  
+**Roadmap step:** 18
+
+**Context:** If the user drags the mouse or scrolls while a `pointAt` or `goTo`
+transition is in progress, the transition and the input handler would conflict over the
+camera pose.
+
+**Decision:** Manual navigation input cancels the active transition immediately and
+returns full control to the input handler. Detection is via a `consumeManualNavigation()`
+flag on `CameraInputHandler`, checked each frame before `TransitionController.update()`.
+
+**Alternatives considered:** Blending manual input with transition progress — rejected
+as complex and likely to feel unresponsive. Ignoring manual input during transitions —
+rejected as it would make the camera feel unresponsive and trap the user.
+
+**Consequences:** `CameraInputHandler` has a small addition: a
+`manualNavigationThisFrame` boolean field and a `consumeManualNavigation()` method.
+This is the only class outside `TransitionController` that participates in transition
+cancellation.
+
+---
+
+## D-013: DEFAULT_GOTO_APPARENT_RADIUS_DEG = 10.0 (visually tuned)
+**Status:** Accepted  
+**Roadmap step:** 18
+
+**Context:** `goTo` needs a default apparent radius to use when `focusBody` drives the
+transition. The formula `endDistance = bodyRadius / tan(apparentRadiusDeg × π/180)`
+means the choice directly controls how close the camera ends up relative to the target
+body.
+
+**Decision:** 10.0 degrees was chosen as the default. At this value Earth ends up at
+approximately 5.7× its radius — a dramatic close-up that clearly confirms the transition
+worked. This value is visually tuned, not physically derived. It is defined as a named
+constant in `KepplrConstants` and can be adjusted without touching logic code.
+
+**Alternatives considered:** 1.0° (too small — body fills only ~4% of screen height at
+typical FOV), 5.0° (reasonable but less dramatic). 10.0° selected as the most
+immediately satisfying default for interactive use.
+
+**Consequences:** Scripts that call `focusBody` will land at 10° apparent radius by
+default. Scripts requiring a specific distance should call `goTo` directly with an
+explicit value.
+
+---
+
+## D-014: focusBody and targetBody compose pointAt/goTo internally; signatures unchanged
+**Status:** Accepted  
+**Roadmap step:** 18
+
+**Context:** Step 18 introduced `pointAt` and `goTo` as explicit primitives on
+`SimulationCommands`. The existing `focusBody` and `targetBody` methods had direct
+camera manipulation semantics that needed to be expressed through these new primitives.
+
+**Decision:** `targetBody` calls `pointAt` internally after updating targeted body
+state. `focusBody` calls `pointAt` then queues `goTo` as a pending transition that
+begins when `pointAt` completes. Neither method's signature changes. Existing call
+sites require no updates.
+
+**Alternatives considered:** Removing `focusBody`/`targetBody` and requiring callers to
+compose `pointAt`/`goTo` manually — rejected because it would break existing call sites
+and the Groovy scripting API, and because the composed semantics are the correct default
+behavior that all callers want.
+
+**Consequences:** `TransitionController` supports a pending transition queue of depth 1
+to handle the `pointAt`-then-`goTo` sequence initiated by `focusBody`. A second
+`pointAt` or `goTo` issued while one is active cancels the active transition and
+replaces the pending one.
+
+---
+
+## D-015: waitTransition() placed in com.kepplr.scripting at Step 18
+**Status:** Accepted  
+**Roadmap step:** 18
+
+**Context:** `waitTransition()` is a blocking primitive that returns when
+`transitionActiveProperty()` becomes false. It is needed by the Groovy scripting layer
+(step 20) to sequence camera moves in scripts. The question was whether to defer it
+entirely to step 20 or implement it alongside the property it depends on.
+
+**Decision:** `waitTransition()` is implemented in `com.kepplr.scripting` at step 18,
+alongside `transitionActiveProperty()`. It is not yet exposed through the Groovy
+wrapper — that happens in step 20 — but the method exists and is callable. This keeps
+related things together and ensures step 20 has no loose ends to pick up from step 18.
+
+**Alternatives considered:** Deferring entirely to step 20 — rejected because it would
+leave `transitionActiveProperty()` without a consumer and make step 20 responsible for
+logic that is naturally part of the transition system.
+
+**Consequences:** Step 20 exposes `waitTransition()` through the Groovy wrapper without
+any implementation work. The method must not be moved or renamed between steps 18
+and 20.
+
+---
+
+*Last updated: Step 18*  
 *Backfill note: Entries D-001 through D-009 were reconstructed retrospectively.
-Dates will be added as future decisions are recorded in real time.*
+D-010 onwards recorded in real time.*
+
