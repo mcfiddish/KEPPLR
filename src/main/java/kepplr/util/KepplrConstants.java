@@ -507,4 +507,47 @@ public final class KepplrConstants {
      * enlarged to this angular floor so the halo remains visible at interplanetary distances (e.g. from Pluto).
      */
     public static final double SUN_HALO_MIN_APPARENT_HALF_ANGLE_RAD = Math.toRadians(0.5);
+
+    // ── Camera transitions (Step 18) ──────────────────────────────────────────────────────────
+
+    /**
+     * Default duration for a {@code pointAt} slew (seconds).
+     *
+     * <p>Applied when {@code targetBody()} and {@code focusBody()} implicitly call {@code pointAt()} with no explicit
+     * duration.
+     */
+    public static final double DEFAULT_SLEW_DURATION_SECONDS = 3.0;
+
+    /**
+     * Default duration for a {@code goTo} translation (seconds).
+     *
+     * <p>Applied when {@code focusBody()} implicitly calls {@code goTo()} with no explicit duration.
+     */
+    public static final double DEFAULT_GOTO_DURATION_SECONDS = 3.0;
+
+    /**
+     * Default apparent radius in degrees for a {@code goTo} command (§4.5).
+     *
+     * <p>{@code endDistance = bodyRadius / tan(DEFAULT_GOTO_APPARENT_RADIUS_DEG × π/180)}. At 10°, the body subtends
+     * approximately 20° of angular diameter — about 44% of the 45° vertical FOV, a dramatic and unambiguous close
+     * approach. Confirmed by user.
+     */
+    public static final double DEFAULT_GOTO_APPARENT_RADIUS_DEG = 10.0;
+
+    /**
+     * Duration threshold below which a transition is treated as instantaneous.
+     *
+     * <p>Any call to {@code pointAt()} or {@code goTo()} with {@code durationSeconds <=
+     * CAMERA_TRANSITION_INSTANT_THRESHOLD_SEC} snaps the camera to the end value on the next frame without creating an
+     * animated transition.
+     */
+    public static final double CAMERA_TRANSITION_INSTANT_THRESHOLD_SEC = 0.0;
+
+    /**
+     * Dot-product threshold for the "already pointing at target" degenerate case in {@code pointAt()}.
+     *
+     * <p>If {@code dot(currentLookDir, targetDir) >= 1.0 − CAMERA_POINT_AT_IDENTICAL_DIRECTION_EPSILON}, the camera is
+     * already aimed at the target and no slew is started.
+     */
+    public static final double CAMERA_POINT_AT_IDENTICAL_DIRECTION_EPSILON = 1e-6;
 }

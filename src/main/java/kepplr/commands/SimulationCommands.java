@@ -91,6 +91,36 @@ public interface SimulationCommands {
      */
     void setUTC(String utcString);
 
+    // ── Camera transition commands (Step 18) ──
+
+    /**
+     * Slew the camera orientation to point at the given body (Step 18).
+     *
+     * <p>Non-blocking. Initiates a transition and returns immediately. If a transition is already in progress, it is
+     * cancelled and the new slew begins from the camera's current orientation. Camera position is not changed.
+     *
+     * <p>If {@code durationSeconds} is zero or negative, the camera snaps to the end orientation instantly on the next
+     * frame.
+     *
+     * @param naifId NAIF ID of the body to point at
+     * @param durationSeconds slew duration in seconds
+     */
+    void pointAt(int naifId, double durationSeconds);
+
+    /**
+     * Translate the camera toward the given body until it subtends the requested apparent radius (Step 18).
+     *
+     * <p>Non-blocking. If a {@code pointAt} transition is currently in progress, the {@code goTo} is queued and begins
+     * automatically when the {@code pointAt} completes. Otherwise the translation begins immediately.
+     *
+     * <p>No light-time correction is applied to the translation path (per KEPPLR_Roadmap.md).
+     *
+     * @param naifId NAIF ID of the body to approach
+     * @param apparentRadiusDeg desired apparent radius in degrees at end of translation
+     * @param durationSeconds translation duration in seconds
+     */
+    void goTo(int naifId, double apparentRadiusDeg, double durationSeconds);
+
     // ── Camera frame commands (§1.5) ──
 
     /**

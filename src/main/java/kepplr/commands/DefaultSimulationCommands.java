@@ -1,9 +1,11 @@
 package kepplr.commands;
 
 import kepplr.camera.CameraFrame;
+import kepplr.camera.TransitionController;
 import kepplr.core.SimulationClock;
 import kepplr.render.RenderQuality;
 import kepplr.state.DefaultSimulationState;
+import kepplr.util.KepplrConstants;
 
 /**
  * Concrete implementation of {@link SimulationCommands} that applies state-transition rules directly to a
@@ -31,14 +33,18 @@ public final class DefaultSimulationCommands implements SimulationCommands {
 
     private final DefaultSimulationState state;
     private final SimulationClock clock;
+    private final TransitionController transitionController;
 
     /**
      * @param state mutable state object this instance will write to for interaction commands
      * @param clock simulation clock this instance will delegate time commands to
+     * @param transitionController camera transition controller; receives {@code pointAt}/{@code goTo} requests
      */
-    public DefaultSimulationCommands(DefaultSimulationState state, SimulationClock clock) {
+    public DefaultSimulationCommands(
+            DefaultSimulationState state, SimulationClock clock, TransitionController transitionController) {
         this.state = state;
         this.clock = clock;
+        this.transitionController = transitionController;
     }
 
     /** Select a body for HUD display only (§4.3). Does not change focused, targeted, or tracked state. */
@@ -50,6 +56,9 @@ public final class DefaultSimulationCommands implements SimulationCommands {
     /**
      * Focus the camera on a body (§4.5). Implicitly selects and targets the same body. Clears tracking and the tracking
      * anchor because focusing implies a new point-at target (§4.6).
+     *
+     * <p>Initiates a {@code pointAt} slew followed by a {@code goTo} translation (Step 18). The {@code goTo} is queued
+     * and begins automatically when the {@code pointAt} completes.
      */
     @Override
     public void focusBody(int naifId) {
@@ -58,11 +67,18 @@ public final class DefaultSimulationCommands implements SimulationCommands {
         state.setTargetedBodyId(naifId);
         state.setTrackedBodyId(-1);
         state.setTrackingAnchor(null);
+        transitionController.requestPointAt(naifId, KepplrConstants.DEFAULT_SLEW_DURATION_SECONDS);
+        transitionController.requestGoTo(
+                naifId,
+                KepplrConstants.DEFAULT_GOTO_APPARENT_RADIUS_DEG,
+                KepplrConstants.DEFAULT_GOTO_DURATION_SECONDS);
     }
 
     /**
      * Target a body — "point at" (§4.4). Implicitly selects the body. Clears tracking and the tracking anchor because a
      * new point-at disables tracking (§4.6).
+     *
+     * <p>Initiates a {@code pointAt} slew (Step 18).
      */
     @Override
     public void targetBody(int naifId) {
@@ -70,6 +86,7 @@ public final class DefaultSimulationCommands implements SimulationCommands {
         state.setTargetedBodyId(naifId);
         state.setTrackedBodyId(-1);
         state.setTrackingAnchor(null);
+        transitionController.requestPointAt(naifId, KepplrConstants.DEFAULT_SLEW_DURATION_SECONDS);
     }
 
     /**
@@ -80,6 +97,18 @@ public final class DefaultSimulationCommands implements SimulationCommands {
     public void trackBody(int naifId) {
         state.setTrackedBodyId(naifId);
         state.setTrackingAnchor(null);
+    }
+
+    /** Initiate a {@code pointAt} slew (Step 18). Delegates to {@link TransitionController}. */
+    @Override
+    public void pointAt(int naifId, double durationSeconds) {
+        transitionController.requestPointAt(naifId, durationSeconds);
+    }
+
+    /** Initiate a {@code goTo} translation (Step 18). Delegates to {@link TransitionController}. */
+    @Override
+    public void goTo(int naifId, double apparentRadiusDeg, double durationSeconds) {
+        transitionController.requestGoTo(naifId, apparentRadiusDeg, durationSeconds);
     }
 
     /** Stop tracking the currently tracked body (§4.6). Clears both the tracked body ID and the anchor. */

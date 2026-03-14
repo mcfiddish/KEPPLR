@@ -64,6 +64,11 @@ public final class DefaultSimulationState implements SimulationState {
 
     private final SimpleObjectProperty<double[]> trackingAnchor = new SimpleObjectProperty<>(null);
 
+    // ── Transition state (Step 18) ──
+
+    private final SimpleBooleanProperty transitionActive = new SimpleBooleanProperty(false);
+    private final SimpleDoubleProperty transitionProgress = new SimpleDoubleProperty(0.0);
+
     // ── SimulationState read-only interface ──
 
     @Override
@@ -144,6 +149,16 @@ public final class DefaultSimulationState implements SimulationState {
     @Override
     public ReadOnlyObjectProperty<double[]> trackingAnchorProperty() {
         return trackingAnchor;
+    }
+
+    @Override
+    public ReadOnlyBooleanProperty transitionActiveProperty() {
+        return transitionActive;
+    }
+
+    @Override
+    public ReadOnlyDoubleProperty transitionProgressProperty() {
+        return transitionProgress;
     }
 
     // ── Setters (used by DefaultSimulationCommands and the simulation core) ──
@@ -255,5 +270,23 @@ public final class DefaultSimulationState implements SimulationState {
      */
     public void setTrackingAnchor(double[] anchor) {
         trackingAnchor.set(anchor);
+    }
+
+    /**
+     * Set whether a camera transition is currently active (Step 18).
+     *
+     * <p>Called each frame by {@link kepplr.camera.TransitionController} on the JME render thread.
+     */
+    public void setTransitionActive(boolean active) {
+        transitionActive.set(active);
+    }
+
+    /**
+     * Set the progress of the active camera transition as a value in {@code [0.0, 1.0]} (Step 18).
+     *
+     * <p>Called each frame by {@link kepplr.camera.TransitionController} on the JME render thread.
+     */
+    public void setTransitionProgress(double progress) {
+        transitionProgress.set(progress);
     }
 }

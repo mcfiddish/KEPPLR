@@ -17,6 +17,7 @@ import kepplr.camera.BodyFixedFrame;
 import kepplr.camera.CameraFrame;
 import kepplr.camera.CameraInputHandler;
 import kepplr.camera.SynodicFrameApplier;
+import kepplr.camera.TransitionController;
 import kepplr.commands.DefaultSimulationCommands;
 import kepplr.config.KEPPLRConfiguration;
 import kepplr.core.SimulationClock;
@@ -77,6 +78,7 @@ public class KepplrApp extends SimpleApplication {
     // ── Simulation model ──────────────────────────────────────────────────────────────────────
     private DefaultSimulationState simulationState;
     private SimulationClock simulationClock;
+    private TransitionController transitionController;
     private KepplrHud hud;
     private CameraInputHandler cameraInputHandler;
     private final BodyFixedFrame bodyFixedFrame = new BodyFixedFrame();
@@ -127,8 +129,10 @@ public class KepplrApp extends SimpleApplication {
         double startET = KEPPLRConfiguration.getInstance().getTimeConversion().instantToTDB(Instant.now());
         simulationState = new DefaultSimulationState();
         simulationClock = new SimulationClock(simulationState, startET);
+        transitionController = new TransitionController(simulationState);
 
-        DefaultSimulationCommands commands = new DefaultSimulationCommands(simulationState, simulationClock);
+        DefaultSimulationCommands commands =
+                new DefaultSimulationCommands(simulationState, simulationClock, transitionController);
         SimulationStateFxBridge bridge = new SimulationStateFxBridge(simulationState);
         // On macOS, JavaFX is started here (after GLFW has claimed NSApplication) rather than in
         // main().  See main() comment for the full rationale.
@@ -246,6 +250,14 @@ public class KepplrApp extends SimpleApplication {
     public void simpleUpdate(float tpf) {
         simulationClock.advance();
         cameraInputHandler.update();
+
+        // Cancel any active transition when the user takes manual control (Step 18)
+        if (cameraInputHandler.consumeManualNavigation() && transitionController.isActive()) {
+            transitionController.cancel();
+        }
+
+        // Advance camera transition one frame (Step 18)
+        transitionController.update(tpf, cam, cameraHelioJ2000);
 
         // Camera frame co-rotation: apply frame delta after translational tracking
         CameraFrame requestedFrame = simulationState.cameraFrameProperty().get();

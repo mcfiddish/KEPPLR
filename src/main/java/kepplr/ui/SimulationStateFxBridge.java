@@ -4,8 +4,12 @@ import java.util.List;
 import java.util.function.Consumer;
 import javafx.animation.AnimationTimer;
 import javafx.application.Platform;
+import javafx.beans.property.ReadOnlyBooleanProperty;
+import javafx.beans.property.ReadOnlyDoubleProperty;
 import javafx.beans.property.ReadOnlyObjectProperty;
 import javafx.beans.property.ReadOnlyStringProperty;
+import javafx.beans.property.SimpleBooleanProperty;
+import javafx.beans.property.SimpleDoubleProperty;
 import javafx.beans.property.SimpleObjectProperty;
 import javafx.beans.property.SimpleStringProperty;
 import kepplr.camera.CameraFrame;
@@ -58,6 +62,8 @@ public final class SimulationStateFxBridge {
     private final SimpleStringProperty cameraPositionText = new SimpleStringProperty("");
     private final SimpleStringProperty cameraBodyFixedText = new SimpleStringProperty("N/A");
     private final SimpleStringProperty bodiesInViewText = new SimpleStringProperty("");
+    private final SimpleBooleanProperty transitionActive = new SimpleBooleanProperty(false);
+    private final SimpleDoubleProperty transitionProgress = new SimpleDoubleProperty(0.0);
 
     // ── Production constructor ────────────────────────────────────────────────
 
@@ -101,6 +107,8 @@ public final class SimulationStateFxBridge {
         cameraBodyFixedText.set(
                 formatBodyFixed(state.cameraBodyFixedSphericalProperty().get()));
         bodiesInViewText.set(formatBodiesInView(state.bodiesInViewProperty().get()));
+        transitionActive.set(state.transitionActiveProperty().get());
+        transitionProgress.set(state.transitionProgressProperty().get());
 
         // Attach listeners — fire on the thread that mutates state (JME thread).
         // In production, polling=true once startPolling() is called; listeners skip dispatcher to
@@ -177,6 +185,14 @@ public final class SimulationStateFxBridge {
             String s = formatBodiesInView(newVal);
             dispatcher.accept(() -> bodiesInViewText.set(s));
         });
+        state.transitionActiveProperty().addListener((obs, oldVal, newVal) -> {
+            if (polling) return;
+            dispatcher.accept(() -> transitionActive.set(newVal));
+        });
+        state.transitionProgressProperty().addListener((obs, oldVal, newVal) -> {
+            if (polling) return;
+            dispatcher.accept(() -> transitionProgress.set(newVal.doubleValue()));
+        });
     }
 
     // ── FX-thread polling (AnimationTimer) ───────────────────────────────────
@@ -216,6 +232,8 @@ public final class SimulationStateFxBridge {
         cameraBodyFixedText.set(
                 formatBodyFixed(state.cameraBodyFixedSphericalProperty().get()));
         bodiesInViewText.set(formatBodiesInView(state.bodiesInViewProperty().get()));
+        transitionActive.set(state.transitionActiveProperty().get());
+        transitionProgress.set(state.transitionProgressProperty().get());
     }
 
     // ── Exposed read-only properties ──────────────────────────────────────────
@@ -278,6 +296,16 @@ public final class SimulationStateFxBridge {
     /** Bodies visible in the scene this frame, formatted as a multi-line string (§7.3, §10.2). */
     public ReadOnlyStringProperty bodiesInViewTextProperty() {
         return bodiesInViewText;
+    }
+
+    /** {@code true} while a camera transition is active (Step 18). */
+    public ReadOnlyBooleanProperty transitionActiveProperty() {
+        return transitionActive;
+    }
+
+    /** Progress of the active camera transition in {@code [0.0, 1.0]}, or {@code 0.0} if none (Step 18). */
+    public ReadOnlyDoubleProperty transitionProgressProperty() {
+        return transitionProgress;
     }
 
     // ── Formatting helpers (called on JME thread) ─────────────────────────────
