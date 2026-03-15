@@ -252,11 +252,12 @@ the control panel must update immediately. Double-click →
 **Keyboard shortcuts** — wired through the JME input handler, not JavaFX. All
 call `SimulationCommands`:
 - G — `goTo` focused body
-- F — if a targeted body is set, calls `SimulationCommands.setCameraFrame(SYNODIC)`;
-  no-op if no targeted body is set
+- F — toggles camera frame between SYNODIC and INERTIAL. If camera frame is currently INERTIAL and a targeted body is 
+- set, switches to SYNODIC. If camera frame is currently SYNODIC, switches to INERTIAL. No-op if frame is INERTIAL and 
+- no targeted body is set.
 - T — target selected body
-- Escape — calls `SimulationCommands.setCameraFrame(INERTIAL)`; must not close
-  either window. JavaFX default Escape-closes-stage behavior must be suppressed.
+- Escape — removed from keyboard shortcut list entirely.  JavaFX default Escape-closes-stage behavior must be 
+suppressed on the control window. Escape must not close either window under any circumstance.
 - Space — pause/resume
 - `[` / `]` — decrease / increase time rate
 
