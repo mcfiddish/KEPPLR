@@ -559,18 +559,32 @@ public final class CameraInputHandler implements ActionListener, AnalogListener,
         double tanHalfFov = Math.tan(Math.toRadians(fovYDeg) / 2.0);
         double halfHeight = viewportHeight / 2.0;
 
+        int totalChildren = 0;
+        int withNaifId = 0;
+        int behindCamera = 0;
+        int candidates = 0;
+
         for (Node layerNode : pickNodes) {
             if (layerNode == null) continue;
             for (com.jme3.scene.Spatial child : layerNode.getChildren()) {
+                totalChildren++;
                 Integer naifId = child.getUserData("naifId");
                 if (naifId == null) continue;
+                withNaifId++;
                 Double bodyRadiusKm = child.getUserData("bodyRadiusKm");
                 if (bodyRadiusKm == null) bodyRadiusKm = 0.0;
 
                 // Step 1: project body center to screen space
                 Vector3f worldPos = child.getWorldTranslation();
+                // Behind-camera check: use dot product with camera direction, NOT screen.z.
+                // In multi-frustum, cam is the far camera — its clip-space z is invalid for
+                // bodies in the near/mid layers (closer than the far camera's near plane).
+                // Screen X,Y from getScreenCoordinates are still valid for direction-based projection.
+                if (cam.getDirection().dot(worldPos) <= 0f) {
+                    behindCamera++;
+                    continue;
+                }
                 Vector3f screen = cam.getScreenCoordinates(worldPos);
-                if (screen.z < 0f || screen.z > 1f) continue; // behind camera
 
                 // Step 1: compute actual screen radius in pixels
                 double dist = worldPos.length();
@@ -588,6 +602,7 @@ public final class CameraInputHandler implements ActionListener, AnalogListener,
 
                 if (screenDist > effectivePickRadius) continue;
 
+                candidates++;
                 // Step 4: among candidates, largest actual screen radius wins
                 if (actualScreenRadius > bestApparentPx) {
                     bestApparentPx = actualScreenRadius;
