@@ -218,6 +218,5 @@ class DefaultSimulationStateTest {
             state.setCameraPositionJ2000(new double[] {1.0, 2.0, 3.0});
             assertTrue(fired.get(), "Change listener should fire when cameraPositionJ2000 changes");
         }
-
     }
 }

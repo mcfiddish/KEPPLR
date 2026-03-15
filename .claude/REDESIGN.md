@@ -126,7 +126,6 @@ At any time, the application maintains at most:
 * one **selected** body
 * one **targeted** body
 * one **focused** body
-* one **tracked** body
 
 ### 4.3 Selected
 
@@ -168,29 +167,21 @@ At any time, the application maintains at most:
 * When focused, the camera pose (frame, position, orientation quaternion) must persist as a stable state.
 * User interactions may modify the pose; after interaction ends, the updated pose must be maintained.
 
-### 4.6 Tracked
+### 4.6 Tracking
 
-Tracking is a shortcut for switching the camera frame to Synodic with the
-targeted body as the "other body." It is not a separate camera behavior —
-it is frame selection with a convenient name for users who do not think in
-terms of reference frames.
+"Tracking" is not a distinct interaction mode — it is a shortcut for
+switching the camera frame to Synodic with the targeted body as the
+"other body."
 
-* **F key** — if a targeted body is set, switches the camera frame to
-  Synodic. The targeted body becomes the synodic "other body" per the key
-  decision in the roadmap. If no targeted body is set, F is a no-op.
-* **Stop Tracking** (View menu) — switches the camera frame back to
-  Inertial. Equivalent to selecting Inertial in the Camera Frame submenu.
-* The Camera Frame submenu and the F key / Stop Tracking are kept in sync —
-  switching frame via the submenu updates the "tracked" state and vice versa.
-* The Tracked row in the body status panel is removed. The active camera
-  frame is already shown in the View menu indicator; a separate Tracked
-  row is redundant.
-* `trackedBodyId`, `trackingAnchor`, and all related properties on
-  `SimulationState` are removed. `SimulationStateFxBridge.trackedBodyActiveProperty()`
-  is removed. The F key handler calls `SimulationCommands.setCameraFrame(SYNODIC)`
-  instead of `trackBody()`. `SimulationCommands.stopTracking()` calls
-  `SimulationCommands.setCameraFrame(INERTIAL)`.
-* The `trackBody()` method on `SimulationCommands` is removed.
+* Pressing **F** while a targeted body is set switches the camera frame to
+  Synodic. If the camera frame is already Synodic, F switches back to
+  Inertial. If no targeted body is set and the frame is Inertial, F is a
+  no-op.
+* **Stop Tracking** in the View menu switches the camera frame to Inertial.
+  It is equivalent to selecting Inertial in the Camera Frame submenu.
+* The Camera Frame submenu and F / Stop Tracking are always kept in sync.
+* There is no separate "tracked body" property. The synodic "other body"
+  is always the currently targeted body (see §5).
 
 ---
 
@@ -265,7 +256,7 @@ terms of reference frames.
 
 * Bodies with apparent radius < **2 pixels** must be drawn as point sprites.
 * Satellites are **not** exempt from sprite rendering — they render as sprites, not culled.
-* **Screen-space cluster suppression:** when two or more sprite-class bodies are within **2 pixels** of each other on screen, the body with the smaller physical radius is suppressed (not rendered). Bodies in an active interaction state (selected, focused, targeted, or tracked) are exempt from cluster suppression.
+* **Screen-space cluster suppression:** when two or more sprite-class bodies are within **2 pixels** of each other on screen, the body with the smaller physical radius is suppressed (not rendered). Bodies in an active interaction state (selected, focused, or targeted) are exempt from cluster suppression.
 * Satellite NAIF ID definition must follow NAIF ID rules documented by NAIF (see sections "Barycenters" and "Planets and Satellites" in NAIF's NAIF ID reference):
 
   * [https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/req/naif_ids.html](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/req/naif_ids.html)
@@ -284,13 +275,16 @@ terms of reference frames.
 * Orbital period determination:
 
   * if an orbital period cannot be calculated from orbital elements, default trail duration is **30 days**.
-* The trail API must allow the **duration** to be supplied as an argument.
+* The trail API must allow the **duration** to be supplied as an argument, per body.
 * Trails must update with simulation time (dynamic).
 * Trails must be drawable in:
 
   * default: heliocentric J2000
   * optionally: other frames (for resonance visualization)
 * Trails must be renderable in **segments** such that different segments can be drawn in different frustums if needed.
+* Trail visibility must be togglable **per body** via `SimulationCommands.setTrailVisible(int naifId, boolean visible)`.
+* Trail duration must be settable **per body** via `SimulationCommands.setTrailDuration(int naifId, double seconds)`.
+* **Decluttering policy:** trails for satellite bodies are suppressed when the satellite's screen position is within `TRAIL_DECLUTTER_MIN_SEPARATION_PX` of its primary body's screen position. As the camera zooms in and the satellite separates from its primary on screen, its trail becomes visible. This threshold is defined in `KepplrConstants`.
 
 ### 7.6 Vector Overlays [D-003]
 
@@ -298,12 +292,38 @@ terms of reference frames.
 * Vector types must be defined via a **strategy interface** (`VectorType`), not an enum,
   to support parameterized types such as `VectorTypes.towardBody(int naifId)`.
 * The set of active overlays must be managed independently of body selection state.
+* Vector visibility must be togglable **per body per vector type** via
+  `SimulationCommands.setVectorVisible(int naifId, VectorType type, boolean visible)`.
 
 ### 7.7 Illumination and Sun Halo
 
 * The **Sun** is the only illumination source.
 * The Sun must have a visible **halo**.
 * Bodies passing near the Sun must be able to **occlude the Sun halo** correctly (see §8).
+
+### 7.8 Labels
+
+* Each body must support a name label rendered as screen-space text attached to its scene node.
+* Label text is the body name resolved via `SpiceBundle.getObjectName()`.
+* Label visibility must be togglable **per body** via `SimulationCommands.setLabelVisible(int naifId, boolean visible)`.
+* **Decluttering policy:** a label is drawn only if no other label belonging to a
+  larger-radius body is within `LABEL_DECLUTTER_MIN_SEPARATION_PX` of its screen
+  position. This produces zoom-dependent behavior: at large distances, major planets
+  are labeled and their satellites are suppressed because satellite screen positions
+  cluster near the primary; as the camera moves closer and satellites separate on
+  screen, their labels appear. `LABEL_DECLUTTER_MIN_SEPARATION_PX` is defined in
+  `KepplrConstants`.
+
+### 7.9 HUD
+
+Two independent HUD elements rendered by JME on the render thread:
+
+* **Time display** — current simulation UTC, upper-right corner.
+  Toggled via `SimulationCommands.setHudTimeVisible(boolean)`.
+* **Info display** — focused body name and distance from camera, upper-left corner.
+  Toggled via `SimulationCommands.setHudInfoVisible(boolean)`.
+
+Both are on by default.
 
 ---
 
@@ -372,22 +392,37 @@ The goal is to maintain interactive performance by allowing reduced-cost setting
 
 ### 10.1 JavaFX Control Window
 
-* A JavaFX control panel must exist as a transparent overlay stage positioned over the
-  JME render window. The JME window renders at full performance; the overlay is kept in
-  sync via GLFW position and focus callbacks managed by `WindowManager`.
-* On Linux, GLFW must run in X11 mode; native Wayland is not supported.
-* On macOS, JME runs on the OS main thread; JavaFX is launched from a background thread.
-* The Linux launcher script (`kepplr.sh`) is a production deliverable.
+* The JavaFX control panel is a **separate OS window** (two-window layout).
+* It opens alongside the JME render window at launch, positioned to its right.
+* Closing either window must close both — the shutdown path is symmetric.
+* The JavaFX window is a normal, non-transparent, non-always-on-top stage.
+  No overlay positioning, no GLFW callbacks for window management.
 
-### 10.2 Status Field
+### 10.2 Status Fields
 
-* The control window must include a text field displaying status info, including at least:
+* The control window must include a status panel displaying at least:
 
-  * current selected/targeted/focused body
-  * camera position and camera frame
-  * UTC time
-  * time rate
-  * whether a body is currently tracked
+  * current selected / targeted / focused body (three rows, each showing body name or "—")
+  * camera position and active camera frame
+  * UTC time and time rate
+
+### 10.3 Overlays Menu
+
+The JavaFX menu bar must include an **Overlays** menu with:
+
+* **Labels** — global toggle (calls `setLabelVisible` on all known bodies)
+* **HUD/Info** — toggles the info display (focused body name and distance)
+* **Show Time** — toggles the time HUD display
+* **Show Trajectories** — global trail toggle (calls `setTrailVisible` on all known bodies)
+* **Current Target** submenu — vector overlays for the focused body:
+
+  * Sun Direction
+  * Earth Direction
+  * Velocity Direction
+  * Trajectory (trail for focused body)
+  * Axes
+
+All menu items call `SimulationCommands` only — no rendering logic in `ui/`.
 
 ---
 
@@ -467,20 +502,19 @@ This section lists commonly needed capabilities (e.g., in Cosmographia/Celestia-
 
 ### 14.4 Visibility Layers and Rendering Toggles
 
-* Add UI toggles to show/hide rendering layers such as:
+Labels, HUD elements, orbit trails, and vector overlays are implemented in
+step 19b with per-body API and global GUI toggles. Remaining deferred items:
 
-  * orbit lines, trajectory trails
-  * labels and HUD overlays
-  * reference axes, grids, ring plane indicators
-  * star magnitude cutoffs / density controls
+* reference axes, grids, ring plane indicators
+* star magnitude cutoffs / density controls
 
 ### 14.5 Labels and HUD Policy
 
-* Define label content and decluttering rules, including:
+Name labels with zoom-dependent decluttering and HUD time/info displays are
+implemented in step 19b. Remaining deferred label types:
 
-  * label types (name, distance, light-time, phase angle, etc.)
-  * zoom-dependent visibility thresholds
-  * overlap avoidance and priority rules
+* distance, light-time, phase angle, and other data labels
+* user-configurable label priority rules beyond the proximity-based policy
 
 ### 14.6 Asset Pipeline Requirements
 

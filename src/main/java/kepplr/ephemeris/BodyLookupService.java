@@ -7,11 +7,10 @@ import picante.mechanics.EphemerisID;
 /**
  * Resolves body names and NAIF IDs without storing ephemeris references (CLAUDE.md Rule 3).
  *
- * <p>All lookups acquire the ephemeris at point-of-use via
- * {@link KEPPLRConfiguration#getInstance()}.
+ * <p>All lookups acquire the ephemeris at point-of-use via {@link KEPPLRConfiguration#getInstance()}.
  *
- * <p>This class lives in {@code kepplr.ephemeris} so that UI code in {@code kepplr.ui} can delegate
- * name resolution here without containing any resolution logic itself (Step 19 hard constraint).
+ * <p>This class lives in {@code kepplr.ephemeris} so that UI code in {@code kepplr.ui} can delegate name resolution
+ * here without containing any resolution logic itself (Step 19 hard constraint).
  */
 public final class BodyLookupService {
 
@@ -20,8 +19,8 @@ public final class BodyLookupService {
     /**
      * Resolve a user-supplied string to a NAIF ID.
      *
-     * <p>If the input parses as an integer it is treated as a NAIF ID directly (validated against
-     * the SPICE bundle). Otherwise it is treated as a body name and looked up case-insensitively.
+     * <p>If the input parses as an integer it is treated as a NAIF ID directly (validated against the SPICE bundle).
+     * Otherwise it is treated as a body name and looked up case-insensitively.
      *
      * @param input body name or NAIF ID string; must not be null or blank
      * @return the resolved NAIF ID
@@ -37,26 +36,24 @@ public final class BodyLookupService {
         if (id == null) {
             throw new IllegalArgumentException("Cannot resolve body: " + trimmed);
         }
-        return bundle.getObjectCode(id).orElseThrow(
-                () -> new IllegalArgumentException("No NAIF code for: " + trimmed));
+        return bundle.getObjectCode(id).orElseThrow(() -> new IllegalArgumentException("No NAIF code for: " + trimmed));
     }
 
     /**
      * Format a NAIF ID as a human-readable body name.
      *
      * @param naifId NAIF body code, or -1 for "no body"
-     * @return the SPICE object name (title-cased), or {@code "—"} if {@code naifId == -1},
-     *         or {@code "NAIF <id>"} if the name cannot be resolved
+     * @return the SPICE object name (title-cased), or {@code "—"} if {@code naifId == -1}, or {@code "NAIF <id>"} if
+     *     the name cannot be resolved
      */
     public static String formatName(int naifId) {
         if (naifId == -1) return "—";
         try {
-            SpiceBundle bundle = KEPPLRConfiguration.getInstance().getEphemeris().getSpiceBundle();
+            SpiceBundle bundle =
+                    KEPPLRConfiguration.getInstance().getEphemeris().getSpiceBundle();
             EphemerisID id = bundle.getObject(naifId);
             if (id == null) return "NAIF " + naifId;
-            return bundle.getObjectName(id)
-                    .map(BodyLookupService::titleCase)
-                    .orElse("NAIF " + naifId);
+            return bundle.getObjectName(id).map(BodyLookupService::titleCase).orElse("NAIF " + naifId);
         } catch (Exception e) {
             return "NAIF " + naifId;
         }
@@ -65,8 +62,8 @@ public final class BodyLookupService {
     /**
      * Title-case a SPICE name: first letter uppercase, rest lowercase.
      *
-     * <p>SPICE names are typically all-uppercase (e.g. "EARTH", "MARS BARYCENTER").
-     * This converts to "Earth", "Mars Barycenter" for display.
+     * <p>SPICE names are typically all-uppercase (e.g. "EARTH", "MARS BARYCENTER"). This converts to "Earth", "Mars
+     * Barycenter" for display.
      */
     public static String titleCase(String s) {
         if (s == null || s.isEmpty()) return s;

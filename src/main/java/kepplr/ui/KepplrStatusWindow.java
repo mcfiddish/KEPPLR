@@ -44,15 +44,15 @@ import org.apache.logging.log4j.Logger;
 import picante.mechanics.EphemerisID;
 
 /**
- * Programmatic JavaFX control window displaying simulation status, body list, and interactive controls
- * (REDESIGN.md §10.2, Step 19).
+ * Programmatic JavaFX control window displaying simulation status, body list, and interactive controls (REDESIGN.md
+ * §10.2, Step 19).
  *
- * <p>Contains no simulation logic, no ephemeris calls beyond body-list population, and no camera math
- * (CLAUDE.md Rule 1). Every displayed value is bound to a {@link javafx.beans.property.ReadOnlyStringProperty}
- * exposed by {@link SimulationStateFxBridge}. All user actions are forwarded to {@link SimulationCommands}.
+ * <p>Contains no simulation logic, no ephemeris calls beyond body-list population, and no camera math (CLAUDE.md Rule
+ * 1). Every displayed value is bound to a {@link javafx.beans.property.ReadOnlyStringProperty} exposed by
+ * {@link SimulationStateFxBridge}. All user actions are forwarded to {@link SimulationCommands}.
  *
- * <p>Body list population reads {@code KEPPLREphemeris.getKnownBodies()} at construction time to build
- * the tree; this is a one-time read, not ongoing logic. The tree refreshes on configuration reload.
+ * <p>Body list population reads {@code KEPPLREphemeris.getKnownBodies()} at construction time to build the tree; this
+ * is a one-time read, not ongoing logic. The tree refreshes on configuration reload.
  *
  * <p>Must be created and shown on the JavaFX application thread.
  */
@@ -391,8 +391,7 @@ public final class KepplrStatusWindow {
         loadConfig.setOnAction(e -> {
             FileChooser chooser = new FileChooser();
             chooser.setTitle("Load KEPPLR Configuration");
-            chooser.getExtensionFilters().add(
-                    new FileChooser.ExtensionFilter("Properties files", "*.properties"));
+            chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("Properties files", "*.properties"));
             chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("All Files", "*.*"));
             File file = chooser.showOpenDialog(stage);
             if (file != null) {

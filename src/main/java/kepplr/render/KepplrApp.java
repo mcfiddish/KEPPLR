@@ -10,8 +10,6 @@ import com.jme3.renderer.Camera;
 import com.jme3.renderer.ViewPort;
 import com.jme3.scene.Node;
 import com.jme3.system.AppSettings;
-
-import java.nio.file.Paths;
 import java.time.Instant;
 import java.util.List;
 import javafx.application.Platform;
@@ -122,8 +120,6 @@ public class KepplrApp extends SimpleApplication {
 
     // ── JavaFX control window ─────────────────────────────────────────────────────────────────
     private volatile KepplrStatusWindow statusWindow;
-
-
 
     @Override
     public void simpleInitApp() {

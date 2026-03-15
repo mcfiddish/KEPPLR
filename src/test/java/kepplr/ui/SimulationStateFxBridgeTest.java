@@ -269,7 +269,6 @@ class SimulationStateFxBridgeTest {
         void initialCameraFrame() {
             assertEquals("INERTIAL", bridge.cameraFrameTextProperty().get());
         }
-
     }
 
     // ─────────────────────────────────────────────────────────────────

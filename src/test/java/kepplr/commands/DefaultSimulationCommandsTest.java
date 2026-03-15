@@ -114,7 +114,6 @@ class DefaultSimulationCommandsTest {
             assertEquals(EARTH, state.focusedBodyIdProperty().get(), "focused should still be EARTH");
             assertEquals(MOON, state.targetedBodyIdProperty().get(), "targeted should be MOON");
         }
-
     }
 
     // ─────────────────────────────────────────────────────────────────

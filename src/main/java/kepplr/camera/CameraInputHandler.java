@@ -363,8 +363,7 @@ public final class CameraInputHandler implements ActionListener, AnalogListener,
             case KeyInput.KEY_F -> {
                 // F — toggle camera frame between SYNODIC and INERTIAL (§4.6)
                 CameraFrame current = state.cameraFrameProperty().get();
-                commands.setCameraFrame(
-                        current == CameraFrame.SYNODIC ? CameraFrame.INERTIAL : CameraFrame.SYNODIC);
+                commands.setCameraFrame(current == CameraFrame.SYNODIC ? CameraFrame.INERTIAL : CameraFrame.SYNODIC);
             }
             case KeyInput.KEY_T -> {
                 // T — target selected body
@@ -373,7 +372,8 @@ public final class CameraInputHandler implements ActionListener, AnalogListener,
                     commands.targetBody(selectedId);
                 }
             }
-            case KeyInput.KEY_SPACE -> commands.setPaused(!state.pausedProperty().get());
+            case KeyInput.KEY_SPACE ->
+                commands.setPaused(!state.pausedProperty().get());
             case KeyInput.KEY_LBRACKET -> {
                 // [ — decrease time rate
                 double currentRate = state.timeRateProperty().get();
@@ -534,8 +534,8 @@ public final class CameraInputHandler implements ActionListener, AnalogListener,
     }
 
     /**
-     * Screen-space pick: project every visible body to screen space, find candidates within their effective pick radius,
-     * and return the one with the largest actual screen radius.
+     * Screen-space pick: project every visible body to screen space, find candidates within their effective pick
+     * radius, and return the one with the largest actual screen radius.
      *
      * <ol>
      *   <li>Project each body center to screen space; compute actual screen radius from body radius and distance.
@@ -588,9 +588,8 @@ public final class CameraInputHandler implements ActionListener, AnalogListener,
 
                 // Step 1: compute actual screen radius in pixels
                 double dist = worldPos.length();
-                double actualScreenRadius = (dist > 0 && bodyRadiusKm > 0)
-                        ? (bodyRadiusKm / dist) * halfHeight / tanHalfFov
-                        : 0.0;
+                double actualScreenRadius =
+                        (dist > 0 && bodyRadiusKm > 0) ? (bodyRadiusKm / dist) * halfHeight / tanHalfFov : 0.0;
 
                 // Step 2: effective pick radius — actual size, but at least PICK_MIN_SCREEN_RADIUS_PX
                 double effectivePickRadius = Math.max(actualScreenRadius, KepplrConstants.PICK_MIN_SCREEN_RADIUS_PX);

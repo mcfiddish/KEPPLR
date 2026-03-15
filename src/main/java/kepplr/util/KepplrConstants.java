@@ -570,15 +570,14 @@ public final class KepplrConstants {
     public static final long MOUSE_DOUBLE_CLICK_THRESHOLD_NS = 400_000_000L;
 
     /**
-     * Maximum mouse-move distance in pixels between button-down and button-up for the action to be
-     * treated as a click rather than a drag.
+     * Maximum mouse-move distance in pixels between button-down and button-up for the action to be treated as a click
+     * rather than a drag.
      */
     public static final double MOUSE_CLICK_DRAG_THRESHOLD_PX = 5.0;
 
     /**
-     * Minimum screen-space pick radius in pixels. Bodies whose apparent radius on screen is smaller
-     * than this value are expanded to this radius for mouse-picking purposes. Prevents small/distant
-     * bodies from being impossible to click.
+     * Minimum screen-space pick radius in pixels. Bodies whose apparent radius on screen is smaller than this value are
+     * expanded to this radius for mouse-picking purposes. Prevents small/distant bodies from being impossible to click.
      */
     public static final float PICK_MIN_SCREEN_RADIUS_PX = 8.0f;
 }
