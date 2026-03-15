@@ -421,6 +421,40 @@ the render layer. CC must not reintroduce a ray cast without explicit discussion
 
 ---
 
+## D-019: Barycenter trails suppressed in GUI except Pluto Barycenter
+**Status:** Accepted
+**Roadmap step:** 19b
+
+**Context:** The body list includes planet barycenters (e.g., Jupiter
+Barycenter, Saturn Barycenter) as top-level entries. For the major planets,
+the barycenter is so close to the planet's center of mass that plotting both
+the barycenter trail and the planet trail produces a visually identical
+duplicate. The Pluto system is different — Charon is massive enough relative
+to Pluto that the Pluto-Charon barycenter is measurably offset from Pluto
+itself and lies outside Pluto's surface, making the barycenter trail
+meaningful and distinct from Pluto's trail.
+
+**Decision:** The GUI global trail toggle does not enable trails for
+barycenter bodies (NAIF IDs x99 series and Solar System Barycenter ID 0),
+with one exception: the Pluto Barycenter (NAIF ID 9) trail is enabled, and
+Pluto (NAIF ID 999) is treated as a satellite of its barycenter in the body
+list tree (as it already is in the NAIF hierarchy). The per-body API
+(setTrailVisible) imposes no such restriction — a script may enable any
+barycenter trail explicitly.
+
+**Alternatives considered:** Suppressing all barycenter trails including
+Pluto — rejected because the Pluto Barycenter trail is visually meaningful.
+Showing all barycenter trails — rejected as visually redundant for the major
+planets and cluttering.
+
+**Consequences:** The global trail toggle in the Overlays menu must
+explicitly skip barycenter NAIF IDs when iterating over known bodies, except
+for NAIF ID 9. The NAIF ID range for barycenters and the Pluto Barycenter
+exception must be defined as named constants in KepplrConstants, not
+hardcoded in the menu handler.
+
+---
+
 *Last updated: Step 19*
 *Backfill note: Entries D-001 through D-009 were reconstructed retrospectively.
 D-010 onwards recorded in real time.*
