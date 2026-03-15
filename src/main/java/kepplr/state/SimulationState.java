@@ -7,6 +7,7 @@ import javafx.beans.property.ReadOnlyIntegerProperty;
 import javafx.beans.property.ReadOnlyObjectProperty;
 import kepplr.camera.CameraFrame;
 import kepplr.render.RenderQuality;
+import kepplr.render.vector.VectorType;
 
 /**
  * Single source of truth for all UI-visible simulation state (REDESIGN.md §4, §10).
@@ -128,4 +129,46 @@ public interface SimulationState {
      * <p>Updated each frame by {@link kepplr.camera.TransitionController} on the JME render thread.
      */
     ReadOnlyDoubleProperty transitionProgressProperty();
+
+    // ── Overlay state (REDESIGN.md §7.8, §7.9, §7.5, §7.6, Step 19b) ──
+
+    /**
+     * Whether the label for the given body is visible (§7.8).
+     *
+     * <p>Returns a property backed by a per-body map. The property is created lazily on first access, defaulting to
+     * {@code false}. Safe to call from any thread.
+     *
+     * @param naifId NAIF ID of the body
+     */
+    ReadOnlyBooleanProperty labelVisibleProperty(int naifId);
+
+    /** Whether the HUD time display is visible (§7.9). Default: {@code true}. */
+    ReadOnlyBooleanProperty hudTimeVisibleProperty();
+
+    /** Whether the HUD info display is visible (§7.9). Default: {@code true}. */
+    ReadOnlyBooleanProperty hudInfoVisibleProperty();
+
+    /**
+     * Whether the trail for the given body is visible (§7.5).
+     *
+     * @param naifId NAIF ID of the body
+     */
+    ReadOnlyBooleanProperty trailVisibleProperty(int naifId);
+
+    /**
+     * Trail duration in simulation seconds for the given body (§7.5).
+     *
+     * <p>{@code -1.0} means use the default (orbital period or 30 days).
+     *
+     * @param naifId NAIF ID of the body
+     */
+    ReadOnlyDoubleProperty trailDurationProperty(int naifId);
+
+    /**
+     * Whether the vector overlay of the given type is visible for the given body (§7.6).
+     *
+     * @param naifId NAIF ID of the body
+     * @param type the vector type
+     */
+    ReadOnlyBooleanProperty vectorVisibleProperty(int naifId, VectorType type);
 }

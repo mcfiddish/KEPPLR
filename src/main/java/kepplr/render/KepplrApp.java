@@ -11,7 +11,11 @@ import com.jme3.renderer.ViewPort;
 import com.jme3.scene.Node;
 import com.jme3.system.AppSettings;
 import java.time.Instant;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import javafx.application.Platform;
 import kepplr.camera.BodyFixedFrame;
 import kepplr.camera.CameraFrame;
@@ -21,16 +25,18 @@ import kepplr.camera.TransitionController;
 import kepplr.commands.DefaultSimulationCommands;
 import kepplr.config.KEPPLRConfiguration;
 import kepplr.core.SimulationClock;
+import kepplr.ephemeris.BodyLookupService;
 import kepplr.ephemeris.KEPPLREphemeris;
 import kepplr.render.body.BodySceneManager;
 import kepplr.render.frustum.FrustumLayer;
+import kepplr.render.label.LabelManager;
 import kepplr.render.trail.TrailManager;
 import kepplr.render.vector.VectorDefinition;
 import kepplr.render.vector.VectorManager;
-import kepplr.render.vector.VectorTypes;
 import kepplr.stars.catalogs.yaleBSC.YaleBrightStarCatalog;
 import kepplr.state.BodyInView;
 import kepplr.state.DefaultSimulationState;
+import kepplr.state.DefaultSimulationState.VectorKey;
 import kepplr.ui.KepplrStatusWindow;
 import kepplr.ui.SimulationStateFxBridge;
 import kepplr.util.KepplrConstants;
@@ -70,6 +76,10 @@ public class KepplrApp extends SimpleApplication {
     private static final Logger logger = LogManager.getLogger();
 
     private static final int DEFAULT_FOCUS_BODY = 399;
+
+    /** Width of the JavaFX control window in pixels (must match KepplrStatusWindow.WINDOW_WIDTH). */
+    private static final double WINDOW_WIDTH_FX = 380.0;
+
     private static final float CAMERA_OFFSET_KM = 15000f;
 
     /** Camera heliocentric J2000 position in km. Scene positions are {@code helioPos − this}, cast to float for JME. */
@@ -115,11 +125,21 @@ public class KepplrApp extends SimpleApplication {
     // ── Star field management ──────────────────────────────────────────────────────────────────
     private StarFieldManager starFieldManager;
 
+    // ── Label management ──────────────────────────────────────────────────────────────────────
+    private LabelManager labelManager;
+
     // ── Sun halo ───────────────────────────────────────────────────────────────────────────────
     private SunHaloRenderer sunHaloRenderer;
 
+    // ── Overlay sync state (maps state → render managers each frame) ───────────────────────────
+    /** Currently enabled trail IDs in TrailManager, kept in sync with state each frame. */
+    private final Set<Integer> activeTrailIds = new HashSet<>();
+    /** Currently enabled vector definitions in VectorManager, keyed by state VectorKey. */
+    private final Map<VectorKey, VectorDefinition> activeVectorDefs = new HashMap<>();
+
     // ── JavaFX control window ─────────────────────────────────────────────────────────────────
     private volatile KepplrStatusWindow statusWindow;
+    private boolean fxWindowPositioned;
 
     @Override
     public void simpleInitApp() {
@@ -151,6 +171,12 @@ public class KepplrApp extends SimpleApplication {
         Platform.runLater(() -> {
             statusWindow = new KepplrStatusWindow(bridge, commands);
             statusWindow.setJmeShutdown(appRef::stop);
+            statusWindow.setJmeResizeCallback((w, h) -> appRef.enqueue(() -> {
+                long handle = getGlfwWindowHandle();
+                if (handle != 0) {
+                    GLFW.glfwSetWindowSize(handle, w, h);
+                }
+            }));
             statusWindow.show();
         });
 
@@ -230,18 +256,9 @@ public class KepplrApp extends SimpleApplication {
 
         // ── Trail manager ─────────────────────────────────────────────────────────────────────
         trailManager = new TrailManager(nearNode, midNode, farNode, assetManager, simulationState);
-        trailManager.enableTrail(focusBodyId);
 
-        // ── Vector overlay manager — enable overlays for Step 13 visual confirmation ──────────
+        // ── Vector overlay manager ────────────────────────────────────────────────────────────
         vectorManager = new VectorManager(nearNode, midNode, farNode, assetManager);
-        vectorManager.enableVector(new VectorDefinition(
-                "velocity direction", VectorTypes.velocity(), focusBodyId, com.jme3.math.ColorRGBA.Cyan, 1.0));
-        vectorManager.enableVector(new VectorDefinition(
-                "Sun direction",
-                VectorTypes.towardBody(KepplrConstants.SUN_NAIF_ID),
-                focusBodyId,
-                com.jme3.math.ColorRGBA.Yellow,
-                1.0));
 
         // ── Star field ────────────────────────────────────────────────────────────────────────
         YaleBrightStarCatalog bsc =
@@ -253,8 +270,9 @@ public class KepplrApp extends SimpleApplication {
         sunHaloRenderer = new SunHaloRenderer(farNode, midNode, nearNode, assetManager, simulationState);
         sunHaloRenderer.init();
 
-        // ── HUD and camera input ──────────────────────────────────────────────────────────────
+        // ── HUD, labels, and camera input ────────────────────────────────────────────────────
         hud = new KepplrHud(guiNode, assetManager, cam);
+        labelManager = new LabelManager(guiNode, assetManager);
         cameraInputHandler = new CameraInputHandler(cam, cameraHelioJ2000, simulationState);
         cameraInputHandler.setSimulationCommands(commands);
         cameraInputHandler.setPickNodes(nearNode, midNode, farNode);
@@ -267,6 +285,24 @@ public class KepplrApp extends SimpleApplication {
 
     @Override
     public void simpleUpdate(float tpf) {
+        // One-shot: position the JavaFX window to the left of the JME window on first frame
+        if (!fxWindowPositioned) {
+            fxWindowPositioned = true;
+            var ctx = getContext();
+            if (ctx instanceof com.jme3.system.lwjgl.LwjglWindow lwjglWindow) {
+                int jmeX = lwjglWindow.getWindowXPosition();
+                int jmeY = lwjglWindow.getWindowYPosition();
+                double fxWidth = WINDOW_WIDTH_FX;
+                double fxX = Math.max(0, jmeX - fxWidth);
+                double fxY = jmeY;
+                Platform.runLater(() -> {
+                    if (statusWindow != null) {
+                        statusWindow.setPosition(fxX, fxY);
+                    }
+                });
+            }
+        }
+
         simulationClock.advance();
         cameraInputHandler.update();
 
@@ -332,17 +368,25 @@ public class KepplrApp extends SimpleApplication {
         sunLightNear.setPosition(sunScenePos);
 
         double currentEt = simulationState.currentEtProperty().get();
+        int focusedBodyId = simulationState.focusedBodyIdProperty().get();
         List<BodyInView> inView = bodySceneManager.update(currentEt, cameraHelioJ2000, cam);
+
+        // ── Sync overlay state → render managers ──────────────────────────────────────────────
+        syncTrails();
+        syncVectors();
+        syncLabels();
+
+        // ── HUD visibility ────────────────────────────────────────────────────────────────────
+        hud.setTimeVisible(simulationState.hudTimeVisibleProperty().get());
+        hud.setInfoVisible(simulationState.hudInfoVisibleProperty().get());
+
         trailManager.update(currentEt, cameraHelioJ2000);
-        vectorManager.update(
-                currentEt,
-                cameraHelioJ2000,
-                cam,
-                simulationState.focusedBodyIdProperty().get());
+        vectorManager.update(currentEt, cameraHelioJ2000, cam, focusedBodyId);
         starFieldManager.update(currentEt, cameraHelioJ2000);
         sunHaloRenderer.update(cameraHelioJ2000, cam, tpf);
+        labelManager.update(cam, nearNode, midNode, farNode);
         simulationState.setBodiesInView(inView);
-        hud.update(currentEt);
+        hud.update(currentEt, focusedBodyId, cameraHelioJ2000);
 
         // JME calls updateGeometricState() only on rootNode and guiNode (SimpleApplication source).
         // Our frustum layer roots are custom viewport scenes and must be updated manually;
@@ -362,6 +406,157 @@ public class KepplrApp extends SimpleApplication {
                 Platform.exit();
             });
         }
+    }
+
+    // ── Overlay sync helpers ────────────────────────────────────────────────────────────────────
+
+    /**
+     * Sync label visibility from state to LabelManager. Iterates all label-visible entries and forwards each body's
+     * enabled state.
+     */
+    private void syncLabels() {
+        for (var entry : simulationState.getLabelVisibilityMap().entrySet()) {
+            labelManager.setLabelVisible(entry.getKey(), entry.getValue().get());
+        }
+    }
+
+    /**
+     * Sync trail visibility from state to TrailManager. Enables/disables trails based on state, applying satellite
+     * decluttering: suppress satellite trails when the satellite's screen position is within
+     * {@link KepplrConstants#TRAIL_DECLUTTER_MIN_SEPARATION_PX} of its primary body.
+     */
+    private void syncTrails() {
+        double et = simulationState.currentEtProperty().get();
+        Set<Integer> wantEnabled = new HashSet<>();
+        for (var entry : simulationState.getTrailVisibilityMap().entrySet()) {
+            if (entry.getValue().get()) {
+                int naifId = entry.getKey();
+                if (isSatellite(naifId) && isSatelliteTooCloseToParent(naifId, et)) {
+                    continue;
+                }
+                wantEnabled.add(naifId);
+            }
+        }
+
+        // Enable new trails
+        for (int id : wantEnabled) {
+            if (activeTrailIds.add(id)) {
+                trailManager.enableTrail(id);
+            }
+        }
+        // Disable removed trails
+        activeTrailIds.removeIf(id -> {
+            if (!wantEnabled.contains(id)) {
+                trailManager.disableTrail(id);
+                return true;
+            }
+            return false;
+        });
+    }
+
+    /**
+     * Check if a satellite's screen position is too close to its primary body for trail decluttering. Projects both the
+     * satellite and its primary (planet with id = hundreds*100 + 99) to screen coords.
+     */
+    private boolean isSatelliteTooCloseToParent(int naifId, double et) {
+        try {
+            KEPPLREphemeris eph = KEPPLRConfiguration.getInstance().getEphemeris();
+            VectorIJK satPos = eph.getHeliocentricPositionJ2000(naifId, et);
+            if (satPos == null) return false;
+            // Primary planet: e.g. for Moon (301) → Earth (399)
+            int primaryId = (naifId / 100) * 100 + 99;
+            VectorIJK primaryPos = eph.getHeliocentricPositionJ2000(primaryId, et);
+            if (primaryPos == null) return false;
+
+            Vector3f satScreen = cam.getScreenCoordinates(new Vector3f(
+                    (float) (satPos.getI() - cameraHelioJ2000[0]),
+                    (float) (satPos.getJ() - cameraHelioJ2000[1]),
+                    (float) (satPos.getK() - cameraHelioJ2000[2])));
+            Vector3f parentScreen = cam.getScreenCoordinates(new Vector3f(
+                    (float) (primaryPos.getI() - cameraHelioJ2000[0]),
+                    (float) (primaryPos.getJ() - cameraHelioJ2000[1]),
+                    (float) (primaryPos.getK() - cameraHelioJ2000[2])));
+
+            double dx = satScreen.x - parentScreen.x;
+            double dy = satScreen.y - parentScreen.y;
+            double minSep = KepplrConstants.TRAIL_DECLUTTER_MIN_SEPARATION_PX;
+            return dx * dx + dy * dy < minSep * minSep;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /**
+     * Sync vector visibility from state to VectorManager. Creates/destroys VectorDefinition instances as needed,
+     * maintaining the identity-keyed mapping.
+     */
+    private void syncVectors() {
+        Set<VectorKey> wantEnabled = new HashSet<>();
+        for (var entry : simulationState.getVectorVisibilityMap().entrySet()) {
+            if (entry.getValue().get()) {
+                wantEnabled.add(entry.getKey());
+            }
+        }
+
+        // Enable new vectors
+        for (VectorKey key : wantEnabled) {
+            if (!activeVectorDefs.containsKey(key)) {
+                ColorRGBA color = resolveVectorColor(key);
+                VectorDefinition def =
+                        new VectorDefinition(key.type().toString(), key.type(), key.naifId(), color, 1.0);
+                activeVectorDefs.put(key, def);
+                vectorManager.enableVector(def);
+            }
+        }
+        // Disable removed vectors
+        activeVectorDefs.entrySet().removeIf(entry -> {
+            if (!wantEnabled.contains(entry.getKey())) {
+                vectorManager.disableVector(entry.getValue());
+                return true;
+            }
+            return false;
+        });
+    }
+
+    /** Returns true if {@code naifId} identifies a natural satellite (same rule as BodyCuller/TrailManager). */
+    private static boolean isSatellite(int naifId) {
+        return naifId >= 100 && naifId <= 999 && naifId % 100 != 99;
+    }
+
+    /**
+     * Resolve the color for a vector overlay. For towardBody vectors, uses the target body's color (e.g., Sun direction
+     * → Sun's yellow). For other vector types, uses white.
+     */
+    private static ColorRGBA resolveVectorColor(VectorKey key) {
+        String typeStr = key.type().toString();
+        if (typeStr.startsWith("towardBody:")) {
+            try {
+                int targetNaifId = Integer.parseInt(typeStr.substring("towardBody:".length()));
+                return resolveBodyColor(targetNaifId);
+            } catch (NumberFormatException ignored) {
+            }
+        }
+        return ColorRGBA.White;
+    }
+
+    /**
+     * Resolve a body's configured color from its BodyBlock, falling back to white. Acquires configuration at
+     * point-of-use (CLAUDE.md Rule 3).
+     */
+    private static ColorRGBA resolveBodyColor(int naifId) {
+        try {
+            String name = BodyLookupService.formatName(naifId);
+            if (name != null && !name.startsWith("NAIF ") && !name.equals("—")) {
+                java.awt.Color awtColor =
+                        KEPPLRConfiguration.getInstance().bodyBlock(name).color();
+                if (awtColor != null) {
+                    return new ColorRGBA(
+                            awtColor.getRed() / 255f, awtColor.getGreen() / 255f, awtColor.getBlue() / 255f, 1f);
+                }
+            }
+        } catch (Exception ignored) {
+        }
+        return ColorRGBA.White;
     }
 
     // ── private helpers ───────────────────────────────────────────────────────────────────────
@@ -425,6 +620,19 @@ public class KepplrApp extends SimpleApplication {
         light.setPosition(position);
         light.setRadius(Float.MAX_VALUE); // no distance attenuation
         return light;
+    }
+
+    /**
+     * Get the GLFW window handle from the JME LWJGL3 context.
+     *
+     * @return the native window handle, or 0 if unavailable
+     */
+    private long getGlfwWindowHandle() {
+        var ctx = getContext();
+        if (ctx instanceof com.jme3.system.lwjgl.LwjglWindow lwjglWindow) {
+            return lwjglWindow.getWindowHandle();
+        }
+        return 0;
     }
 
     public static void main(String[] args) {

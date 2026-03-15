@@ -2,6 +2,7 @@ package kepplr.commands;
 
 import kepplr.camera.CameraFrame;
 import kepplr.render.RenderQuality;
+import kepplr.render.vector.VectorType;
 
 /**
  * All user-initiated actions enter the simulation through this interface (REDESIGN.md §4, CLAUDE.md Rule 2).
@@ -129,4 +130,53 @@ public interface SimulationCommands {
      * @param quality the desired quality preset; must not be null
      */
     void setRenderQuality(RenderQuality quality);
+
+    // ── Overlay commands (REDESIGN.md §7.8, §7.9, §7.5, §7.6, Step 19b) ──
+
+    /**
+     * Toggle label visibility for a specific body (§7.8).
+     *
+     * @param naifId NAIF ID of the body
+     * @param visible {@code true} to show the label, {@code false} to hide it
+     */
+    void setLabelVisible(int naifId, boolean visible);
+
+    /**
+     * Toggle the HUD time display (§7.9).
+     *
+     * @param visible {@code true} to show the time HUD, {@code false} to hide it
+     */
+    void setHudTimeVisible(boolean visible);
+
+    /**
+     * Toggle the HUD info display (§7.9).
+     *
+     * @param visible {@code true} to show the info HUD, {@code false} to hide it
+     */
+    void setHudInfoVisible(boolean visible);
+
+    /**
+     * Toggle trail visibility for a specific body (§7.5).
+     *
+     * @param naifId NAIF ID of the body
+     * @param visible {@code true} to show the trail, {@code false} to hide it
+     */
+    void setTrailVisible(int naifId, boolean visible);
+
+    /**
+     * Set the trail duration for a specific body (§7.5).
+     *
+     * @param naifId NAIF ID of the body
+     * @param seconds trail duration in simulation seconds; use {@code -1} for the default (orbital period or 30 days)
+     */
+    void setTrailDuration(int naifId, double seconds);
+
+    /**
+     * Toggle vector overlay visibility for a specific body and vector type (§7.6).
+     *
+     * @param naifId NAIF ID of the body
+     * @param type the vector type strategy
+     * @param visible {@code true} to show, {@code false} to hide
+     */
+    void setVectorVisible(int naifId, VectorType type, boolean visible);
 }

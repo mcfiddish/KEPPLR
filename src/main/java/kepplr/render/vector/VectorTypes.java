@@ -110,6 +110,21 @@ public final class VectorTypes {
                 return null;
             }
         }
+
+        @Override
+        public boolean equals(Object o) {
+            return o instanceof VelocityVectorType;
+        }
+
+        @Override
+        public int hashCode() {
+            return VelocityVectorType.class.hashCode();
+        }
+
+        @Override
+        public String toString() {
+            return "velocity";
+        }
     }
 
     /**
@@ -161,6 +176,21 @@ public final class VectorTypes {
 
         private String axisLabel() {
             return axisIndex == 0 ? "X" : axisIndex == 1 ? "Y" : "Z";
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            return o instanceof BodyAxisVectorType that && this.axisIndex == that.axisIndex;
+        }
+
+        @Override
+        public int hashCode() {
+            return 31 * BodyAxisVectorType.class.hashCode() + axisIndex;
+        }
+
+        @Override
+        public String toString() {
+            return "bodyAxis" + axisLabel();
         }
     }
 
@@ -218,6 +248,21 @@ public final class VectorTypes {
                         e.getMessage());
                 return null;
             }
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            return o instanceof TowardBodyVectorType that && this.targetNaifId == that.targetNaifId;
+        }
+
+        @Override
+        public int hashCode() {
+            return 31 * TowardBodyVectorType.class.hashCode() + targetNaifId;
+        }
+
+        @Override
+        public String toString() {
+            return "towardBody:" + targetNaifId;
         }
     }
 }

@@ -4,6 +4,7 @@ import kepplr.camera.CameraFrame;
 import kepplr.camera.TransitionController;
 import kepplr.core.SimulationClock;
 import kepplr.render.RenderQuality;
+import kepplr.render.vector.VectorType;
 import kepplr.state.DefaultSimulationState;
 import kepplr.util.KepplrConstants;
 
@@ -137,5 +138,37 @@ public final class DefaultSimulationCommands implements SimulationCommands {
     @Override
     public void setRenderQuality(RenderQuality quality) {
         state.setRenderQuality(quality);
+    }
+
+    // ── Overlay commands (Step 19b) ──
+
+    @Override
+    public void setLabelVisible(int naifId, boolean visible) {
+        state.setLabelVisible(naifId, visible);
+    }
+
+    @Override
+    public void setHudTimeVisible(boolean visible) {
+        state.setHudTimeVisible(visible);
+    }
+
+    @Override
+    public void setHudInfoVisible(boolean visible) {
+        state.setHudInfoVisible(visible);
+    }
+
+    @Override
+    public void setTrailVisible(int naifId, boolean visible) {
+        state.setTrailVisible(naifId, visible);
+    }
+
+    @Override
+    public void setTrailDuration(int naifId, double seconds) {
+        state.setTrailDuration(naifId, seconds);
+    }
+
+    @Override
+    public void setVectorVisible(int naifId, VectorType type, boolean visible) {
+        state.setVectorVisible(naifId, type, visible);
     }
 }

@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import kepplr.camera.CameraFrame;
+import kepplr.render.vector.VectorTypes;
 import kepplr.util.KepplrConstants;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -217,6 +218,125 @@ class DefaultSimulationStateTest {
             state.cameraPositionJ2000Property().addListener((obs, oldVal, newVal) -> fired.set(true));
             state.setCameraPositionJ2000(new double[] {1.0, 2.0, 3.0});
             assertTrue(fired.get(), "Change listener should fire when cameraPositionJ2000 changes");
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────────
+    // Overlay properties (Step 19b)
+    // ─────────────────────────────────────────────────────────────────
+
+    @Nested
+    @DisplayName("Overlay properties (Step 19b)")
+    class OverlayProperties {
+
+        @Test
+        @DisplayName("labelVisibleProperty defaults to false")
+        void labelVisibleDefault() {
+            assertFalse(state.labelVisibleProperty(EARTH).get(), "Label should default to invisible");
+        }
+
+        @Test
+        @DisplayName("setLabelVisible(true) makes label visible")
+        void setLabelVisibleTrue() {
+            state.setLabelVisible(EARTH, true);
+            assertTrue(state.labelVisibleProperty(EARTH).get());
+        }
+
+        @Test
+        @DisplayName("hudTimeVisibleProperty defaults to true")
+        void hudTimeDefault() {
+            assertTrue(state.hudTimeVisibleProperty().get(), "HUD time should default to visible");
+        }
+
+        @Test
+        @DisplayName("setHudTimeVisible(false) hides HUD time")
+        void setHudTimeVisibleFalse() {
+            state.setHudTimeVisible(false);
+            assertFalse(state.hudTimeVisibleProperty().get());
+        }
+
+        @Test
+        @DisplayName("hudInfoVisibleProperty defaults to true")
+        void hudInfoDefault() {
+            assertTrue(state.hudInfoVisibleProperty().get(), "HUD info should default to visible");
+        }
+
+        @Test
+        @DisplayName("setHudInfoVisible(false) hides HUD info")
+        void setHudInfoVisibleFalse() {
+            state.setHudInfoVisible(false);
+            assertFalse(state.hudInfoVisibleProperty().get());
+        }
+
+        @Test
+        @DisplayName("trailVisibleProperty defaults to false")
+        void trailVisibleDefault() {
+            assertFalse(state.trailVisibleProperty(EARTH).get(), "Trail should default to invisible");
+        }
+
+        @Test
+        @DisplayName("setTrailVisible(true) makes trail visible")
+        void setTrailVisibleTrue() {
+            state.setTrailVisible(EARTH, true);
+            assertTrue(state.trailVisibleProperty(EARTH).get());
+        }
+
+        @Test
+        @DisplayName("trailDurationProperty defaults to -1.0")
+        void trailDurationDefault() {
+            assertEquals(-1.0, state.trailDurationProperty(EARTH).get(), 0.001);
+        }
+
+        @Test
+        @DisplayName("setTrailDuration changes the duration")
+        void setTrailDuration() {
+            state.setTrailDuration(EARTH, 86400.0);
+            assertEquals(86400.0, state.trailDurationProperty(EARTH).get(), 0.001);
+        }
+
+        @Test
+        @DisplayName("vectorVisibleProperty defaults to false")
+        void vectorVisibleDefault() {
+            assertFalse(
+                    state.vectorVisibleProperty(EARTH, VectorTypes.velocity()).get());
+        }
+
+        @Test
+        @DisplayName("setVectorVisible(true) makes vector visible")
+        void setVectorVisibleTrue() {
+            state.setVectorVisible(EARTH, VectorTypes.velocity(), true);
+            assertTrue(
+                    state.vectorVisibleProperty(EARTH, VectorTypes.velocity()).get());
+        }
+
+        @Test
+        @DisplayName("different VectorType keys are independent")
+        void differentVectorTypesIndependent() {
+            state.setVectorVisible(EARTH, VectorTypes.velocity(), true);
+            assertFalse(
+                    state.vectorVisibleProperty(EARTH, VectorTypes.towardBody(10))
+                            .get(),
+                    "Different VectorType should have independent visibility");
+        }
+
+        @Test
+        @DisplayName("same body different types are independent")
+        void sameBodyDifferentTypesIndependent() {
+            state.setVectorVisible(EARTH, VectorTypes.bodyAxisX(), true);
+            state.setVectorVisible(EARTH, VectorTypes.bodyAxisY(), false);
+            assertTrue(
+                    state.vectorVisibleProperty(EARTH, VectorTypes.bodyAxisX()).get());
+            assertFalse(
+                    state.vectorVisibleProperty(EARTH, VectorTypes.bodyAxisY()).get());
+        }
+
+        @Test
+        @DisplayName("label visibility for different bodies is independent")
+        void labelVisibilityIndependentPerBody() {
+            state.setLabelVisible(EARTH, true);
+            state.setLabelVisible(MOON, false);
+            assertTrue(state.labelVisibleProperty(EARTH).get());
+            assertFalse(state.labelVisibleProperty(MOON).get());
         }
     }
 }

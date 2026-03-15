@@ -15,6 +15,8 @@ import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
+import kepplr.config.KEPPLRConfiguration;
+import kepplr.ephemeris.BodyLookupService;
 import kepplr.render.frustum.FrustumLayer;
 
 /**
@@ -219,15 +221,29 @@ class TrailRenderer {
     }
 
     /**
-     * Derive a trail color from a NAIF ID using a golden-ratio hash.
+     * Resolve a body's color from configuration, falling back to a golden-ratio hash.
      *
-     * <p>The golden-ratio conjugate (≈ 0.618…) distributes hues evenly across the color wheel regardless of the input
-     * sequence, so nearby NAIF IDs receive visually distinct colors. Saturation = 0.8, brightness = 1.0, alpha = 0.9.
+     * <p>First attempts to look up the body's configured hex color via {@link KEPPLRConfiguration#bodyBlock(String)}.
+     * If the body has a configured color (non-white or explicit), it is used with alpha = 0.9. Otherwise, the
+     * golden-ratio hash produces a deterministic, visually well-distributed fallback color.
      *
      * @param naifId NAIF integer ID
-     * @return a {@link ColorRGBA} unique to this ID
+     * @return a {@link ColorRGBA} for this body's trail
      */
     private static ColorRGBA naifIdToColor(int naifId) {
+        try {
+            String name = BodyLookupService.formatName(naifId);
+            if (name != null && !name.startsWith("NAIF ") && !name.equals("—")) {
+                java.awt.Color awtColor =
+                        KEPPLRConfiguration.getInstance().bodyBlock(name).color();
+                if (awtColor != null) {
+                    return new ColorRGBA(
+                            awtColor.getRed() / 255f, awtColor.getGreen() / 255f, awtColor.getBlue() / 255f, 0.9f);
+                }
+            }
+        } catch (Exception ignored) {
+            // Fall through to golden-ratio hash
+        }
         double hue = (naifId * GOLDEN_RATIO_CONJUGATE) % 1.0;
         if (hue < 0.0) hue += 1.0;
 
