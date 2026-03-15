@@ -238,6 +238,20 @@ call `SimulationCommands`:
 - Space — pause/resume
 - `[` / `]` — decrease / increase time rate
 
+**Mouse picking in the JME window:**
+
+Single click on a body in the render view → `SimulationCommands.selectBody(naifId)`.
+Double-click on a body → `SimulationCommands.focusBody(naifId)`.
+No mouse-based targeting — Target is only available via the T key or the
+control panel button.
+
+Picking is a ray cast from the camera through the click position against all
+visible body nodes. On a hit, use the NAIF ID stored on the body node. On a
+miss (click on empty space), do nothing — do not clear the current selection.
+Picking is handled in the JME input handler alongside the keyboard shortcuts,
+not in JavaFX. Double-click detection uses a timing threshold constant defined
+in `KepplrConstants`.
+
 **`SimulationStateFxBridge` extensions** (add without removing anything
 already present):
 - `selectedBodyActiveProperty()` (boolean)
