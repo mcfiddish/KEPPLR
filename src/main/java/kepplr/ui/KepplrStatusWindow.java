@@ -9,10 +9,12 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
+import java.util.function.BiConsumer;
 import javafx.beans.binding.Bindings;
 import javafx.geometry.Insets;
 import javafx.scene.Scene;
 import javafx.scene.control.Button;
+import javafx.scene.control.CheckMenuItem;
 import javafx.scene.control.Label;
 import javafx.scene.control.Menu;
 import javafx.scene.control.MenuBar;
@@ -39,6 +41,8 @@ import kepplr.config.KEPPLRConfiguration;
 import kepplr.ephemeris.BodyLookupService;
 import kepplr.ephemeris.KEPPLREphemeris;
 import kepplr.ephemeris.spice.SpiceBundle;
+import kepplr.render.vector.VectorTypes;
+import kepplr.util.KepplrConstants;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import picante.mechanics.EphemerisID;
@@ -66,6 +70,7 @@ public final class KepplrStatusWindow {
     private final SimulationStateFxBridge bridge;
     private final SimulationCommands commands;
     private Runnable jmeShutdown;
+    private BiConsumer<Integer, Integer> jmeResizeCallback;
     private Stage stage;
     private TreeView<BodyTreeEntry> bodyTree;
 
@@ -85,6 +90,15 @@ public final class KepplrStatusWindow {
      */
     public void setJmeShutdown(Runnable shutdown) {
         this.jmeShutdown = shutdown;
+    }
+
+    /**
+     * Set the callback to resize the JME render window.
+     *
+     * @param resizeCallback accepts (width, height) in pixels; called from the FX thread
+     */
+    public void setJmeResizeCallback(BiConsumer<Integer, Integer> resizeCallback) {
+        this.jmeResizeCallback = resizeCallback;
     }
 
     /**
@@ -135,6 +149,19 @@ public final class KepplrStatusWindow {
     public void close() {
         if (stage != null) {
             stage.close();
+        }
+    }
+
+    /**
+     * Reposition the window. Must be called on the FX thread.
+     *
+     * @param x screen x coordinate
+     * @param y screen y coordinate
+     */
+    public void setPosition(double x, double y) {
+        if (stage != null) {
+            stage.setX(x);
+            stage.setY(y);
         }
     }
 
@@ -380,8 +407,10 @@ public final class KepplrStatusWindow {
         Menu fileMenu = buildFileMenu();
         Menu viewMenu = buildViewMenu();
         Menu timeMenu = buildTimeMenu();
+        Menu overlaysMenu = buildOverlaysMenu();
+        Menu windowMenu = buildWindowMenu();
 
-        MenuBar bar = new MenuBar(fileMenu, viewMenu, timeMenu);
+        MenuBar bar = new MenuBar(fileMenu, viewMenu, timeMenu, overlaysMenu, windowMenu);
         bar.setUseSystemMenuBar(false);
         return bar;
     }
@@ -458,6 +487,142 @@ public final class KepplrStatusWindow {
                 new SetTimeRateDialog(commands, bridge.timeRateTextProperty().get()).showAndWait());
 
         return new Menu("Time", null, pauseItem, new SeparatorMenuItem(), setTimeItem, setRateItem);
+    }
+
+    private Menu buildOverlaysMenu() {
+        // ── Labels ────────────────────────────────────────────────────────────
+        CheckMenuItem labelsItem = new CheckMenuItem("Show Labels");
+        labelsItem.setSelected(false);
+        labelsItem.setOnAction(e -> {
+            boolean show = labelsItem.isSelected();
+            try {
+                KEPPLREphemeris eph = KEPPLRConfiguration.getInstance().getEphemeris();
+                for (EphemerisID id : eph.getKnownBodies()) {
+                    eph.getSpiceBundle().getObjectCode(id).ifPresent(code -> commands.setLabelVisible(code, show));
+                }
+                for (var sc : eph.getSpacecraft()) {
+                    commands.setLabelVisible(sc.code(), show);
+                }
+            } catch (Exception ex) {
+                logger.debug("Failed to toggle labels: {}", ex.getMessage());
+            }
+        });
+
+        // ── HUD toggles ──────────────────────────────────────────────────────
+        CheckMenuItem hudInfoItem = new CheckMenuItem("HUD / Info");
+        hudInfoItem.setSelected(bridge.hudInfoVisibleProperty().get());
+        bridge.hudInfoVisibleProperty().addListener((obs, old, val) -> hudInfoItem.setSelected(val));
+        hudInfoItem.setOnAction(e -> commands.setHudInfoVisible(hudInfoItem.isSelected()));
+
+        CheckMenuItem showTimeItem = new CheckMenuItem("Show Time");
+        showTimeItem.setSelected(bridge.hudTimeVisibleProperty().get());
+        bridge.hudTimeVisibleProperty().addListener((obs, old, val) -> showTimeItem.setSelected(val));
+        showTimeItem.setOnAction(e -> commands.setHudTimeVisible(showTimeItem.isSelected()));
+
+        // ── Trajectories (global toggle) ─────────────────────────────────────
+        CheckMenuItem trajItem = new CheckMenuItem("Show Trajectories");
+        trajItem.setSelected(false);
+        trajItem.setOnAction(e -> {
+            boolean show = trajItem.isSelected();
+            try {
+                KEPPLREphemeris eph = KEPPLRConfiguration.getInstance().getEphemeris();
+                for (EphemerisID id : eph.getKnownBodies()) {
+                    eph.getSpiceBundle().getObjectCode(id).ifPresent(code -> {
+                        // Skip barycenters (1–9) except Pluto barycenter (9)
+                        if (code >= 1 && code <= 9 && code != KepplrConstants.PLUTO_BARYCENTER_NAIF_ID) return;
+                        commands.setTrailVisible(code, show);
+                    });
+                }
+                for (var sc : eph.getSpacecraft()) {
+                    commands.setTrailVisible(sc.code(), show);
+                }
+            } catch (Exception ex) {
+                logger.debug("Failed to toggle trajectories: {}", ex.getMessage());
+            }
+        });
+
+        // ── Current Focus submenu ─────────────────────────────────────────────
+        CheckMenuItem sunDirItem = new CheckMenuItem("Sun Direction");
+        sunDirItem.setOnAction(e -> {
+            int focId = bridge.focusedBodyIdProperty().get();
+            if (focId != -1)
+                commands.setVectorVisible(
+                        focId, VectorTypes.towardBody(KepplrConstants.SUN_NAIF_ID), sunDirItem.isSelected());
+        });
+
+        CheckMenuItem earthDirItem = new CheckMenuItem("Earth Direction");
+        earthDirItem.setOnAction(e -> {
+            int focId = bridge.focusedBodyIdProperty().get();
+            if (focId != -1) commands.setVectorVisible(focId, VectorTypes.towardBody(399), earthDirItem.isSelected());
+        });
+
+        CheckMenuItem velocityItem = new CheckMenuItem("Velocity Direction");
+        velocityItem.setOnAction(e -> {
+            int focId = bridge.focusedBodyIdProperty().get();
+            if (focId != -1) commands.setVectorVisible(focId, VectorTypes.velocity(), velocityItem.isSelected());
+        });
+
+        CheckMenuItem targetTrailItem = new CheckMenuItem("Trajectory");
+        targetTrailItem.setOnAction(e -> {
+            int focId = bridge.focusedBodyIdProperty().get();
+            if (focId != -1) commands.setTrailVisible(focId, targetTrailItem.isSelected());
+        });
+
+        CheckMenuItem axesItem = new CheckMenuItem("Axes");
+        axesItem.setOnAction(e -> {
+            int focId = bridge.focusedBodyIdProperty().get();
+            if (focId != -1) {
+                boolean show = axesItem.isSelected();
+                commands.setVectorVisible(focId, VectorTypes.bodyAxisX(), show);
+                commands.setVectorVisible(focId, VectorTypes.bodyAxisY(), show);
+                commands.setVectorVisible(focId, VectorTypes.bodyAxisZ(), show);
+            }
+        });
+
+        // Reset all Current Focus checkmarks when focus body changes
+        bridge.focusedBodyIdProperty().addListener((obs, oldVal, newVal) -> {
+            sunDirItem.setSelected(false);
+            earthDirItem.setSelected(false);
+            velocityItem.setSelected(false);
+            targetTrailItem.setSelected(false);
+            axesItem.setSelected(false);
+        });
+
+        Menu currentFocus =
+                new Menu("Current Focus", null, sunDirItem, earthDirItem, velocityItem, targetTrailItem, axesItem);
+
+        return new Menu(
+                "Overlays",
+                null,
+                labelsItem,
+                hudInfoItem,
+                showTimeItem,
+                new SeparatorMenuItem(),
+                trajItem,
+                new SeparatorMenuItem(),
+                currentFocus);
+    }
+
+    private Menu buildWindowMenu() {
+        MenuItem size720 = new MenuItem("1280 \u00d7 720");
+        size720.setOnAction(e -> resizeJmeWindow(1280, 720));
+
+        MenuItem size1024 = new MenuItem("1280 \u00d7 1024");
+        size1024.setOnAction(e -> resizeJmeWindow(1280, 1024));
+
+        MenuItem size1080 = new MenuItem("1920 \u00d7 1080");
+        size1080.setOnAction(e -> resizeJmeWindow(1920, 1080));
+
+        MenuItem size1440 = new MenuItem("2560 \u00d7 1440");
+        size1440.setOnAction(e -> resizeJmeWindow(2560, 1440));
+
+        return new Menu("Window", null, size720, size1024, size1080, size1440);
+    }
+
+    private void resizeJmeWindow(int width, int height) {
+        if (jmeResizeCallback != null) {
+            jmeResizeCallback.accept(width, height);
+        }
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────

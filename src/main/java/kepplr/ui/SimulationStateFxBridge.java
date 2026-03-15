@@ -76,6 +76,10 @@ public final class SimulationStateFxBridge {
     private final SimpleIntegerProperty selectedBodyIdFx = new SimpleIntegerProperty(-1);
     private final SimpleIntegerProperty focusedBodyIdFx = new SimpleIntegerProperty(-1);
     private final SimpleIntegerProperty targetedBodyIdFx = new SimpleIntegerProperty(-1);
+
+    // ── Step 19b additions ───────────────────────────────────────────────────
+    private final SimpleBooleanProperty hudTimeVisibleFx = new SimpleBooleanProperty(true);
+    private final SimpleBooleanProperty hudInfoVisibleFx = new SimpleBooleanProperty(true);
     // ── Production constructor ────────────────────────────────────────────────
 
     /**
@@ -127,6 +131,8 @@ public final class SimulationStateFxBridge {
         selectedBodyIdFx.set(state.selectedBodyIdProperty().get());
         focusedBodyIdFx.set(state.focusedBodyIdProperty().get());
         targetedBodyIdFx.set(state.targetedBodyIdProperty().get());
+        hudTimeVisibleFx.set(state.hudTimeVisibleProperty().get());
+        hudInfoVisibleFx.set(state.hudInfoVisibleProperty().get());
         // Attach listeners — fire on the thread that mutates state (JME thread).
         // In production, polling=true once startPolling() is called; listeners skip dispatcher to
         // avoid flooding the FX run queue at 60 fps (the AnimationTimer handles all updates).
@@ -238,6 +244,14 @@ public final class SimulationStateFxBridge {
             if (polling) return;
             dispatcher.accept(() -> cameraFrameFallbackActive.set(newVal));
         });
+        state.hudTimeVisibleProperty().addListener((obs, oldVal, newVal) -> {
+            if (polling) return;
+            dispatcher.accept(() -> hudTimeVisibleFx.set(newVal));
+        });
+        state.hudInfoVisibleProperty().addListener((obs, oldVal, newVal) -> {
+            if (polling) return;
+            dispatcher.accept(() -> hudInfoVisibleFx.set(newVal));
+        });
     }
 
     // ── FX-thread polling (AnimationTimer) ───────────────────────────────────
@@ -286,6 +300,8 @@ public final class SimulationStateFxBridge {
         selectedBodyIdFx.set(state.selectedBodyIdProperty().get());
         focusedBodyIdFx.set(state.focusedBodyIdProperty().get());
         targetedBodyIdFx.set(state.targetedBodyIdProperty().get());
+        hudTimeVisibleFx.set(state.hudTimeVisibleProperty().get());
+        hudInfoVisibleFx.set(state.hudInfoVisibleProperty().get());
     }
 
     // ── Exposed read-only properties ──────────────────────────────────────────
@@ -395,6 +411,16 @@ public final class SimulationStateFxBridge {
     /** NAIF ID of the currently targeted body (-1 if none). */
     public ReadOnlyIntegerProperty targetedBodyIdProperty() {
         return targetedBodyIdFx;
+    }
+
+    /** Whether the HUD time display is visible (Step 19b). */
+    public ReadOnlyBooleanProperty hudTimeVisibleProperty() {
+        return hudTimeVisibleFx;
+    }
+
+    /** Whether the HUD info display is visible (Step 19b). */
+    public ReadOnlyBooleanProperty hudInfoVisibleProperty() {
+        return hudInfoVisibleFx;
     }
 
     // ── Formatting helpers (called on JME thread) ─────────────────────────────

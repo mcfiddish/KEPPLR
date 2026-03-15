@@ -117,10 +117,6 @@ Sun halo implemented as a world-space billboard with custom GLSL 150 shader (`Su
 ### 18. Camera Transitions
 `pointAt(int naifId, double durationSeconds)` and `goTo(int naifId, double apparentRadiusDeg, double durationSeconds)` added to `SimulationCommands`. Transitions execute on the JME render thread, progressing each frame in `simpleUpdate()`. Transitions are non-blocking — commands return immediately and progress is tracked in `SimulationState`. `pointAt` slews the camera orientation from current look direction to the target body direction over `durationSeconds` using spherical linear interpolation (slerp). `goTo` waits for any in-progress `pointAt` to complete, then translates the camera along its current line of sight until the target body subtends the requested apparent radius. Both transitions use linear interpolation initially; acceleration/deceleration is a deferred refinement. `goTo` does not apply light-time correction to the translation path. `SimulationState` exposes `transitionActiveProperty()` (boolean) and `transitionProgressProperty()` (double in [0,1]) so the UI and scripting layer can observe completion. If a new `pointAt` or `goTo` is issued while a transition is in progress, the in-progress transition is cancelled and the new one begins immediately. `waitTransition()` implemented as a blocking primitive that returns when `transitionActiveProperty()` becomes false — defined here alongside the property it depends on and exposed through the Groovy scripting wrapper in step 20. Existing `focusBody()` and `targetBody()` implementations updated to drive `pointAt`/`goTo` internally so interaction mode semantics are consistent with the new transition system. All duration and interpolation constants in `KepplrConstants`.
 
----
-
-## Remaining Steps
-
 ### 19. UI — Body Selection and Camera Controls
 
 **Architecture decision (final):** Two-window layout. The JME render window
@@ -259,8 +255,6 @@ in `ui/`.
   not exist anywhere in the codebase after this step.
 - `mvn test` passes with no new failures.
 
----
-
 ### 19b. Overlays — Labels, HUD, Trails, and Vector Toggles
 
 This step surfaces existing rendering capabilities (labels, trails from step
@@ -355,6 +349,10 @@ any body and any `VectorType`; the GUI exposes the common cases only.
 - Decluttering logic lives in the rendering layer, not in `SimulationCommands`
   or `ui/`.
 - `mvn test` passes with no new failures.
+
+---
+
+## Remaining Steps
 
 ---
 

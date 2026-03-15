@@ -278,4 +278,75 @@ class VectorTypesTest {
             assertNull(dir, "bodyAxisX must return null when no body-fixed frame is available");
         }
     }
+
+    // ─────────────────────────────────────────────────────────────────
+    // equals/hashCode/toString (Step 19b)
+    // ─────────────────────────────────────────────────────────────────
+
+    @Nested
+    @DisplayName("equals/hashCode/toString (Step 19b)")
+    class EqualityTests {
+
+        @Test
+        @DisplayName("velocity() instances are equal")
+        void velocityEquality() {
+            VectorType a = VectorTypes.velocity();
+            VectorType b = VectorTypes.velocity();
+            assertEquals(a, b);
+            assertEquals(a.hashCode(), b.hashCode());
+        }
+
+        @Test
+        @DisplayName("velocity() toString")
+        void velocityToString() {
+            assertEquals("velocity", VectorTypes.velocity().toString());
+        }
+
+        @Test
+        @DisplayName("bodyAxisX() instances are equal")
+        void bodyAxisXEquality() {
+            assertEquals(VectorTypes.bodyAxisX(), VectorTypes.bodyAxisX());
+        }
+
+        @Test
+        @DisplayName("bodyAxisX and bodyAxisY are not equal")
+        void bodyAxisXNotEqualY() {
+            assertNotEquals(VectorTypes.bodyAxisX(), VectorTypes.bodyAxisY());
+        }
+
+        @Test
+        @DisplayName("bodyAxisZ toString")
+        void bodyAxisZToString() {
+            assertEquals("bodyAxisZ", VectorTypes.bodyAxisZ().toString());
+        }
+
+        @Test
+        @DisplayName("towardBody(10) instances are equal")
+        void towardBodyEquality() {
+            assertEquals(VectorTypes.towardBody(10), VectorTypes.towardBody(10));
+            assertEquals(
+                    VectorTypes.towardBody(10).hashCode(),
+                    VectorTypes.towardBody(10).hashCode());
+        }
+
+        @Test
+        @DisplayName("towardBody(10) and towardBody(399) are not equal")
+        void towardBodyDifferentTargets() {
+            assertNotEquals(VectorTypes.towardBody(10), VectorTypes.towardBody(399));
+        }
+
+        @Test
+        @DisplayName("towardBody toString includes target NAIF ID")
+        void towardBodyToString() {
+            assertEquals("towardBody:10", VectorTypes.towardBody(10).toString());
+        }
+
+        @Test
+        @DisplayName("different type categories are not equal")
+        void crossTypeInequality() {
+            assertNotEquals(VectorTypes.velocity(), VectorTypes.bodyAxisX());
+            assertNotEquals(VectorTypes.velocity(), VectorTypes.towardBody(10));
+            assertNotEquals(VectorTypes.bodyAxisX(), VectorTypes.towardBody(10));
+        }
+    }
 }

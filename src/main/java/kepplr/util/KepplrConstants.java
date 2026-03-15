@@ -276,6 +276,12 @@ public final class KepplrConstants {
     /** NAIF ID of Earth. */
     public static final int EARTH_NAIF_ID = 399;
 
+    /** NAIF ID of Pluto. Treated as a satellite of its barycenter (9) for trail purposes. */
+    public static final int PLUTO_NAIF_ID = 999;
+
+    /** NAIF ID of the Pluto system barycenter. */
+    public static final int PLUTO_BARYCENTER_NAIF_ID = 9;
+
     // ── Saturn rings (REDESIGN.md §7.2, Step 16) ──────────────────────────────────────────────
 
     /**
@@ -559,6 +565,29 @@ public final class KepplrConstants {
      * <p>Pressing {@code ]} sets {@code timeRate *= TIME_RATE_KEYBOARD_FACTOR}; pressing {@code [} divides by it.
      */
     public static final double TIME_RATE_KEYBOARD_FACTOR = 10.0;
+
+    // ── Label decluttering (REDESIGN.md §7.8, Step 19b) ────────────────────────────────────────
+
+    /**
+     * Minimum screen-space separation in pixels between labels.
+     *
+     * <p>A label is drawn only if no other label belonging to a body with larger physical radius is within this many
+     * pixels of its screen position. This produces zoom-dependent behavior: at large distances major planets are
+     * labeled and satellites are suppressed because they cluster near their primary; as the camera moves closer and
+     * satellites separate on screen, their labels appear.
+     */
+    public static final double LABEL_DECLUTTER_MIN_SEPARATION_PX = 30.0;
+
+    // ── Trail decluttering (REDESIGN.md §7.5, Step 19b) ─────────────────────────────────────
+
+    /**
+     * Minimum screen-space separation in pixels between a satellite and its primary for the satellite's trail to be
+     * drawn.
+     *
+     * <p>When a satellite's screen position is within this many pixels of its primary body's screen position, its trail
+     * is suppressed. As the camera zooms in and the satellite separates on screen, the trail becomes visible.
+     */
+    public static final double TRAIL_DECLUTTER_MIN_SEPARATION_PX = 30.0;
 
     // ── Mouse picking (Step 19) ───────────────────────────────────────────────────────────────
 

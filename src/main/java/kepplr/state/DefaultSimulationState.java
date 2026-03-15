@@ -2,6 +2,8 @@ package kepplr.state;
 
 import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
+import java.util.concurrent.ConcurrentHashMap;
 import javafx.beans.property.ReadOnlyBooleanProperty;
 import javafx.beans.property.ReadOnlyDoubleProperty;
 import javafx.beans.property.ReadOnlyIntegerProperty;
@@ -12,6 +14,7 @@ import javafx.beans.property.SimpleIntegerProperty;
 import javafx.beans.property.SimpleObjectProperty;
 import kepplr.camera.CameraFrame;
 import kepplr.render.RenderQuality;
+import kepplr.render.vector.VectorType;
 import kepplr.util.KepplrConstants;
 
 /**
@@ -62,6 +65,28 @@ public final class DefaultSimulationState implements SimulationState {
 
     private final SimpleBooleanProperty transitionActive = new SimpleBooleanProperty(false);
     private final SimpleDoubleProperty transitionProgress = new SimpleDoubleProperty(0.0);
+
+    // ── Overlay state (Step 19b) ──
+
+    private final ConcurrentHashMap<Integer, SimpleBooleanProperty> labelVisibility = new ConcurrentHashMap<>();
+    private final SimpleBooleanProperty hudTimeVisible = new SimpleBooleanProperty(true);
+    private final SimpleBooleanProperty hudInfoVisible = new SimpleBooleanProperty(true);
+    private final ConcurrentHashMap<Integer, SimpleBooleanProperty> trailVisibility = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<Integer, SimpleDoubleProperty> trailDuration = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<VectorKey, SimpleBooleanProperty> vectorVisibility = new ConcurrentHashMap<>();
+
+    /** Composite key for per-body per-type vector visibility. */
+    public record VectorKey(int naifId, VectorType type) {
+        @Override
+        public boolean equals(Object o) {
+            return o instanceof VectorKey that && this.naifId == that.naifId && Objects.equals(this.type, that.type);
+        }
+
+        @Override
+        public int hashCode() {
+            return 31 * naifId + Objects.hashCode(type);
+        }
+    }
 
     // ── SimulationState read-only interface ──
 
@@ -255,5 +280,91 @@ public final class DefaultSimulationState implements SimulationState {
      */
     public void setTransitionProgress(double progress) {
         transitionProgress.set(progress);
+    }
+
+    // ── Overlay property accessors (Step 19b) ──
+
+    @Override
+    public ReadOnlyBooleanProperty labelVisibleProperty(int naifId) {
+        return labelVisibility.computeIfAbsent(naifId, id -> new SimpleBooleanProperty(false));
+    }
+
+    @Override
+    public ReadOnlyBooleanProperty hudTimeVisibleProperty() {
+        return hudTimeVisible;
+    }
+
+    @Override
+    public ReadOnlyBooleanProperty hudInfoVisibleProperty() {
+        return hudInfoVisible;
+    }
+
+    @Override
+    public ReadOnlyBooleanProperty trailVisibleProperty(int naifId) {
+        return trailVisibility.computeIfAbsent(naifId, id -> new SimpleBooleanProperty(false));
+    }
+
+    @Override
+    public ReadOnlyDoubleProperty trailDurationProperty(int naifId) {
+        return trailDuration.computeIfAbsent(naifId, id -> new SimpleDoubleProperty(-1.0));
+    }
+
+    @Override
+    public ReadOnlyBooleanProperty vectorVisibleProperty(int naifId, VectorType type) {
+        return vectorVisibility.computeIfAbsent(new VectorKey(naifId, type), k -> new SimpleBooleanProperty(false));
+    }
+
+    // ── Overlay setters (Step 19b) ──
+
+    public void setLabelVisible(int naifId, boolean visible) {
+        labelVisibility
+                .computeIfAbsent(naifId, id -> new SimpleBooleanProperty(false))
+                .set(visible);
+    }
+
+    public void setHudTimeVisible(boolean visible) {
+        hudTimeVisible.set(visible);
+    }
+
+    public void setHudInfoVisible(boolean visible) {
+        hudInfoVisible.set(visible);
+    }
+
+    public void setTrailVisible(int naifId, boolean visible) {
+        trailVisibility
+                .computeIfAbsent(naifId, id -> new SimpleBooleanProperty(false))
+                .set(visible);
+    }
+
+    public void setTrailDuration(int naifId, double seconds) {
+        trailDuration
+                .computeIfAbsent(naifId, id -> new SimpleDoubleProperty(-1.0))
+                .set(seconds);
+    }
+
+    public void setVectorVisible(int naifId, VectorType type, boolean visible) {
+        vectorVisibility
+                .computeIfAbsent(new VectorKey(naifId, type), k -> new SimpleBooleanProperty(false))
+                .set(visible);
+    }
+
+    /** Returns a snapshot of all label-visible entries. Package-private for render-loop access. */
+    public ConcurrentHashMap<Integer, SimpleBooleanProperty> getLabelVisibilityMap() {
+        return labelVisibility;
+    }
+
+    /** Returns a snapshot of all trail-visible entries. Package-private for render-loop access. */
+    public ConcurrentHashMap<Integer, SimpleBooleanProperty> getTrailVisibilityMap() {
+        return trailVisibility;
+    }
+
+    /** Returns the trail duration map. */
+    public ConcurrentHashMap<Integer, SimpleDoubleProperty> getTrailDurationMap() {
+        return trailDuration;
+    }
+
+    /** Returns the vector visibility map. */
+    public ConcurrentHashMap<VectorKey, SimpleBooleanProperty> getVectorVisibilityMap() {
+        return vectorVisibility;
     }
 }

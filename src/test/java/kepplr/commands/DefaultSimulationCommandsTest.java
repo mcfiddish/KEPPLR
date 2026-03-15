@@ -6,6 +6,7 @@ import kepplr.camera.CameraFrame;
 import kepplr.camera.TransitionController;
 import kepplr.config.KEPPLRConfiguration;
 import kepplr.core.SimulationClock;
+import kepplr.render.vector.VectorTypes;
 import kepplr.state.DefaultSimulationState;
 import kepplr.testsupport.TestHarness;
 import org.junit.jupiter.api.BeforeEach;
@@ -207,6 +208,58 @@ class DefaultSimulationCommandsTest {
                     state.currentEtProperty().get(),
                     1e-3,
                     "setUTC must set currentEt to the ET matching the UTC string");
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────────
+    // Overlay commands (Step 19b)
+    // ─────────────────────────────────────────────────────────────────
+
+    @Nested
+    @DisplayName("Overlay commands (Step 19b)")
+    class OverlayCommands {
+
+        @Test
+        @DisplayName("setLabelVisible delegates to state")
+        void setLabelVisible() {
+            commands.setLabelVisible(EARTH, true);
+            assertTrue(state.labelVisibleProperty(EARTH).get());
+        }
+
+        @Test
+        @DisplayName("setHudTimeVisible delegates to state")
+        void setHudTimeVisible() {
+            commands.setHudTimeVisible(false);
+            assertFalse(state.hudTimeVisibleProperty().get());
+        }
+
+        @Test
+        @DisplayName("setHudInfoVisible delegates to state")
+        void setHudInfoVisible() {
+            commands.setHudInfoVisible(false);
+            assertFalse(state.hudInfoVisibleProperty().get());
+        }
+
+        @Test
+        @DisplayName("setTrailVisible delegates to state")
+        void setTrailVisible() {
+            commands.setTrailVisible(EARTH, true);
+            assertTrue(state.trailVisibleProperty(EARTH).get());
+        }
+
+        @Test
+        @DisplayName("setTrailDuration delegates to state")
+        void setTrailDuration() {
+            commands.setTrailDuration(EARTH, 86400.0);
+            assertEquals(86400.0, state.trailDurationProperty(EARTH).get(), 0.001);
+        }
+
+        @Test
+        @DisplayName("setVectorVisible delegates to state")
+        void setVectorVisible() {
+            commands.setVectorVisible(EARTH, VectorTypes.velocity(), true);
+            assertTrue(
+                    state.vectorVisibleProperty(EARTH, VectorTypes.velocity()).get());
         }
     }
 }

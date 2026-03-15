@@ -284,7 +284,13 @@ switching the camera frame to Synodic with the targeted body as the
 * Trails must be renderable in **segments** such that different segments can be drawn in different frustums if needed.
 * Trail visibility must be togglable **per body** via `SimulationCommands.setTrailVisible(int naifId, boolean visible)`.
 * Trail duration must be settable **per body** via `SimulationCommands.setTrailDuration(int naifId, double seconds)`.
-* **Decluttering policy:** trails for satellite bodies are suppressed when the satellite's screen position is within `TRAIL_DECLUTTER_MIN_SEPARATION_PX` of its primary body's screen position. As the camera zooms in and the satellite separates from its primary on screen, its trail becomes visible. This threshold is defined in `KepplrConstants`.
+* **Decluttering policy:** trails for satellite bodies are suppressed when the satellite's screen position is within 
+`TRAIL_DECLUTTER_MIN_SEPARATION_PX` of its primary body's screen position. As the camera zooms in and the satellite 
+separates from its primary on screen, its trail becomes visible. This threshold is defined in `KepplrConstants`.
+* **Barycenter trail policy:** the GUI global trail toggle skips barycenter
+    bodies except the Pluto Barycenter (NAIF ID 9), whose trail is meaningful
+    due to the Pluto-Charon mass ratio. The per-body API imposes no such
+    restriction.
 
 ### 7.6 Vector Overlays [D-003]
 
