@@ -123,12 +123,20 @@ public class KepplrApp extends SimpleApplication {
     // ── JavaFX control window ─────────────────────────────────────────────────────────────────
     private volatile KepplrStatusWindow statusWindow;
 
+    // ── GLFW window handle for auto-focus on cursor enter ───────────────────────────────────
+    private long glfwWindowHandle = 0;
+    private boolean cursorWasInside = false;
+
     @Override
     public void simpleInitApp() {
         setLostFocusBehavior(LostFocusBehavior.Disabled);
         setDisplayFps(true);
         setDisplayStatView(false);
         flyCam.setEnabled(false);
+
+        // Remove JME's default Escape→exit mapping (SimpleApplication binds KEY_ESCAPE to stop()).
+        // Escape has no function in KEPPLR and must not close either window.
+        inputManager.deleteMapping(INPUT_MAPPING_EXIT);
 
         // ── Simulation clock and commands ─────────────────────────────────────────────────────
         double startET = KEPPLRConfiguration.getInstance().getTimeConversion().instantToTDB(Instant.now());
@@ -144,8 +152,11 @@ public class KepplrApp extends SimpleApplication {
         if (System.getProperty("os.name", "").toLowerCase().contains("mac")) {
             Platform.startup(() -> {});
         }
+        // Capture a reference to this app for the FX-side shutdown callback
+        KepplrApp appRef = this;
         Platform.runLater(() -> {
             statusWindow = new KepplrStatusWindow(bridge, commands);
+            statusWindow.setJmeShutdown(appRef::stop);
             statusWindow.show();
         });
 
@@ -254,10 +265,35 @@ public class KepplrApp extends SimpleApplication {
         cameraInputHandler.setSimulationCommands(commands);
         cameraInputHandler.setPickNodes(nearNode, midNode, farNode);
         cameraInputHandler.register(inputManager);
+
+        // Extract GLFW window handle for per-frame cursor-inside polling (BUG 5).
+        try {
+            var context = getContext();
+            java.lang.reflect.Field wField = context.getClass().getDeclaredField("windowHandle");
+            wField.setAccessible(true);
+            glfwWindowHandle = (long) wField.get(context);
+        } catch (Exception ex) {
+            logger.warn("Could not extract GLFW window handle: {}", ex.getMessage());
+        }
     }
 
     @Override
     public void simpleUpdate(float tpf) {
+        // BUG 5: Auto-focus JME window when cursor enters. Polled per frame because
+        // glfwFocusWindow() from a GLFW callback is unreliable on macOS.
+        // Uses cursor position vs. window size (GLFW_HOVERED is unreliable on macOS Cocoa).
+        if (glfwWindowHandle != 0) {
+            double[] cx = new double[1], cy = new double[1];
+            GLFW.glfwGetCursorPos(glfwWindowHandle, cx, cy);
+            int[] ww = new int[1], wh = new int[1];
+            GLFW.glfwGetWindowSize(glfwWindowHandle, ww, wh);
+            boolean inside = cx[0] >= 0 && cy[0] >= 0 && cx[0] < ww[0] && cy[0] < wh[0];
+            if (inside && !cursorWasInside) {
+                GLFW.glfwFocusWindow(glfwWindowHandle);
+            }
+            cursorWasInside = inside;
+        }
+
         simulationClock.advance();
         cameraInputHandler.update();
 
@@ -347,6 +383,7 @@ public class KepplrApp extends SimpleApplication {
     public void destroy() {
         super.destroy();
         if (statusWindow != null) {
+            // Sanctioned use: JME destroy() runs on JME thread; must marshal FX cleanup to FX thread
             Platform.runLater(() -> {
                 statusWindow.close();
                 Platform.exit();

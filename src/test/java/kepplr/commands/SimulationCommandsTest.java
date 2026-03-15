@@ -46,13 +46,6 @@ class SimulationCommandsTest {
     }
 
     @Test
-    @DisplayName("trackBody forwards call")
-    void trackBodyForwards() {
-        commands.trackBody(MOON);
-        verify(commands).trackBody(MOON);
-    }
-
-    @Test
     @DisplayName("setTimeRate is absolute, not multiplicative (§2.3)")
     void setTimeRateAbsolute() {
         // "3x" means timeRate = 3.0, verified by contract

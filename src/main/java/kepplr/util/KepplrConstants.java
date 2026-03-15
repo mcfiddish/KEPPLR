@@ -574,4 +574,11 @@ public final class KepplrConstants {
      * treated as a click rather than a drag.
      */
     public static final double MOUSE_CLICK_DRAG_THRESHOLD_PX = 5.0;
+
+    /**
+     * Minimum screen-space pick radius in pixels. Bodies whose apparent radius on screen is smaller
+     * than this value are expanded to this radius for mouse-picking purposes. Prevents small/distant
+     * bodies from being impossible to click.
+     */
+    public static final float PICK_MIN_SCREEN_RADIUS_PX = 8.0f;
 }

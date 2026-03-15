@@ -112,6 +112,8 @@ public final class BodyNodeFactory {
 
         // Ephemeris node: positioned at body's camera-relative location each frame
         Node ephemerisNode = new Node(bodyId.getName() + "-ephemeris");
+        ephemerisNode.setUserData("naifId", naifId);
+        ephemerisNode.setUserData("bodyRadiusKm", (double) radiusKm);
         ephemerisNode.attachChild(bodyFixedNode);
         ephemerisNode.attachChild(spriteGeom);
 
@@ -147,6 +149,8 @@ public final class BodyNodeFactory {
         spriteGeom.setCullHint(Spatial.CullHint.Inherit);
 
         Node ephemerisNode = new Node(name + "-ephemeris");
+        ephemerisNode.setUserData("naifId", naifId);
+        ephemerisNode.setUserData("bodyRadiusKm", 0.0);
         ephemerisNode.attachChild(bodyFixedNode);
         ephemerisNode.attachChild(spriteGeom);
 

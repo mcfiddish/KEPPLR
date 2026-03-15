@@ -55,7 +55,6 @@ public final class SimulationStateFxBridge {
     private final SimpleStringProperty selectedBodyText = new SimpleStringProperty("");
     private final SimpleStringProperty focusedBodyText = new SimpleStringProperty("");
     private final SimpleStringProperty targetedBodyText = new SimpleStringProperty("");
-    private final SimpleStringProperty trackedText = new SimpleStringProperty("");
     private final SimpleStringProperty utcTimeText = new SimpleStringProperty("");
     private final SimpleStringProperty timeRateText = new SimpleStringProperty("");
     private final SimpleStringProperty pausedText = new SimpleStringProperty("");
@@ -72,15 +71,11 @@ public final class SimulationStateFxBridge {
     private final SimpleStringProperty selectedBodyName = new SimpleStringProperty("—");
     private final SimpleStringProperty focusedBodyName = new SimpleStringProperty("—");
     private final SimpleStringProperty targetedBodyName = new SimpleStringProperty("—");
-    private final SimpleStringProperty trackedBodyName = new SimpleStringProperty("—");
     private final SimpleBooleanProperty selectedBodyActive = new SimpleBooleanProperty(false);
-    private final SimpleBooleanProperty trackedBodyActive = new SimpleBooleanProperty(false);
     private final SimpleBooleanProperty cameraFrameFallbackActive = new SimpleBooleanProperty(false);
     private final SimpleIntegerProperty selectedBodyIdFx = new SimpleIntegerProperty(-1);
     private final SimpleIntegerProperty focusedBodyIdFx = new SimpleIntegerProperty(-1);
     private final SimpleIntegerProperty targetedBodyIdFx = new SimpleIntegerProperty(-1);
-    private final SimpleIntegerProperty trackedBodyIdFx = new SimpleIntegerProperty(-1);
-
     // ── Production constructor ────────────────────────────────────────────────
 
     /**
@@ -112,7 +107,6 @@ public final class SimulationStateFxBridge {
         selectedBodyText.set(formatBodyId(state.selectedBodyIdProperty().get()));
         focusedBodyText.set(formatBodyId(state.focusedBodyIdProperty().get()));
         targetedBodyText.set(formatBodyId(state.targetedBodyIdProperty().get()));
-        trackedText.set(formatTracked(state.trackedBodyIdProperty().get()));
         utcTimeText.set(formatEt(state.currentEtProperty().get()));
         timeRateText.set(formatTimeRate(state.timeRateProperty().get()));
         pausedText.set(formatPaused(state.pausedProperty().get()));
@@ -128,15 +122,11 @@ public final class SimulationStateFxBridge {
         selectedBodyName.set(formatBodyName(state.selectedBodyIdProperty().get()));
         focusedBodyName.set(formatBodyName(state.focusedBodyIdProperty().get()));
         targetedBodyName.set(formatBodyName(state.targetedBodyIdProperty().get()));
-        trackedBodyName.set(formatBodyName(state.trackedBodyIdProperty().get()));
         selectedBodyActive.set(state.selectedBodyIdProperty().get() != -1);
-        trackedBodyActive.set(state.trackedBodyIdProperty().get() != -1);
         cameraFrameFallbackActive.set(state.cameraFrameFallbackActiveProperty().get());
         selectedBodyIdFx.set(state.selectedBodyIdProperty().get());
         focusedBodyIdFx.set(state.focusedBodyIdProperty().get());
         targetedBodyIdFx.set(state.targetedBodyIdProperty().get());
-        trackedBodyIdFx.set(state.trackedBodyIdProperty().get());
-
         // Attach listeners — fire on the thread that mutates state (JME thread).
         // In production, polling=true once startPolling() is called; listeners skip dispatcher to
         // avoid flooding the FX run queue at 60 fps (the AnimationTimer handles all updates).
@@ -155,11 +145,6 @@ public final class SimulationStateFxBridge {
             if (polling) return;
             String s = formatBodyId(newVal.intValue());
             dispatcher.accept(() -> targetedBodyText.set(s));
-        });
-        state.trackedBodyIdProperty().addListener((obs, oldVal, newVal) -> {
-            if (polling) return;
-            String s = formatTracked(newVal.intValue());
-            dispatcher.accept(() -> trackedText.set(s));
         });
         state.currentEtProperty().addListener((obs, oldVal, newVal) -> {
             if (polling) return;
@@ -249,17 +234,6 @@ public final class SimulationStateFxBridge {
                 targetedBodyIdFx.set(id);
             });
         });
-        state.trackedBodyIdProperty().addListener((obs, oldVal, newVal) -> {
-            if (polling) return;
-            String n = formatBodyName(newVal.intValue());
-            boolean active = newVal.intValue() != -1;
-            int id = newVal.intValue();
-            dispatcher.accept(() -> {
-                trackedBodyName.set(n);
-                trackedBodyActive.set(active);
-                trackedBodyIdFx.set(id);
-            });
-        });
         state.cameraFrameFallbackActiveProperty().addListener((obs, oldVal, newVal) -> {
             if (polling) return;
             dispatcher.accept(() -> cameraFrameFallbackActive.set(newVal));
@@ -292,7 +266,6 @@ public final class SimulationStateFxBridge {
         selectedBodyText.set(formatBodyId(state.selectedBodyIdProperty().get()));
         focusedBodyText.set(formatBodyId(state.focusedBodyIdProperty().get()));
         targetedBodyText.set(formatBodyId(state.targetedBodyIdProperty().get()));
-        trackedText.set(formatTracked(state.trackedBodyIdProperty().get()));
         utcTimeText.set(formatEt(state.currentEtProperty().get()));
         timeRateText.set(formatTimeRate(state.timeRateProperty().get()));
         pausedText.set(formatPaused(state.pausedProperty().get()));
@@ -308,14 +281,11 @@ public final class SimulationStateFxBridge {
         selectedBodyName.set(formatBodyName(state.selectedBodyIdProperty().get()));
         focusedBodyName.set(formatBodyName(state.focusedBodyIdProperty().get()));
         targetedBodyName.set(formatBodyName(state.targetedBodyIdProperty().get()));
-        trackedBodyName.set(formatBodyName(state.trackedBodyIdProperty().get()));
         selectedBodyActive.set(state.selectedBodyIdProperty().get() != -1);
-        trackedBodyActive.set(state.trackedBodyIdProperty().get() != -1);
         cameraFrameFallbackActive.set(state.cameraFrameFallbackActiveProperty().get());
         selectedBodyIdFx.set(state.selectedBodyIdProperty().get());
         focusedBodyIdFx.set(state.focusedBodyIdProperty().get());
         targetedBodyIdFx.set(state.targetedBodyIdProperty().get());
-        trackedBodyIdFx.set(state.trackedBodyIdProperty().get());
     }
 
     // ── Exposed read-only properties ──────────────────────────────────────────
@@ -333,11 +303,6 @@ public final class SimulationStateFxBridge {
     /** NAIF ID of the targeted body, formatted for display. */
     public ReadOnlyStringProperty targetedBodyTextProperty() {
         return targetedBodyText;
-    }
-
-    /** Tracking status, formatted for display. */
-    public ReadOnlyStringProperty trackedTextProperty() {
-        return trackedText;
     }
 
     /** Current simulation time as a UTC string (§1.2). */
@@ -407,19 +372,9 @@ public final class SimulationStateFxBridge {
         return targetedBodyName;
     }
 
-    /** Tracked body name resolved via {@link BodyLookupService#formatName(int)}. */
-    public ReadOnlyStringProperty trackedBodyNameProperty() {
-        return trackedBodyName;
-    }
-
     /** {@code true} when a body is currently selected (selectedBodyId != -1). */
     public ReadOnlyBooleanProperty selectedBodyActiveProperty() {
         return selectedBodyActive;
-    }
-
-    /** {@code true} when a body is currently tracked (trackedBodyId != -1). */
-    public ReadOnlyBooleanProperty trackedBodyActiveProperty() {
-        return trackedBodyActive;
     }
 
     /** {@code true} when the camera frame fell back from BODY_FIXED to INERTIAL. */
@@ -442,11 +397,6 @@ public final class SimulationStateFxBridge {
         return targetedBodyIdFx;
     }
 
-    /** NAIF ID of the currently tracked body (-1 if none). */
-    public ReadOnlyIntegerProperty trackedBodyIdProperty() {
-        return trackedBodyIdFx;
-    }
-
     // ── Formatting helpers (called on JME thread) ─────────────────────────────
 
     /**
@@ -467,15 +417,6 @@ public final class SimulationStateFxBridge {
      */
     public static String formatBodyName(int id) {
         return BodyLookupService.formatName(id);
-    }
-
-    /**
-     * Format the tracked-body state.
-     *
-     * @param trackedId NAIF ID of tracked body, or -1
-     */
-    static String formatTracked(int trackedId) {
-        return trackedId == -1 ? "Not tracking" : "Tracking NAIF " + trackedId;
     }
 
     /**

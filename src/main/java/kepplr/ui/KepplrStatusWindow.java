@@ -24,6 +24,8 @@ import javafx.scene.control.TextField;
 import javafx.scene.control.ToggleGroup;
 import javafx.scene.control.TreeItem;
 import javafx.scene.control.TreeView;
+import javafx.scene.input.KeyCode;
+import javafx.scene.input.KeyEvent;
 import javafx.scene.layout.ColumnConstraints;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
@@ -63,6 +65,7 @@ public final class KepplrStatusWindow {
 
     private final SimulationStateFxBridge bridge;
     private final SimulationCommands commands;
+    private Runnable jmeShutdown;
     private Stage stage;
     private TreeView<BodyTreeEntry> bodyTree;
 
@@ -73,6 +76,15 @@ public final class KepplrStatusWindow {
     public KepplrStatusWindow(SimulationStateFxBridge bridge, SimulationCommands commands) {
         this.bridge = bridge;
         this.commands = commands;
+    }
+
+    /**
+     * Set the callback to shut down JME when the JavaFX window is closed.
+     *
+     * @param shutdown runnable that stops the JME application; called from the FX thread
+     */
+    public void setJmeShutdown(Runnable shutdown) {
+        this.jmeShutdown = shutdown;
     }
 
     /**
@@ -101,7 +113,19 @@ public final class KepplrStatusWindow {
         VBox.setVgrow(bodyListSection, Priority.ALWAYS);
 
         Scene scene = new Scene(root, WINDOW_WIDTH, WINDOW_HEIGHT);
+
+        // BUG 3: Suppress Escape-closes-stage default behavior
+        scene.addEventFilter(KeyEvent.KEY_PRESSED, e -> {
+            if (e.getCode() == KeyCode.ESCAPE) e.consume();
+        });
+
         stage.setScene(scene);
+
+        // BUG 2: When the JavaFX window is closed, shut down JME too
+        stage.setOnCloseRequest(e -> {
+            if (jmeShutdown != null) jmeShutdown.run();
+        });
+
         stage.show();
         stage.toFront();
         bridge.startPolling();
@@ -114,7 +138,7 @@ public final class KepplrStatusWindow {
         }
     }
 
-    // ── Body Readout (Selected, Focused, Targeted, Tracked with action buttons) ─
+    // ── Body Readout (Selected, Focused, Targeted with action buttons) ────────
 
     private VBox buildBodyReadout() {
         GridPane grid = new GridPane();
@@ -166,19 +190,6 @@ public final class KepplrStatusWindow {
         tgtValue.textProperty().bind(bridge.targetedBodyNameProperty());
         grid.add(tgtLabel, 0, 2);
         grid.add(tgtValue, 1, 2);
-
-        // Row 3: Tracked — with Stop button
-        Label trkLabel = boldLabel("Tracked:");
-        Label trkValue = monoLabel();
-        trkValue.textProperty().bind(bridge.trackedBodyNameProperty());
-        Button stopTrackBtn = smallButton("Stop");
-        stopTrackBtn.setOnAction(e -> commands.stopTracking());
-        stopTrackBtn.visibleProperty().bind(bridge.trackedBodyActiveProperty());
-        stopTrackBtn.managedProperty().bind(bridge.trackedBodyActiveProperty());
-
-        grid.add(trkLabel, 0, 3);
-        grid.add(trkValue, 1, 3);
-        grid.add(stopTrackBtn, 2, 3);
 
         return new VBox(grid);
     }
@@ -382,6 +393,7 @@ public final class KepplrStatusWindow {
             chooser.setTitle("Load KEPPLR Configuration");
             chooser.getExtensionFilters().add(
                     new FileChooser.ExtensionFilter("Properties files", "*.properties"));
+            chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("All Files", "*.*"));
             File file = chooser.showOpenDialog(stage);
             if (file != null) {
                 try {
@@ -423,7 +435,7 @@ public final class KepplrStatusWindow {
         Menu frameSubMenu = new Menu("Camera Frame", null, inertialItem, bodyFixedItem, synodicItem);
 
         MenuItem stopTrackItem = new MenuItem("Stop Tracking");
-        stopTrackItem.setOnAction(e -> commands.stopTracking());
+        stopTrackItem.setOnAction(e -> commands.setCameraFrame(CameraFrame.INERTIAL));
 
         return new Menu("View", null, frameSubMenu, new SeparatorMenuItem(), stopTrackItem);
     }

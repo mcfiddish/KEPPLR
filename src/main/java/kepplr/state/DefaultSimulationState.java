@@ -32,8 +32,6 @@ public final class DefaultSimulationState implements SimulationState {
     private final SimpleIntegerProperty selectedBodyId = new SimpleIntegerProperty(-1);
     private final SimpleIntegerProperty focusedBodyId = new SimpleIntegerProperty(-1);
     private final SimpleIntegerProperty targetedBodyId = new SimpleIntegerProperty(-1);
-    private final SimpleIntegerProperty trackedBodyId = new SimpleIntegerProperty(-1);
-
     // ── Time state (§1.2, §2.3) ──
 
     private final SimpleDoubleProperty currentEt = new SimpleDoubleProperty(0.0);
@@ -60,10 +58,6 @@ public final class DefaultSimulationState implements SimulationState {
 
     private final SimpleObjectProperty<RenderQuality> renderQuality = new SimpleObjectProperty<>(RenderQuality.HIGH);
 
-    // ── Tracking anchor (§4.6) ──
-
-    private final SimpleObjectProperty<double[]> trackingAnchor = new SimpleObjectProperty<>(null);
-
     // ── Transition state (Step 18) ──
 
     private final SimpleBooleanProperty transitionActive = new SimpleBooleanProperty(false);
@@ -84,11 +78,6 @@ public final class DefaultSimulationState implements SimulationState {
     @Override
     public ReadOnlyIntegerProperty targetedBodyIdProperty() {
         return targetedBodyId;
-    }
-
-    @Override
-    public ReadOnlyIntegerProperty trackedBodyIdProperty() {
-        return trackedBodyId;
     }
 
     @Override
@@ -147,11 +136,6 @@ public final class DefaultSimulationState implements SimulationState {
     }
 
     @Override
-    public ReadOnlyObjectProperty<double[]> trackingAnchorProperty() {
-        return trackingAnchor;
-    }
-
-    @Override
     public ReadOnlyBooleanProperty transitionActiveProperty() {
         return transitionActive;
     }
@@ -176,11 +160,6 @@ public final class DefaultSimulationState implements SimulationState {
     /** Set the targeted body NAIF ID, or -1 for none. */
     public void setTargetedBodyId(int id) {
         targetedBodyId.set(id);
-    }
-
-    /** Set the tracked body NAIF ID, or -1 for none. */
-    public void setTrackedBodyId(int id) {
-        trackedBodyId.set(id);
     }
 
     /** Set the current simulation epoch (ET, TDB seconds past J2000). */
@@ -258,18 +237,6 @@ public final class DefaultSimulationState implements SimulationState {
     /** Set the render quality preset (§9.4). */
     public void setRenderQuality(RenderQuality quality) {
         renderQuality.set(quality);
-    }
-
-    /**
-     * Set the tracking anchor to normalized screen coordinates, or {@code null} to clear it.
-     *
-     * <p>Called by the JME render thread each frame while a body is being tracked, and by
-     * {@link kepplr.commands.DefaultSimulationCommands} on any transition that ends tracking.
-     *
-     * @param anchor length-2 array [normalizedX, normalizedY], or {@code null}
-     */
-    public void setTrackingAnchor(double[] anchor) {
-        trackingAnchor.set(anchor);
     }
 
     /**

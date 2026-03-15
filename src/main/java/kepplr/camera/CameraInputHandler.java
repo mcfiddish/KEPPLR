@@ -1,6 +1,5 @@
 package kepplr.camera;
 
-import com.jme3.collision.CollisionResults;
 import com.jme3.input.InputManager;
 import com.jme3.input.KeyInput;
 import com.jme3.input.MouseInput;
@@ -16,11 +15,8 @@ import com.jme3.input.event.MouseButtonEvent;
 import com.jme3.input.event.MouseMotionEvent;
 import com.jme3.input.event.TouchEvent;
 import com.jme3.math.Quaternion;
-import com.jme3.math.Ray;
-import com.jme3.math.Vector2f;
 import com.jme3.math.Vector3f;
 import com.jme3.renderer.Camera;
-import com.jme3.scene.Geometry;
 import com.jme3.scene.Node;
 import kepplr.commands.SimulationCommands;
 import kepplr.config.KEPPLRConfiguration;
@@ -54,9 +50,8 @@ import picante.surfaces.Ellipsoid;
  *   <li>Shift + Left/Right arrow — orbit around screen-up axis
  *   <li>PgUp/PgDn — zoom in/out
  *   <li>G — goTo focused body (camera transition)
- *   <li>F — follow/track focused body
+ *   <li>F — toggle camera frame between SYNODIC and INERTIAL (§4.6)
  *   <li>T — target selected body
- *   <li>Escape — stop tracking
  *   <li>Space — pause/resume simulation
  *   <li>{@code [} / {@code ]} — decrease / increase time rate
  *   <li>Left click on body — select body
@@ -366,11 +361,10 @@ public final class CameraInputHandler implements ActionListener, AnalogListener,
                 }
             }
             case KeyInput.KEY_F -> {
-                // F — follow/track focused body
-                int focusId = state.focusedBodyIdProperty().get();
-                if (focusId != -1) {
-                    commands.trackBody(focusId);
-                }
+                // F — toggle camera frame between SYNODIC and INERTIAL (§4.6)
+                CameraFrame current = state.cameraFrameProperty().get();
+                commands.setCameraFrame(
+                        current == CameraFrame.SYNODIC ? CameraFrame.INERTIAL : CameraFrame.SYNODIC);
             }
             case KeyInput.KEY_T -> {
                 // T — target selected body
@@ -379,7 +373,6 @@ public final class CameraInputHandler implements ActionListener, AnalogListener,
                     commands.targetBody(selectedId);
                 }
             }
-            case KeyInput.KEY_ESCAPE -> commands.stopTracking();
             case KeyInput.KEY_SPACE -> commands.setPaused(!state.pausedProperty().get());
             case KeyInput.KEY_LBRACKET -> {
                 // [ — decrease time rate
@@ -541,40 +534,68 @@ public final class CameraInputHandler implements ActionListener, AnalogListener,
     }
 
     /**
-     * Cast a pick ray from the camera through the given screen coordinates against all frustum layer nodes.
+     * Screen-space pick: project every visible body to screen space, find candidates within their effective pick radius,
+     * and return the one with the largest actual screen radius.
      *
-     * @return the NAIF ID of the closest hit body, or -1 if no body was hit
+     * <ol>
+     *   <li>Project each body center to screen space; compute actual screen radius from body radius and distance.
+     *   <li>Effective pick radius = {@code max(actualScreenRadius, PICK_MIN_SCREEN_RADIUS_PX)}.
+     *   <li>A body is a candidate if {@code screenDist ≤ effectivePickRadius}.
+     *   <li>Among candidates, the one with the largest actual screen radius wins — this correctly selects Jupiter over
+     *       a nearby satellite when both are candidates.
+     *   <li>If no candidates exist, returns -1 (caller does nothing).
+     * </ol>
+     *
+     * @return the NAIF ID of the best candidate body, or -1 if no body was hit
      */
     private int pickBody(float screenX, float screenY) {
         if (pickNodes == null) return -1;
 
-        Vector2f screenPos = new Vector2f(screenX, screenY);
-        Vector3f worldCoords = cam.getWorldCoordinates(screenPos, 0f);
-        Vector3f direction = cam.getWorldCoordinates(screenPos, 1f).subtractLocal(worldCoords).normalizeLocal();
-        Ray ray = new Ray(worldCoords, direction);
+        int bestNaifId = -1;
+        double bestApparentPx = -1;
 
-        CollisionResults closest = null;
-        float closestDist = Float.MAX_VALUE;
+        int viewportHeight = cam.getHeight();
+        float fovYDeg = KepplrConstants.CAMERA_FOV_Y_DEG;
+        double tanHalfFov = Math.tan(Math.toRadians(fovYDeg) / 2.0);
+        double halfHeight = viewportHeight / 2.0;
 
-        for (Node node : pickNodes) {
-            if (node == null) continue;
-            CollisionResults results = new CollisionResults();
-            node.collideWith(ray, results);
-            if (results.size() > 0 && results.getClosestCollision().getDistance() < closestDist) {
-                closest = results;
-                closestDist = results.getClosestCollision().getDistance();
+        for (Node layerNode : pickNodes) {
+            if (layerNode == null) continue;
+            for (com.jme3.scene.Spatial child : layerNode.getChildren()) {
+                Integer naifId = child.getUserData("naifId");
+                if (naifId == null) continue;
+                Double bodyRadiusKm = child.getUserData("bodyRadiusKm");
+                if (bodyRadiusKm == null) bodyRadiusKm = 0.0;
+
+                // Step 1: project body center to screen space
+                Vector3f worldPos = child.getWorldTranslation();
+                Vector3f screen = cam.getScreenCoordinates(worldPos);
+                if (screen.z < 0f || screen.z > 1f) continue; // behind camera
+
+                // Step 1: compute actual screen radius in pixels
+                double dist = worldPos.length();
+                double actualScreenRadius = (dist > 0 && bodyRadiusKm > 0)
+                        ? (bodyRadiusKm / dist) * halfHeight / tanHalfFov
+                        : 0.0;
+
+                // Step 2: effective pick radius — actual size, but at least PICK_MIN_SCREEN_RADIUS_PX
+                double effectivePickRadius = Math.max(actualScreenRadius, KepplrConstants.PICK_MIN_SCREEN_RADIUS_PX);
+
+                // Step 3: screen-space distance from click to body center
+                double dx = screenX - screen.x;
+                double dy = screenY - screen.y;
+                double screenDist = Math.sqrt(dx * dx + dy * dy);
+
+                if (screenDist > effectivePickRadius) continue;
+
+                // Step 4: among candidates, largest actual screen radius wins
+                if (actualScreenRadius > bestApparentPx) {
+                    bestApparentPx = actualScreenRadius;
+                    bestNaifId = naifId;
+                }
             }
         }
-
-        if (closest == null) return -1;
-
-        Geometry hitGeom = closest.getClosestCollision().getGeometry();
-        // The naifId UserData is set directly on the geometry by BodyNodeFactory
-        if (hitGeom != null) {
-            Integer naifId = hitGeom.getUserData("naifId");
-            if (naifId != null) return naifId;
-        }
-        return -1;
+        return bestNaifId;
     }
 
     // ─────────────────────────────────────────────────────────────────────────
