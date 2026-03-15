@@ -10,6 +10,8 @@ import com.jme3.renderer.Camera;
 import com.jme3.renderer.ViewPort;
 import com.jme3.scene.Node;
 import com.jme3.system.AppSettings;
+
+import java.nio.file.Paths;
 import java.time.Instant;
 import java.util.List;
 import javafx.application.Platform;
@@ -118,6 +120,9 @@ public class KepplrApp extends SimpleApplication {
     // ── Sun halo ───────────────────────────────────────────────────────────────────────────────
     private SunHaloRenderer sunHaloRenderer;
 
+    // ── JavaFX control window ─────────────────────────────────────────────────────────────────
+    private volatile KepplrStatusWindow statusWindow;
+
     @Override
     public void simpleInitApp() {
         setLostFocusBehavior(LostFocusBehavior.Disabled);
@@ -139,7 +144,10 @@ public class KepplrApp extends SimpleApplication {
         if (System.getProperty("os.name", "").toLowerCase().contains("mac")) {
             Platform.startup(() -> {});
         }
-        Platform.runLater(() -> new KepplrStatusWindow(bridge, commands).show());
+        Platform.runLater(() -> {
+            statusWindow = new KepplrStatusWindow(bridge, commands);
+            statusWindow.show();
+        });
 
         int focusBodyId = DEFAULT_FOCUS_BODY;
         commands.focusBody(focusBodyId);
@@ -243,6 +251,8 @@ public class KepplrApp extends SimpleApplication {
         // ── HUD and camera input ──────────────────────────────────────────────────────────────
         hud = new KepplrHud(guiNode, assetManager, cam);
         cameraInputHandler = new CameraInputHandler(cam, cameraHelioJ2000, simulationState);
+        cameraInputHandler.setSimulationCommands(commands);
+        cameraInputHandler.setPickNodes(nearNode, midNode, farNode);
         cameraInputHandler.register(inputManager);
     }
 
@@ -331,6 +341,17 @@ public class KepplrApp extends SimpleApplication {
         farNode.updateGeometricState();
         midNode.updateGeometricState();
         nearNode.updateGeometricState();
+    }
+
+    @Override
+    public void destroy() {
+        super.destroy();
+        if (statusWindow != null) {
+            Platform.runLater(() -> {
+                statusWindow.close();
+                Platform.exit();
+            });
+        }
     }
 
     // ── private helpers ───────────────────────────────────────────────────────────────────────

@@ -6,14 +6,17 @@ import javafx.animation.AnimationTimer;
 import javafx.application.Platform;
 import javafx.beans.property.ReadOnlyBooleanProperty;
 import javafx.beans.property.ReadOnlyDoubleProperty;
+import javafx.beans.property.ReadOnlyIntegerProperty;
 import javafx.beans.property.ReadOnlyObjectProperty;
 import javafx.beans.property.ReadOnlyStringProperty;
 import javafx.beans.property.SimpleBooleanProperty;
 import javafx.beans.property.SimpleDoubleProperty;
+import javafx.beans.property.SimpleIntegerProperty;
 import javafx.beans.property.SimpleObjectProperty;
 import javafx.beans.property.SimpleStringProperty;
 import kepplr.camera.CameraFrame;
 import kepplr.config.KEPPLRConfiguration;
+import kepplr.ephemeris.BodyLookupService;
 import kepplr.state.BodyInView;
 import kepplr.state.SimulationState;
 
@@ -65,6 +68,19 @@ public final class SimulationStateFxBridge {
     private final SimpleBooleanProperty transitionActive = new SimpleBooleanProperty(false);
     private final SimpleDoubleProperty transitionProgress = new SimpleDoubleProperty(0.0);
 
+    // ── Step 19 additions ────────────────────────────────────────────────────
+    private final SimpleStringProperty selectedBodyName = new SimpleStringProperty("—");
+    private final SimpleStringProperty focusedBodyName = new SimpleStringProperty("—");
+    private final SimpleStringProperty targetedBodyName = new SimpleStringProperty("—");
+    private final SimpleStringProperty trackedBodyName = new SimpleStringProperty("—");
+    private final SimpleBooleanProperty selectedBodyActive = new SimpleBooleanProperty(false);
+    private final SimpleBooleanProperty trackedBodyActive = new SimpleBooleanProperty(false);
+    private final SimpleBooleanProperty cameraFrameFallbackActive = new SimpleBooleanProperty(false);
+    private final SimpleIntegerProperty selectedBodyIdFx = new SimpleIntegerProperty(-1);
+    private final SimpleIntegerProperty focusedBodyIdFx = new SimpleIntegerProperty(-1);
+    private final SimpleIntegerProperty targetedBodyIdFx = new SimpleIntegerProperty(-1);
+    private final SimpleIntegerProperty trackedBodyIdFx = new SimpleIntegerProperty(-1);
+
     // ── Production constructor ────────────────────────────────────────────────
 
     /**
@@ -109,6 +125,17 @@ public final class SimulationStateFxBridge {
         bodiesInViewText.set(formatBodiesInView(state.bodiesInViewProperty().get()));
         transitionActive.set(state.transitionActiveProperty().get());
         transitionProgress.set(state.transitionProgressProperty().get());
+        selectedBodyName.set(formatBodyName(state.selectedBodyIdProperty().get()));
+        focusedBodyName.set(formatBodyName(state.focusedBodyIdProperty().get()));
+        targetedBodyName.set(formatBodyName(state.targetedBodyIdProperty().get()));
+        trackedBodyName.set(formatBodyName(state.trackedBodyIdProperty().get()));
+        selectedBodyActive.set(state.selectedBodyIdProperty().get() != -1);
+        trackedBodyActive.set(state.trackedBodyIdProperty().get() != -1);
+        cameraFrameFallbackActive.set(state.cameraFrameFallbackActiveProperty().get());
+        selectedBodyIdFx.set(state.selectedBodyIdProperty().get());
+        focusedBodyIdFx.set(state.focusedBodyIdProperty().get());
+        targetedBodyIdFx.set(state.targetedBodyIdProperty().get());
+        trackedBodyIdFx.set(state.trackedBodyIdProperty().get());
 
         // Attach listeners — fire on the thread that mutates state (JME thread).
         // In production, polling=true once startPolling() is called; listeners skip dispatcher to
@@ -193,6 +220,50 @@ public final class SimulationStateFxBridge {
             if (polling) return;
             dispatcher.accept(() -> transitionProgress.set(newVal.doubleValue()));
         });
+        state.selectedBodyIdProperty().addListener((obs, oldVal, newVal) -> {
+            if (polling) return;
+            String n = formatBodyName(newVal.intValue());
+            boolean active = newVal.intValue() != -1;
+            int id = newVal.intValue();
+            dispatcher.accept(() -> {
+                selectedBodyName.set(n);
+                selectedBodyActive.set(active);
+                selectedBodyIdFx.set(id);
+            });
+        });
+        state.focusedBodyIdProperty().addListener((obs, oldVal, newVal) -> {
+            if (polling) return;
+            String n = formatBodyName(newVal.intValue());
+            int id = newVal.intValue();
+            dispatcher.accept(() -> {
+                focusedBodyName.set(n);
+                focusedBodyIdFx.set(id);
+            });
+        });
+        state.targetedBodyIdProperty().addListener((obs, oldVal, newVal) -> {
+            if (polling) return;
+            String n = formatBodyName(newVal.intValue());
+            int id = newVal.intValue();
+            dispatcher.accept(() -> {
+                targetedBodyName.set(n);
+                targetedBodyIdFx.set(id);
+            });
+        });
+        state.trackedBodyIdProperty().addListener((obs, oldVal, newVal) -> {
+            if (polling) return;
+            String n = formatBodyName(newVal.intValue());
+            boolean active = newVal.intValue() != -1;
+            int id = newVal.intValue();
+            dispatcher.accept(() -> {
+                trackedBodyName.set(n);
+                trackedBodyActive.set(active);
+                trackedBodyIdFx.set(id);
+            });
+        });
+        state.cameraFrameFallbackActiveProperty().addListener((obs, oldVal, newVal) -> {
+            if (polling) return;
+            dispatcher.accept(() -> cameraFrameFallbackActive.set(newVal));
+        });
     }
 
     // ── FX-thread polling (AnimationTimer) ───────────────────────────────────
@@ -234,6 +305,17 @@ public final class SimulationStateFxBridge {
         bodiesInViewText.set(formatBodiesInView(state.bodiesInViewProperty().get()));
         transitionActive.set(state.transitionActiveProperty().get());
         transitionProgress.set(state.transitionProgressProperty().get());
+        selectedBodyName.set(formatBodyName(state.selectedBodyIdProperty().get()));
+        focusedBodyName.set(formatBodyName(state.focusedBodyIdProperty().get()));
+        targetedBodyName.set(formatBodyName(state.targetedBodyIdProperty().get()));
+        trackedBodyName.set(formatBodyName(state.trackedBodyIdProperty().get()));
+        selectedBodyActive.set(state.selectedBodyIdProperty().get() != -1);
+        trackedBodyActive.set(state.trackedBodyIdProperty().get() != -1);
+        cameraFrameFallbackActive.set(state.cameraFrameFallbackActiveProperty().get());
+        selectedBodyIdFx.set(state.selectedBodyIdProperty().get());
+        focusedBodyIdFx.set(state.focusedBodyIdProperty().get());
+        targetedBodyIdFx.set(state.targetedBodyIdProperty().get());
+        trackedBodyIdFx.set(state.trackedBodyIdProperty().get());
     }
 
     // ── Exposed read-only properties ──────────────────────────────────────────
@@ -308,6 +390,63 @@ public final class SimulationStateFxBridge {
         return transitionProgress;
     }
 
+    // ── Step 19 properties ───────────────────────────────────────────────────
+
+    /** Selected body name resolved via {@link BodyLookupService#formatName(int)}. */
+    public ReadOnlyStringProperty selectedBodyNameProperty() {
+        return selectedBodyName;
+    }
+
+    /** Focused body name resolved via {@link BodyLookupService#formatName(int)}. */
+    public ReadOnlyStringProperty focusedBodyNameProperty() {
+        return focusedBodyName;
+    }
+
+    /** Targeted body name resolved via {@link BodyLookupService#formatName(int)}. */
+    public ReadOnlyStringProperty targetedBodyNameProperty() {
+        return targetedBodyName;
+    }
+
+    /** Tracked body name resolved via {@link BodyLookupService#formatName(int)}. */
+    public ReadOnlyStringProperty trackedBodyNameProperty() {
+        return trackedBodyName;
+    }
+
+    /** {@code true} when a body is currently selected (selectedBodyId != -1). */
+    public ReadOnlyBooleanProperty selectedBodyActiveProperty() {
+        return selectedBodyActive;
+    }
+
+    /** {@code true} when a body is currently tracked (trackedBodyId != -1). */
+    public ReadOnlyBooleanProperty trackedBodyActiveProperty() {
+        return trackedBodyActive;
+    }
+
+    /** {@code true} when the camera frame fell back from BODY_FIXED to INERTIAL. */
+    public ReadOnlyBooleanProperty cameraFrameFallbackActiveProperty() {
+        return cameraFrameFallbackActive;
+    }
+
+    /** NAIF ID of the currently selected body (-1 if none). */
+    public ReadOnlyIntegerProperty selectedBodyIdProperty() {
+        return selectedBodyIdFx;
+    }
+
+    /** NAIF ID of the currently focused body (-1 if none). */
+    public ReadOnlyIntegerProperty focusedBodyIdProperty() {
+        return focusedBodyIdFx;
+    }
+
+    /** NAIF ID of the currently targeted body (-1 if none). */
+    public ReadOnlyIntegerProperty targetedBodyIdProperty() {
+        return targetedBodyIdFx;
+    }
+
+    /** NAIF ID of the currently tracked body (-1 if none). */
+    public ReadOnlyIntegerProperty trackedBodyIdProperty() {
+        return trackedBodyIdFx;
+    }
+
     // ── Formatting helpers (called on JME thread) ─────────────────────────────
 
     /**
@@ -318,6 +457,16 @@ public final class SimulationStateFxBridge {
      */
     static String formatBodyId(int id) {
         return id == -1 ? "—" : "NAIF " + id;
+    }
+
+    /**
+     * Format a NAIF ID as a human-readable body name via {@link BodyLookupService}.
+     *
+     * @param id NAIF ID, or -1 for "no body"
+     * @return the SPICE name (title-cased), {@code "—"} for -1, or {@code "NAIF <id>"} as fallback
+     */
+    public static String formatBodyName(int id) {
+        return BodyLookupService.formatName(id);
     }
 
     /**

@@ -87,6 +87,7 @@ public final class BodyNodeFactory {
         }
         fullGeom.setMaterial(createBodyMaterial(naifId, bodyId.getName(), assetManager));
         fullGeom.setCullHint(Spatial.CullHint.Inherit);
+        fullGeom.setUserData("naifId", naifId);
         if (naifId != KepplrConstants.SUN_NAIF_ID) {
             fullGeom.setUserData("eclipseMaterial", true);
         }
@@ -256,6 +257,7 @@ public final class BodyNodeFactory {
         ColorRGBA color = spriteColorFor(name, naifId);
         spriteGeom.setMaterial(unshadedMaterial(color, assetManager));
         spriteGeom.setCullHint(Spatial.CullHint.Always);
+        spriteGeom.setUserData("naifId", naifId);
         return spriteGeom;
     }
 
