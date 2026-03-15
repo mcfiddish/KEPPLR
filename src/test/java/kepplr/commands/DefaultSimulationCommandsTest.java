@@ -212,6 +212,99 @@ class DefaultSimulationCommandsTest {
     }
 
     // ─────────────────────────────────────────────────────────────────
+    // Camera navigation commands (Step 19c)
+    // ─────────────────────────────────────────────────────────────────
+
+    @Nested
+    @DisplayName("Camera navigation commands (Step 19c)")
+    class CameraNavigationCommands {
+
+        @Test
+        @DisplayName("zoom delegates to TransitionController (does not throw)")
+        void zoomDelegates() {
+            assertDoesNotThrow(() -> commands.zoom(2.0, 0));
+        }
+
+        @Test
+        @DisplayName("setFov delegates to TransitionController (does not throw)")
+        void setFovDelegates() {
+            assertDoesNotThrow(() -> commands.setFov(60.0, 0));
+        }
+
+        @Test
+        @DisplayName("orbit delegates to TransitionController (does not throw)")
+        void orbitDelegates() {
+            assertDoesNotThrow(() -> commands.orbit(45.0, 0.0, 0));
+        }
+
+        @Test
+        @DisplayName("tilt delegates to TransitionController (does not throw)")
+        void tiltDelegates() {
+            assertDoesNotThrow(() -> commands.tilt(10.0, 0));
+        }
+
+        @Test
+        @DisplayName("yaw delegates to TransitionController (does not throw)")
+        void yawDelegates() {
+            assertDoesNotThrow(() -> commands.yaw(10.0, 0));
+        }
+
+        @Test
+        @DisplayName("roll delegates to TransitionController (does not throw)")
+        void rollDelegates() {
+            assertDoesNotThrow(() -> commands.roll(90.0, 0));
+        }
+
+        @Test
+        @DisplayName("setCameraPosition (focus-relative) delegates to TransitionController")
+        void setCameraPositionFocusRelative() {
+            assertDoesNotThrow(() -> commands.setCameraPosition(0, 0, 10000, 0));
+        }
+
+        @Test
+        @DisplayName("setCameraPosition (explicit origin) delegates to TransitionController")
+        void setCameraPositionExplicitOrigin() {
+            assertDoesNotThrow(() -> commands.setCameraPosition(0, 0, 50000, MOON, 0));
+        }
+
+        @Test
+        @DisplayName("setCameraLookDirection delegates to TransitionController")
+        void setCameraLookDirectionDelegates() {
+            assertDoesNotThrow(() -> commands.setCameraLookDirection(1, 0, 0, 0, 0, 1, 0));
+        }
+
+        @Test
+        @DisplayName("setSynodicFrame sets override IDs and frame without changing interaction state")
+        void setSynodicFrameSetsOverrides() {
+            commands.focusBody(EARTH);
+            commands.targetBody(MOON);
+            commands.selectBody(SUN);
+
+            commands.setSynodicFrame(EARTH, MOON);
+
+            assertEquals(EARTH, state.synodicFrameFocusIdProperty().get(), "synodic focus override");
+            assertEquals(MOON, state.synodicFrameTargetIdProperty().get(), "synodic target override");
+            assertEquals(CameraFrame.SYNODIC, state.cameraFrameProperty().get(), "frame should be SYNODIC");
+            // Interaction state untouched
+            assertEquals(SUN, state.selectedBodyIdProperty().get(), "selected should not change");
+            assertEquals(EARTH, state.focusedBodyIdProperty().get(), "focused should not change");
+            assertEquals(MOON, state.targetedBodyIdProperty().get(), "targeted should not change");
+        }
+
+        @Test
+        @DisplayName("setCameraFrame clears synodic override IDs")
+        void setCameraFrameClearsOverrides() {
+            commands.setSynodicFrame(EARTH, MOON);
+            assertEquals(EARTH, state.synodicFrameFocusIdProperty().get());
+
+            commands.setCameraFrame(CameraFrame.INERTIAL);
+
+            assertEquals(-1, state.synodicFrameFocusIdProperty().get(), "override focus should be cleared");
+            assertEquals(-1, state.synodicFrameTargetIdProperty().get(), "override target should be cleared");
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────────
     // Overlay commands (Step 19b)
     // ─────────────────────────────────────────────────────────────────
 

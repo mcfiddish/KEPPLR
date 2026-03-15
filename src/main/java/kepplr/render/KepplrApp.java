@@ -329,8 +329,15 @@ public class KepplrApp extends SimpleApplication {
             simulationState.setCameraFrameFallbackActive(bf.fallbackActive());
         } else if (requestedFrame == CameraFrame.SYNODIC) {
             bodyFixedFrame.reset();
-            int focusId = simulationState.focusedBodyIdProperty().get();
-            int targetId = simulationState.targetedBodyIdProperty().get();
+            // Step 19c: synodic frame override IDs take precedence over interaction state
+            int synodicFocus = simulationState.synodicFrameFocusIdProperty().get();
+            int synodicTarget = simulationState.synodicFrameTargetIdProperty().get();
+            int focusId = (synodicFocus != -1)
+                    ? synodicFocus
+                    : simulationState.focusedBodyIdProperty().get();
+            int targetId = (synodicTarget != -1)
+                    ? synodicTarget
+                    : simulationState.targetedBodyIdProperty().get();
             double et = simulationState.currentEtProperty().get();
             SynodicFrameApplier.ApplyResult sr =
                     synodicFrameApplier.apply(cameraHelioJ2000, cam.getRotation(), focusId, targetId, et);

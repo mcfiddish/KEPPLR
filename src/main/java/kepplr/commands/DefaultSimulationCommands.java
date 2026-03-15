@@ -94,6 +94,61 @@ public final class DefaultSimulationCommands implements SimulationCommands {
         transitionController.requestGoTo(naifId, apparentRadiusDeg, durationSeconds);
     }
 
+    // ── Camera navigation commands (Step 19c) ──
+
+    @Override
+    public void zoom(double factor, double durationSeconds) {
+        transitionController.requestZoom(factor, durationSeconds);
+    }
+
+    @Override
+    public void setFov(double degrees, double durationSeconds) {
+        transitionController.requestFov(degrees, durationSeconds);
+    }
+
+    @Override
+    public void orbit(double rightDegrees, double upDegrees, double durationSeconds) {
+        transitionController.requestOrbit(rightDegrees, upDegrees, durationSeconds);
+    }
+
+    @Override
+    public void tilt(double degrees, double durationSeconds) {
+        transitionController.requestTilt(degrees, durationSeconds);
+    }
+
+    @Override
+    public void yaw(double degrees, double durationSeconds) {
+        transitionController.requestYaw(degrees, durationSeconds);
+    }
+
+    @Override
+    public void roll(double degrees, double durationSeconds) {
+        transitionController.requestRoll(degrees, durationSeconds);
+    }
+
+    @Override
+    public void setCameraPosition(double x, double y, double z, double durationSeconds) {
+        transitionController.requestCameraPosition(x, y, z, -1, durationSeconds);
+    }
+
+    @Override
+    public void setCameraPosition(double x, double y, double z, int originNaifId, double durationSeconds) {
+        transitionController.requestCameraPosition(x, y, z, originNaifId, durationSeconds);
+    }
+
+    @Override
+    public void setCameraLookDirection(
+            double lookX, double lookY, double lookZ, double upX, double upY, double upZ, double durationSeconds) {
+        transitionController.requestCameraLookDirection(lookX, lookY, lookZ, upX, upY, upZ, durationSeconds);
+    }
+
+    @Override
+    public void setSynodicFrame(int focusNaifId, int targetNaifId) {
+        state.setSynodicFrameFocusId(focusNaifId);
+        state.setSynodicFrameTargetId(targetNaifId);
+        state.setCameraFrame(CameraFrame.SYNODIC);
+    }
+
     /**
      * Set the simulation time rate as an absolute value (§2.3).
      *
@@ -128,9 +183,14 @@ public final class DefaultSimulationCommands implements SimulationCommands {
         clock.setUTC(utcString);
     }
 
-    /** Switch the active camera frame (§1.5). All three values are now supported. */
+    /**
+     * Switch the active camera frame (§1.5). Clears synodic frame override IDs so the frame reverts to using
+     * interaction state for focus/target.
+     */
     @Override
     public void setCameraFrame(CameraFrame frame) {
+        state.setSynodicFrameFocusId(-1);
+        state.setSynodicFrameTargetId(-1);
         state.setCameraFrame(frame);
     }
 

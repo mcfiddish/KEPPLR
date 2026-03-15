@@ -557,6 +557,31 @@ public final class KepplrConstants {
      */
     public static final double CAMERA_POINT_AT_IDENTICAL_DIRECTION_EPSILON = 1e-6;
 
+    // ── Camera scripting defaults (Step 19c) ──────────────────────────────────────────────────
+
+    /**
+     * Default transition duration for scripted camera navigation commands (seconds).
+     *
+     * <p>Used by the Groovy wrapper for no-duration overloads and by {@code CameraInputHandler} for keyboard navigation
+     * shortcuts. Mouse gestures always use 0 (instant snap).
+     */
+    public static final double DEFAULT_CAMERA_TRANSITION_DURATION_SECONDS = 1.0;
+
+    /**
+     * Minimum camera field of view in degrees.
+     *
+     * <p>Clamping floor for {@code setFov()} commands. Prevents the FOV from becoming so narrow that rendering
+     * artifacts or numerical instability appear.
+     */
+    public static final double FOV_MIN_DEG = 1.0;
+
+    /**
+     * Maximum camera field of view in degrees.
+     *
+     * <p>Clamping ceiling for {@code setFov()} commands. Prevents extreme wide-angle distortion beyond practical use.
+     */
+    public static final double FOV_MAX_DEG = 120.0;
+
     // ── UI keyboard / time-rate controls (Step 19) ────────────────────────────────────────────
 
     /**

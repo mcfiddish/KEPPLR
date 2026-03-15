@@ -14,7 +14,6 @@ import com.jme3.input.event.KeyInputEvent;
 import com.jme3.input.event.MouseButtonEvent;
 import com.jme3.input.event.MouseMotionEvent;
 import com.jme3.input.event.TouchEvent;
-import com.jme3.math.Quaternion;
 import com.jme3.math.Vector3f;
 import com.jme3.renderer.Camera;
 import com.jme3.scene.Node;
@@ -25,8 +24,6 @@ import kepplr.state.DefaultSimulationState;
 import kepplr.util.KepplrConstants;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import picante.mechanics.EphemerisID;
-import picante.surfaces.Ellipsoid;
 
 /**
  * JMonkeyEngine input handler for camera navigation.
@@ -35,13 +32,18 @@ import picante.surfaces.Ellipsoid;
  * queue. This works correctly whether the cursor is visible or captured (GLFW cursor-disabled mode is not required).
  * {@link AnalogListener} is kept for scroll-wheel zoom. Keyboard uses {@link ActionListener}.
  *
+ * <p>All navigation actions delegate to {@link SimulationCommands} with {@code durationSeconds = 0} (instant snap), so
+ * that camera actions are scriptable through the same interface (Step 19c). The input handler retains responsibility
+ * for detecting gestures and computing delta values — it does not retain responsibility for applying them to the
+ * camera.
+ *
  * <p>All callbacks fire on the JME render thread (CLAUDE.md Rule 4). Focus body and ephemeris are acquired via
  * {@link KEPPLRConfiguration#getInstance()} at point of use (CLAUDE.md Rule 3).
  *
  * <p>Input bindings:
  *
  * <ul>
- *   <li>Left drag — rotate camera in place (always active)
+ *   <li>Left drag — rotate camera in place (tilt + yaw; always active)
  *   <li>Right drag — orbit camera around focus body (no-op if no focus)
  *   <li>Scroll wheel — zoom (no-op if no focus)
  *   <li>Up/Down arrow — tilt camera (pitch in place)
@@ -85,7 +87,10 @@ public final class CameraInputHandler implements ActionListener, AnalogListener,
     private final double[] cameraHelioJ2000;
     private final DefaultSimulationState state;
 
-    /** SimulationCommands for keyboard shortcuts and mouse picking. Set via {@link #setSimulationCommands}. */
+    /**
+     * SimulationCommands for keyboard shortcuts, mouse picking, and delegated navigation. Set via
+     * {@link #setSimulationCommands}.
+     */
     private SimulationCommands commands;
 
     /** Frustum layer root nodes for mouse pick ray collision. Set via {@link #setPickNodes}. */
@@ -131,9 +136,9 @@ public final class CameraInputHandler implements ActionListener, AnalogListener,
     }
 
     /**
-     * Set the simulation commands interface for keyboard shortcuts and mouse picking.
+     * Set the simulation commands interface for keyboard shortcuts, mouse picking, and delegated navigation.
      *
-     * @param commands the commands interface; null disables shortcut/pick handling
+     * @param commands the commands interface; null disables shortcut/pick/delegation handling
      */
     public void setSimulationCommands(SimulationCommands commands) {
         this.commands = commands;
@@ -226,72 +231,84 @@ public final class CameraInputHandler implements ActionListener, AnalogListener,
 
     @Override
     public void onAnalog(String name, float value, float tpf) {
+        if (commands == null) return;
+
         switch (name) {
             case SCROLL_UP -> {
-                applyZoom(1.0);
+                commands.zoom(KepplrConstants.CAMERA_ZOOM_FACTOR_PER_STEP, 0);
                 manualNavigationThisFrame = true;
             }
             case SCROLL_DOWN -> {
-                applyZoom(-1.0);
+                commands.zoom(1.0 / KepplrConstants.CAMERA_ZOOM_FACTOR_PER_STEP, 0);
                 manualNavigationThisFrame = true;
             }
 
             case TILT_UP -> {
                 if (!shiftDown) {
-                    applyTilt(-(float) (value * KepplrConstants.CAMERA_KEYBOARD_ROTATE_RATE_RAD_PER_SEC));
+                    double degrees = -Math.toDegrees(value * KepplrConstants.CAMERA_KEYBOARD_ROTATE_RATE_RAD_PER_SEC);
+                    commands.tilt(degrees, 0);
                     manualNavigationThisFrame = true;
                 }
             }
             case TILT_DOWN -> {
                 if (!shiftDown) {
-                    applyTilt((float) (value * KepplrConstants.CAMERA_KEYBOARD_ROTATE_RATE_RAD_PER_SEC));
+                    double degrees = Math.toDegrees(value * KepplrConstants.CAMERA_KEYBOARD_ROTATE_RATE_RAD_PER_SEC);
+                    commands.tilt(degrees, 0);
                     manualNavigationThisFrame = true;
                 }
             }
             case ROLL_LEFT -> {
                 if (!shiftDown) {
-                    applyRoll(-(float) (value * KepplrConstants.CAMERA_KEYBOARD_ROTATE_RATE_RAD_PER_SEC));
+                    double degrees = -Math.toDegrees(value * KepplrConstants.CAMERA_KEYBOARD_ROTATE_RATE_RAD_PER_SEC);
+                    commands.roll(degrees, 0);
                     manualNavigationThisFrame = true;
                 }
             }
             case ROLL_RIGHT -> {
                 if (!shiftDown) {
-                    applyRoll((float) (value * KepplrConstants.CAMERA_KEYBOARD_ROTATE_RATE_RAD_PER_SEC));
+                    double degrees = Math.toDegrees(value * KepplrConstants.CAMERA_KEYBOARD_ROTATE_RATE_RAD_PER_SEC);
+                    commands.roll(degrees, 0);
                     manualNavigationThisFrame = true;
                 }
             }
 
             case ORBIT_UP -> {
                 if (shiftDown) {
-                    applyOrbit((float) (value * KepplrConstants.CAMERA_KEYBOARD_ORBIT_RATE_RAD_PER_SEC), 0f);
+                    double upDeg = Math.toDegrees(value * KepplrConstants.CAMERA_KEYBOARD_ORBIT_RATE_RAD_PER_SEC);
+                    commands.orbit(0, upDeg, 0);
                     manualNavigationThisFrame = true;
                 }
             }
             case ORBIT_DOWN -> {
                 if (shiftDown) {
-                    applyOrbit(-(float) (value * KepplrConstants.CAMERA_KEYBOARD_ORBIT_RATE_RAD_PER_SEC), 0f);
+                    double upDeg = -Math.toDegrees(value * KepplrConstants.CAMERA_KEYBOARD_ORBIT_RATE_RAD_PER_SEC);
+                    commands.orbit(0, upDeg, 0);
                     manualNavigationThisFrame = true;
                 }
             }
             case ORBIT_LEFT -> {
                 if (shiftDown) {
-                    applyOrbit(0f, (float) (value * KepplrConstants.CAMERA_KEYBOARD_ORBIT_RATE_RAD_PER_SEC));
+                    double rightDeg = Math.toDegrees(value * KepplrConstants.CAMERA_KEYBOARD_ORBIT_RATE_RAD_PER_SEC);
+                    commands.orbit(rightDeg, 0, 0);
                     manualNavigationThisFrame = true;
                 }
             }
             case ORBIT_RIGHT -> {
                 if (shiftDown) {
-                    applyOrbit(0f, -(float) (value * KepplrConstants.CAMERA_KEYBOARD_ORBIT_RATE_RAD_PER_SEC));
+                    double rightDeg = -Math.toDegrees(value * KepplrConstants.CAMERA_KEYBOARD_ORBIT_RATE_RAD_PER_SEC);
+                    commands.orbit(rightDeg, 0, 0);
                     manualNavigationThisFrame = true;
                 }
             }
 
             case ZOOM_IN -> {
-                applyZoom(value * KepplrConstants.CAMERA_KEYBOARD_ZOOM_RATE_STEPS_PER_SEC);
+                double steps = value * KepplrConstants.CAMERA_KEYBOARD_ZOOM_RATE_STEPS_PER_SEC;
+                commands.zoom(Math.pow(KepplrConstants.CAMERA_ZOOM_FACTOR_PER_STEP, steps), 0);
                 manualNavigationThisFrame = true;
             }
             case ZOOM_OUT -> {
-                applyZoom(-value * KepplrConstants.CAMERA_KEYBOARD_ZOOM_RATE_STEPS_PER_SEC);
+                double steps = -value * KepplrConstants.CAMERA_KEYBOARD_ZOOM_RATE_STEPS_PER_SEC;
+                commands.zoom(Math.pow(KepplrConstants.CAMERA_ZOOM_FACTOR_PER_STEP, steps), 0);
                 manualNavigationThisFrame = true;
             }
         }
@@ -409,17 +426,20 @@ public final class CameraInputHandler implements ActionListener, AnalogListener,
         rawMouseDx = 0;
         rawMouseDy = 0;
 
+        if (commands == null) return;
+
         if (leftDragging) {
-            // Left drag: rotate in place.  dx → yaw (around screenUp), dy → pitch (around screenRight)
-            float deltaUp = (float) (dx * KepplrConstants.CAMERA_MOUSE_ROTATE_SENSITIVITY);
-            float deltaRight = -(float) (dy * KepplrConstants.CAMERA_MOUSE_ROTATE_SENSITIVITY);
-            applyRotateInPlace(deltaRight, deltaUp);
+            // Left drag: tilt + yaw in place.  dx → yaw (around screenUp), dy → tilt (around screenRight)
+            double yawDeg = Math.toDegrees(dx * KepplrConstants.CAMERA_MOUSE_ROTATE_SENSITIVITY);
+            double tiltDeg = Math.toDegrees(-(dy * KepplrConstants.CAMERA_MOUSE_ROTATE_SENSITIVITY));
+            commands.tilt(tiltDeg, 0);
+            commands.yaw(yawDeg, 0);
             manualNavigationThisFrame = true;
         } else if (rightDragging) {
             // Right drag: orbit around focus.  dx → orbit around screenUp, dy → around screenRight
-            float deltaUp = -(float) (dx * KepplrConstants.CAMERA_MOUSE_ORBIT_SENSITIVITY);
-            float deltaRight = (float) (dy * KepplrConstants.CAMERA_MOUSE_ORBIT_SENSITIVITY);
-            applyOrbit(deltaRight, deltaUp);
+            double rightDeg = Math.toDegrees(-(dx * KepplrConstants.CAMERA_MOUSE_ORBIT_SENSITIVITY));
+            double upDeg = Math.toDegrees(dy * KepplrConstants.CAMERA_MOUSE_ORBIT_SENSITIVITY);
+            commands.orbit(rightDeg, upDeg, 0);
             manualNavigationThisFrame = true;
         }
     }
@@ -435,73 +455,6 @@ public final class CameraInputHandler implements ActionListener, AnalogListener,
         boolean result = manualNavigationThisFrame;
         manualNavigationThisFrame = false;
         return result;
-    }
-
-    // ─────────────────────────────────────────────────────────────────────────
-    // Navigation operations
-    // ─────────────────────────────────────────────────────────────────────────
-
-    /** Pitch (tilt): rotate around the camera's current screen-right axis. */
-    private void applyTilt(float deltaRight) {
-        applyRotateInPlace(deltaRight, 0f);
-    }
-
-    /** Roll: rotate around the camera's current look direction (forward axis). */
-    private void applyRoll(float delta) {
-        Vector3f lookDir = cam.getDirection().normalize();
-        Quaternion qRoll = new Quaternion().fromAngleNormalAxis(delta, lookDir);
-        Quaternion newOrientation = qRoll.mult(cam.getRotation()).normalizeLocal();
-        cam.setAxes(newOrientation);
-    }
-
-    private void applyRotateInPlace(float deltaRight, float deltaUp) {
-        Vector3f screenRight = cam.getLeft().negate();
-        Vector3f screenUp = cam.getUp();
-        Quaternion newOrientation =
-                CameraNavigator.rotateInPlace(cam.getRotation(), screenRight, screenUp, deltaRight, deltaUp);
-        cam.setAxes(newOrientation);
-    }
-
-    private void applyOrbit(float deltaRight, float deltaUp) {
-        int focusId = state.focusedBodyIdProperty().get();
-        if (focusId == -1) return;
-
-        double[] focusPos = getFocusBodyPos(focusId);
-        if (focusPos == null) return;
-
-        Vector3f screenRight = cam.getLeft().negate();
-        Vector3f screenUp = cam.getUp();
-
-        CameraNavigator.OrbitResult result = CameraNavigator.orbit(
-                cameraHelioJ2000, cam.getRotation(), focusPos, screenRight, screenUp, deltaRight, deltaUp);
-
-        cameraHelioJ2000[0] = result.position()[0];
-        cameraHelioJ2000[1] = result.position()[1];
-        cameraHelioJ2000[2] = result.position()[2];
-        cam.setAxes(result.orientation());
-        state.setCameraPositionJ2000(cameraHelioJ2000);
-    }
-
-    private void applyZoom(double steps) {
-        int focusId = state.focusedBodyIdProperty().get();
-        if (focusId == -1) return;
-
-        double[] focusPos = getFocusBodyPos(focusId);
-        if (focusPos == null) return;
-
-        double minDist = getFocusBodyMinDist(focusId);
-        double[] newPos = CameraNavigator.zoom(
-                cameraHelioJ2000,
-                focusPos,
-                steps,
-                minDist,
-                KepplrConstants.FRUSTUM_FAR_MAX_KM,
-                KepplrConstants.CAMERA_ZOOM_FACTOR_PER_STEP);
-
-        cameraHelioJ2000[0] = newPos[0];
-        cameraHelioJ2000[1] = newPos[1];
-        cameraHelioJ2000[2] = newPos[2];
-        state.setCameraPositionJ2000(cameraHelioJ2000);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -559,18 +512,11 @@ public final class CameraInputHandler implements ActionListener, AnalogListener,
         double tanHalfFov = Math.tan(Math.toRadians(fovYDeg) / 2.0);
         double halfHeight = viewportHeight / 2.0;
 
-        int totalChildren = 0;
-        int withNaifId = 0;
-        int behindCamera = 0;
-        int candidates = 0;
-
         for (Node layerNode : pickNodes) {
             if (layerNode == null) continue;
             for (com.jme3.scene.Spatial child : layerNode.getChildren()) {
-                totalChildren++;
                 Integer naifId = child.getUserData("naifId");
                 if (naifId == null) continue;
-                withNaifId++;
                 Double bodyRadiusKm = child.getUserData("bodyRadiusKm");
                 if (bodyRadiusKm == null) bodyRadiusKm = 0.0;
 
@@ -581,7 +527,6 @@ public final class CameraInputHandler implements ActionListener, AnalogListener,
                 // bodies in the near/mid layers (closer than the far camera's near plane).
                 // Screen X,Y from getScreenCoordinates are still valid for direction-based projection.
                 if (cam.getDirection().dot(worldPos) <= 0f) {
-                    behindCamera++;
                     continue;
                 }
                 Vector3f screen = cam.getScreenCoordinates(worldPos);
@@ -595,13 +540,12 @@ public final class CameraInputHandler implements ActionListener, AnalogListener,
                 double effectivePickRadius = Math.max(actualScreenRadius, KepplrConstants.PICK_MIN_SCREEN_RADIUS_PX);
 
                 // Step 3: screen-space distance from click to body center
-                double dx = screenX - screen.x;
-                double dy = screenY - screen.y;
-                double screenDist = Math.sqrt(dx * dx + dy * dy);
+                double ddx = screenX - screen.x;
+                double ddy = screenY - screen.y;
+                double screenDist = Math.sqrt(ddx * ddx + ddy * ddy);
 
                 if (screenDist > effectivePickRadius) continue;
 
-                candidates++;
                 // Step 4: among candidates, largest actual screen radius wins
                 if (actualScreenRadius > bestApparentPx) {
                     bestApparentPx = actualScreenRadius;
@@ -622,19 +566,6 @@ public final class CameraInputHandler implements ActionListener, AnalogListener,
         picante.math.vectorspace.VectorIJK pos = eph.getHeliocentricPositionJ2000(naifId, et);
         if (pos == null) return null;
         return new double[] {pos.getI(), pos.getJ(), pos.getK()};
-    }
-
-    private double getFocusBodyMinDist(int naifId) {
-        KEPPLREphemeris eph = KEPPLRConfiguration.getInstance().getEphemeris();
-        EphemerisID id = eph.getSpiceBundle().getObject(naifId);
-        if (id != null) {
-            Ellipsoid shape = eph.getShape(id);
-            if (shape != null) {
-                double meanRadius = (shape.getA() + shape.getB() + shape.getC()) / 3.0;
-                return meanRadius * KepplrConstants.CAMERA_ZOOM_BODY_RADIUS_FACTOR;
-            }
-        }
-        return KepplrConstants.CAMERA_ZOOM_FALLBACK_MIN_KM;
     }
 
     /**
