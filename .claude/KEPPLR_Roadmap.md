@@ -330,6 +330,17 @@ generic `wait()` function per §11.2.
 
 ---
 
+## Known Limitations
+
+**macOS: JME window requires a click to receive keyboard focus.**
+Moving the mouse from the JavaFX control window into the JME render
+window does not automatically transfer keyboard focus on macOS. The user
+must click the JME window before keyboard shortcuts will respond. This is
+a macOS window management constraint. Behavior on Linux (X11) is untested
+and may differ.
+
+---
+
 ## Deferred / Out of Scope for v0.1
 
 - Camera transition acceleration/deceleration (linear interpolation used initially)

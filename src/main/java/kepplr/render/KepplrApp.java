@@ -123,9 +123,7 @@ public class KepplrApp extends SimpleApplication {
     // ── JavaFX control window ─────────────────────────────────────────────────────────────────
     private volatile KepplrStatusWindow statusWindow;
 
-    // ── GLFW window handle for auto-focus on cursor enter ───────────────────────────────────
-    private long glfwWindowHandle = 0;
-    private boolean cursorWasInside = false;
+
 
     @Override
     public void simpleInitApp() {
@@ -266,34 +264,13 @@ public class KepplrApp extends SimpleApplication {
         cameraInputHandler.setPickNodes(nearNode, midNode, farNode);
         cameraInputHandler.register(inputManager);
 
-        // Extract GLFW window handle for per-frame cursor-inside polling (BUG 5).
-        try {
-            var context = getContext();
-            java.lang.reflect.Field wField = context.getClass().getDeclaredField("windowHandle");
-            wField.setAccessible(true);
-            glfwWindowHandle = (long) wField.get(context);
-        } catch (Exception ex) {
-            logger.warn("Could not extract GLFW window handle: {}", ex.getMessage());
-        }
+        // NOTE: Auto-focus JME window on cursor enter is deferred — macOS does not
+        // honour glfwFocusWindow() or Cocoa makeKeyAndOrderFront: from a render loop.
+        // Works on Linux. Users must click the JME window to give it focus on macOS.
     }
 
     @Override
     public void simpleUpdate(float tpf) {
-        // BUG 5: Auto-focus JME window when cursor enters. Polled per frame because
-        // glfwFocusWindow() from a GLFW callback is unreliable on macOS.
-        // Uses cursor position vs. window size (GLFW_HOVERED is unreliable on macOS Cocoa).
-        if (glfwWindowHandle != 0) {
-            double[] cx = new double[1], cy = new double[1];
-            GLFW.glfwGetCursorPos(glfwWindowHandle, cx, cy);
-            int[] ww = new int[1], wh = new int[1];
-            GLFW.glfwGetWindowSize(glfwWindowHandle, ww, wh);
-            boolean inside = cx[0] >= 0 && cy[0] >= 0 && cx[0] < ww[0] && cy[0] < wh[0];
-            if (inside && !cursorWasInside) {
-                GLFW.glfwFocusWindow(glfwWindowHandle);
-            }
-            cursorWasInside = inside;
-        }
-
         simulationClock.advance();
         cameraInputHandler.update();
 
