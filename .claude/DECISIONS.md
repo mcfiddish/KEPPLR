@@ -338,7 +338,90 @@ and 20.
 
 ---
 
-*Last updated: Step 18*  
+## D-016: Two-window layout; transparent overlay rejected
+**Status:** Accepted
+**Roadmap step:** 19
+
+**Context:** Step 19 required a JavaFX control panel alongside the JME render window.
+A transparent overlay stage (`StageStyle.TRANSPARENT`, `setAlwaysOnTop(true)`) positioned
+over the JME window was prototyped in a dedicated spike project (`KEPPLR-overlay-spike`)
+and confirmed working on macOS and Linux (XWayland). However, position-sync lag on macOS
+was unacceptable in practice — GLFW position callbacks fire after the window has already
+moved, producing a visible rubber-band effect.
+
+**Decision:** The JavaFX control panel is a separate OS window (two-window layout). No
+`WindowManager` class. No GLFW position/minimize/focus callbacks. No Linux X11 forcing
+workaround. The JavaFX stage is a normal, non-transparent, non-always-on-top window
+positioned to the right of the JME window at launch.
+
+**Alternatives considered:** Transparent overlay (Option B) — prototyped and rejected
+due to macOS lag. Embedding JavaFX in the JME canvas — rejected on complexity grounds
+before the spike.
+
+**Consequences:** Both windows close regardless of which one the user closes — symmetric
+shutdown via `destroy()`. The spike project (`../KEPPLR-overlay-spike`) is retained as
+reference but its workarounds are not applied. CC must not revisit this decision.
+
+---
+
+## D-017: Tracking is camera frame selection, not a distinct interaction mode
+**Status:** Accepted
+**Roadmap step:** 19
+
+**Context:** The original design (REDESIGN.md §4.6) defined "tracked" as a fourth
+interaction mode with a screen-space anchor that locked a body to a fixed screen position.
+During step 19 implementation it became clear that this behavior is equivalent to the
+Synodic camera frame with the targeted body as the "other body" — which was already
+implemented. Maintaining a separate tracking concept would have duplicated behavior and
+added dead state properties.
+
+**Decision:** Tracking is removed as a distinct mode. The F key toggles the camera frame
+between SYNODIC and INERTIAL. Stop Tracking in the View menu switches to INERTIAL. Both
+are kept in sync with the Camera Frame submenu radio items. `trackedBodyId`,
+`trackingAnchor`, `trackBody()`, and `stopTracking()` do not exist in the codebase.
+
+**Alternatives considered:** Implementing screen-position locking as a distinct behavior
+from the Synodic frame — rejected because the user-visible result is identical for the
+primary use case (focus Earth, target Moon, keep Moon in view), and maintaining two
+parallel mechanisms for the same behavior creates confusion and dead code paths.
+
+**Consequences:** `SimulationState` has no tracked body property. `SimulationCommands`
+has no `trackBody()` or `stopTracking()`. The F key is handled in `CameraInputHandler`
+as a `setCameraFrame()` toggle. Any future requirement for true screen-position locking
+(independent of the Synodic frame) should be recorded as a new decision before
+implementing.
+
+---
+
+## D-018: Mouse picking is screen-space only; no 3D ray cast
+**Status:** Accepted
+**Roadmap step:** 19
+
+**Context:** Step 19 required click-to-select body picking in the JME render window.
+An initial implementation used a 3D ray cast from the camera through the click position.
+This failed for nearby large bodies (e.g., the Sun at close range) because body node
+positions in the scene graph are camera-relative (floating origin) — a ray built in
+heliocentric world space misses nearby bodies whose scene-graph position is near the
+origin regardless of their true distance.
+
+**Decision:** Picking is entirely screen-space. Every visible body is projected to screen
+coordinates and its screen-space radius is computed. A click selects the candidate within
+`PICK_MIN_SCREEN_RADIUS_PX` of the click point with the largest actual screen radius.
+If no candidates exist, the click is ignored. No 3D ray cast anywhere in the picking
+path.
+
+**Alternatives considered:** Fixing the ray cast to use camera-relative space — rejected
+because the screen-space approach is simpler, handles the minimum pick radius requirement
+naturally, and resolves the overlapping-bodies case (largest body wins) without additional
+logic.
+
+**Consequences:** `PICK_MIN_SCREEN_RADIUS_PX` is defined in `KepplrConstants`. The pick
+algorithm runs in `CameraInputHandler` against projected screen positions maintained by
+the render layer. CC must not reintroduce a ray cast without explicit discussion.
+
+---
+
+*Last updated: Step 19*
 *Backfill note: Entries D-001 through D-009 were reconstructed retrospectively.
 D-010 onwards recorded in real time.*
 

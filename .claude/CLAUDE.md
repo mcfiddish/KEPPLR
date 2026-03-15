@@ -109,8 +109,11 @@ User Input      → SimulationCommands                     → Simulation Core
 
 - `SimulationState` is the single source of truth for everything the UI displays.
 - `SimulationState` properties are updated on the JME thread; JavaFX bindings must
-  marshal to the FX thread using `Platform.runLater(...)` at the boundary layer, not
-  scattered through UI code.
+  marshal to the FX thread using `Platform.runLater(...)` at the boundary layer
+  (`SimulationStateFxBridge`), not scattered through UI code. The one additional
+  sanctioned use is `KepplrApp.destroy()` for lifecycle shutdown — that call site
+  must have a comment explaining the exception. No other class may call
+  `Platform.runLater(...)`.
 - `SimulationCommands` is a plain interface; implementations are free to queue,
   validate, or execute commands immediately — that is the core's concern, not the UI's.
 
@@ -177,7 +180,6 @@ public interface SimulationState {
     ReadOnlyObjectProperty<Body> selectedBodyProperty();
     ReadOnlyObjectProperty<Body> focusedBodyProperty();
     ReadOnlyObjectProperty<Body> targetedBodyProperty();
-    ReadOnlyObjectProperty<Body> trackedBodyProperty();
     ReadOnlyDoubleProperty currentEtProperty();
     ReadOnlyDoubleProperty timeRateProperty();
     ReadOnlyBooleanProperty pausedProperty();
@@ -189,8 +191,7 @@ public interface SimulationCommands {
     void selectBody(int naifId);
     void focusBody(int naifId);
     void targetBody(int naifId);
-    void trackBody(int naifId);
-    void stopTracking();
+    void setCameraFrame(CameraFrame frame);
     void setTimeRate(double simSecondsPerWallSecond);
     void setPaused(boolean paused);
     // ... extend as needed
@@ -226,7 +227,7 @@ Do not consider a task done if only #1 is true.
 ## Things to Never Do
 
 - Do not add ephemeris calls, camera math, or SPICE logic to `ui/` classes
-- Do not use `Platform.runLater(...)` outside the designated FX bridge layer
+- Do not use `Platform.runLater(...)` outside `SimulationStateFxBridge` or `KepplrApp.destroy()` (the latter requires a comment explaining the sanctioned use)
 - Do not use `Thread.sleep(...)` in the simulation or render loop
 - Do not create a `wait(...)` function in the Groovy scripting API (use `waitSim` / `waitWall`)
 - Do not add a generic getter for `KEPPLRConfiguration` or `KEPPLREphemeris` to any domain class

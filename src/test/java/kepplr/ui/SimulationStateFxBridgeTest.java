@@ -57,23 +57,6 @@ class SimulationStateFxBridgeTest {
     }
 
     @Nested
-    @DisplayName("formatTracked")
-    class FormatTracked {
-
-        @Test
-        @DisplayName("-1 → \"Not tracking\"")
-        void notTracking() {
-            assertEquals("Not tracking", SimulationStateFxBridge.formatTracked(-1));
-        }
-
-        @Test
-        @DisplayName("301 → \"Tracking NAIF 301\"")
-        void tracking() {
-            assertEquals("Tracking NAIF 301", SimulationStateFxBridge.formatTracked(301));
-        }
-    }
-
-    @Nested
     @DisplayName("formatTimeRate")
     class FormatTimeRate {
 
@@ -206,21 +189,6 @@ class SimulationStateFxBridgeTest {
         }
 
         @Test
-        @DisplayName("trackedTextProperty shows tracking when trackedBodyId set")
-        void trackedUpdates() {
-            state.setTrackedBodyId(301);
-            assertEquals("Tracking NAIF 301", bridge.trackedTextProperty().get());
-        }
-
-        @Test
-        @DisplayName("trackedTextProperty shows not-tracking when cleared")
-        void trackedClearedUpdates() {
-            state.setTrackedBodyId(301);
-            state.setTrackedBodyId(-1);
-            assertEquals("Not tracking", bridge.trackedTextProperty().get());
-        }
-
-        @Test
         @DisplayName("timeRateTextProperty updates when timeRate changes")
         void timeRateUpdates() {
             state.setTimeRate(3600.0);
@@ -300,12 +268,6 @@ class SimulationStateFxBridgeTest {
         @DisplayName("cameraFrameText starts as 'INERTIAL'")
         void initialCameraFrame() {
             assertEquals("INERTIAL", bridge.cameraFrameTextProperty().get());
-        }
-
-        @Test
-        @DisplayName("trackedText starts as 'Not tracking'")
-        void initialTracked() {
-            assertEquals("Not tracking", bridge.trackedTextProperty().get());
         }
     }
 

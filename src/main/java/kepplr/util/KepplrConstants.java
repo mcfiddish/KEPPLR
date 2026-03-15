@@ -550,4 +550,34 @@ public final class KepplrConstants {
      * already aimed at the target and no slew is started.
      */
     public static final double CAMERA_POINT_AT_IDENTICAL_DIRECTION_EPSILON = 1e-6;
+
+    // ── UI keyboard / time-rate controls (Step 19) ────────────────────────────────────────────
+
+    /**
+     * Factor by which {@code [} and {@code ]} multiply/divide the current time rate.
+     *
+     * <p>Pressing {@code ]} sets {@code timeRate *= TIME_RATE_KEYBOARD_FACTOR}; pressing {@code [} divides by it.
+     */
+    public static final double TIME_RATE_KEYBOARD_FACTOR = 10.0;
+
+    // ── Mouse picking (Step 19) ───────────────────────────────────────────────────────────────
+
+    /**
+     * Maximum elapsed nanoseconds between two left-clicks for a double-click to be recognised.
+     *
+     * <p>400 ms matches common OS defaults.
+     */
+    public static final long MOUSE_DOUBLE_CLICK_THRESHOLD_NS = 400_000_000L;
+
+    /**
+     * Maximum mouse-move distance in pixels between button-down and button-up for the action to be treated as a click
+     * rather than a drag.
+     */
+    public static final double MOUSE_CLICK_DRAG_THRESHOLD_PX = 5.0;
+
+    /**
+     * Minimum screen-space pick radius in pixels. Bodies whose apparent radius on screen is smaller than this value are
+     * expanded to this radius for mouse-picking purposes. Prevents small/distant bodies from being impossible to click.
+     */
+    public static final float PICK_MIN_SCREEN_RADIUS_PX = 8.0f;
 }

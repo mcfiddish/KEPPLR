@@ -29,9 +29,6 @@ public interface SimulationState {
     /** NAIF ID of the targeted body (point-at), or -1 if none. */
     ReadOnlyIntegerProperty targetedBodyIdProperty();
 
-    /** NAIF ID of the tracked body (screen-position lock), or -1 if none. */
-    ReadOnlyIntegerProperty trackedBodyIdProperty();
-
     // ── Time state (§1.2, §2.3) ──
 
     /** Current simulation epoch as ET (TDB seconds past J2000). */
@@ -88,8 +85,6 @@ public interface SimulationState {
      */
     ReadOnlyObjectProperty<double[]> cameraBodyFixedSphericalProperty();
 
-    // ── Tracking state (§4.6, §10.2) ──
-
     // ── Render quality (§9.4) ──
 
     /**
@@ -112,17 +107,6 @@ public interface SimulationState {
      * or spacecraft). Empty list when nothing is visible.
      */
     ReadOnlyObjectProperty<List<BodyInView>> bodiesInViewProperty();
-
-    /**
-     * Normalized screen coordinates {@code [x, y]} of the tracked body's center (§4.6).
-     *
-     * <p>{@code null} when no body is tracked, or when tracking has started but the JME render loop has not yet
-     * computed the first frame position. Non-null means tracking is active with a known anchor.
-     *
-     * <p>Updated each frame by the JME render thread. Read by the JavaFX status window to display whether a body is
-     * being tracked (§10.2).
-     */
-    ReadOnlyObjectProperty<double[]> trackingAnchorProperty();
 
     // ── Transition state (Step 18) ──
 

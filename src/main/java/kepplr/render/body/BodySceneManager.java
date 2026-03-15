@@ -270,11 +270,9 @@ public class BodySceneManager {
         int sel = state.selectedBodyIdProperty().get();
         int foc = state.focusedBodyIdProperty().get();
         int tgt = state.targetedBodyIdProperty().get();
-        int trk = state.trackedBodyIdProperty().get();
         if (sel != -1) exempt.add(sel);
         if (foc != -1) exempt.add(foc);
         if (tgt != -1) exempt.add(tgt);
-        if (trk != -1) exempt.add(trk);
         return exempt;
     }
 

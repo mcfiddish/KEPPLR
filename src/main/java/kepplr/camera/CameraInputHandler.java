@@ -17,6 +17,8 @@ import com.jme3.input.event.TouchEvent;
 import com.jme3.math.Quaternion;
 import com.jme3.math.Vector3f;
 import com.jme3.renderer.Camera;
+import com.jme3.scene.Node;
+import kepplr.commands.SimulationCommands;
 import kepplr.config.KEPPLRConfiguration;
 import kepplr.ephemeris.KEPPLREphemeris;
 import kepplr.state.DefaultSimulationState;
@@ -47,6 +49,13 @@ import picante.surfaces.Ellipsoid;
  *   <li>Shift + Up/Down arrow — orbit around screen-right axis
  *   <li>Shift + Left/Right arrow — orbit around screen-up axis
  *   <li>PgUp/PgDn — zoom in/out
+ *   <li>G — goTo focused body (camera transition)
+ *   <li>F — toggle camera frame between SYNODIC and INERTIAL (§4.6)
+ *   <li>T — target selected body
+ *   <li>Space — pause/resume simulation
+ *   <li>{@code [} / {@code ]} — decrease / increase time rate
+ *   <li>Left click on body — select body
+ *   <li>Double-click on body — focus body
  * </ul>
  */
 public final class CameraInputHandler implements ActionListener, AnalogListener, RawInputListener {
@@ -76,9 +85,21 @@ public final class CameraInputHandler implements ActionListener, AnalogListener,
     private final double[] cameraHelioJ2000;
     private final DefaultSimulationState state;
 
+    /** SimulationCommands for keyboard shortcuts and mouse picking. Set via {@link #setSimulationCommands}. */
+    private SimulationCommands commands;
+
+    /** Frustum layer root nodes for mouse pick ray collision. Set via {@link #setPickNodes}. */
+    private Node[] pickNodes;
+
     // Mouse button drag state — set/cleared by RawInputListener.onMouseButtonEvent
     private boolean leftDragging = false;
     private boolean rightDragging = false;
+
+    // Mouse click detection — distinguishes clicks from drags, detects double-clicks
+    private float mouseDownX = -1;
+    private float mouseDownY = -1;
+    private long lastClickTimeNanos = 0;
+    private int lastClickNaifId = -1;
 
     /**
      * Set to {@code true} whenever a navigation action fires (mouse drag, scroll, keyboard). Reset by
@@ -107,6 +128,26 @@ public final class CameraInputHandler implements ActionListener, AnalogListener,
         this.cam = cam;
         this.cameraHelioJ2000 = cameraHelioJ2000;
         this.state = state;
+    }
+
+    /**
+     * Set the simulation commands interface for keyboard shortcuts and mouse picking.
+     *
+     * @param commands the commands interface; null disables shortcut/pick handling
+     */
+    public void setSimulationCommands(SimulationCommands commands) {
+        this.commands = commands;
+    }
+
+    /**
+     * Set the frustum layer root nodes for mouse pick ray collision.
+     *
+     * @param nearNode near frustum root node
+     * @param midNode mid frustum root node
+     * @param farNode far frustum root node
+     */
+    public void setPickNodes(Node nearNode, Node midNode, Node farNode) {
+        this.pickNodes = new Node[] {nearNode, midNode, farNode};
     }
 
     /**
@@ -265,9 +306,22 @@ public final class CameraInputHandler implements ActionListener, AnalogListener,
 
     @Override
     public void onMouseButtonEvent(MouseButtonEvent evt) {
-        switch (evt.getButtonIndex()) {
-            case MouseInput.BUTTON_LEFT -> leftDragging = evt.isPressed();
-            case MouseInput.BUTTON_RIGHT -> rightDragging = evt.isPressed();
+        if (evt.getButtonIndex() == MouseInput.BUTTON_LEFT) {
+            if (evt.isPressed()) {
+                leftDragging = true;
+                mouseDownX = evt.getX();
+                mouseDownY = evt.getY();
+            } else {
+                leftDragging = false;
+                // Check if this was a click (not a drag) based on distance moved
+                float dx = evt.getX() - mouseDownX;
+                float dy = evt.getY() - mouseDownY;
+                if (Math.sqrt(dx * dx + dy * dy) < KepplrConstants.MOUSE_CLICK_DRAG_THRESHOLD_PX) {
+                    handleClick(evt.getX(), evt.getY());
+                }
+            }
+        } else if (evt.getButtonIndex() == MouseInput.BUTTON_RIGHT) {
+            rightDragging = evt.isPressed();
         }
     }
 
@@ -292,7 +346,47 @@ public final class CameraInputHandler implements ActionListener, AnalogListener,
     public void onJoyButtonEvent(JoyButtonEvent evt) {}
 
     @Override
-    public void onKeyEvent(KeyInputEvent evt) {}
+    public void onKeyEvent(KeyInputEvent evt) {
+        if (!evt.isPressed() || commands == null) return;
+
+        switch (evt.getKeyCode()) {
+            case KeyInput.KEY_G -> {
+                // G — goTo focused body
+                int focusId = state.focusedBodyIdProperty().get();
+                if (focusId != -1) {
+                    commands.goTo(
+                            focusId,
+                            KepplrConstants.DEFAULT_GOTO_APPARENT_RADIUS_DEG,
+                            KepplrConstants.DEFAULT_GOTO_DURATION_SECONDS);
+                }
+            }
+            case KeyInput.KEY_F -> {
+                // F — toggle camera frame between SYNODIC and INERTIAL (§4.6)
+                CameraFrame current = state.cameraFrameProperty().get();
+                commands.setCameraFrame(current == CameraFrame.SYNODIC ? CameraFrame.INERTIAL : CameraFrame.SYNODIC);
+            }
+            case KeyInput.KEY_T -> {
+                // T — target selected body
+                int selectedId = state.selectedBodyIdProperty().get();
+                if (selectedId != -1) {
+                    commands.targetBody(selectedId);
+                }
+            }
+            case KeyInput.KEY_SPACE ->
+                commands.setPaused(!state.pausedProperty().get());
+            case KeyInput.KEY_LBRACKET -> {
+                // [ — decrease time rate
+                double currentRate = state.timeRateProperty().get();
+                commands.setTimeRate(currentRate / KepplrConstants.TIME_RATE_KEYBOARD_FACTOR);
+            }
+            case KeyInput.KEY_RBRACKET -> {
+                // ] — increase time rate
+                double currentRate = state.timeRateProperty().get();
+                commands.setTimeRate(currentRate * KepplrConstants.TIME_RATE_KEYBOARD_FACTOR);
+            }
+            default -> {}
+        }
+    }
 
     @Override
     public void onTouchEvent(TouchEvent evt) {}
@@ -408,6 +502,114 @@ public final class CameraInputHandler implements ActionListener, AnalogListener,
         cameraHelioJ2000[1] = newPos[1];
         cameraHelioJ2000[2] = newPos[2];
         state.setCameraPositionJ2000(cameraHelioJ2000);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Mouse picking — ray cast against visible body nodes
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /**
+     * Handle a left-click at the given screen coordinates. Casts a pick ray against the frustum layer nodes to find a
+     * body. Single click → selectBody; double-click → focusBody.
+     */
+    private void handleClick(float screenX, float screenY) {
+        if (commands == null) return;
+
+        int hitNaifId = pickBody(screenX, screenY);
+        if (hitNaifId == -1) return;
+
+        long now = System.nanoTime();
+        if (lastClickNaifId == hitNaifId
+                && (now - lastClickTimeNanos) < KepplrConstants.MOUSE_DOUBLE_CLICK_THRESHOLD_NS) {
+            // Double-click on same body → focus
+            commands.focusBody(hitNaifId);
+            lastClickTimeNanos = 0;
+            lastClickNaifId = -1;
+        } else {
+            // Single click → select
+            commands.selectBody(hitNaifId);
+            lastClickTimeNanos = now;
+            lastClickNaifId = hitNaifId;
+        }
+    }
+
+    /**
+     * Screen-space pick: project every visible body to screen space, find candidates within their effective pick
+     * radius, and return the one with the largest actual screen radius.
+     *
+     * <ol>
+     *   <li>Project each body center to screen space; compute actual screen radius from body radius and distance.
+     *   <li>Effective pick radius = {@code max(actualScreenRadius, PICK_MIN_SCREEN_RADIUS_PX)}.
+     *   <li>A body is a candidate if {@code screenDist ≤ effectivePickRadius}.
+     *   <li>Among candidates, the one with the largest actual screen radius wins — this correctly selects Jupiter over
+     *       a nearby satellite when both are candidates.
+     *   <li>If no candidates exist, returns -1 (caller does nothing).
+     * </ol>
+     *
+     * @return the NAIF ID of the best candidate body, or -1 if no body was hit
+     */
+    private int pickBody(float screenX, float screenY) {
+        if (pickNodes == null) return -1;
+
+        int bestNaifId = -1;
+        double bestApparentPx = -1;
+
+        int viewportHeight = cam.getHeight();
+        float fovYDeg = KepplrConstants.CAMERA_FOV_Y_DEG;
+        double tanHalfFov = Math.tan(Math.toRadians(fovYDeg) / 2.0);
+        double halfHeight = viewportHeight / 2.0;
+
+        int totalChildren = 0;
+        int withNaifId = 0;
+        int behindCamera = 0;
+        int candidates = 0;
+
+        for (Node layerNode : pickNodes) {
+            if (layerNode == null) continue;
+            for (com.jme3.scene.Spatial child : layerNode.getChildren()) {
+                totalChildren++;
+                Integer naifId = child.getUserData("naifId");
+                if (naifId == null) continue;
+                withNaifId++;
+                Double bodyRadiusKm = child.getUserData("bodyRadiusKm");
+                if (bodyRadiusKm == null) bodyRadiusKm = 0.0;
+
+                // Step 1: project body center to screen space
+                Vector3f worldPos = child.getWorldTranslation();
+                // Behind-camera check: use dot product with camera direction, NOT screen.z.
+                // In multi-frustum, cam is the far camera — its clip-space z is invalid for
+                // bodies in the near/mid layers (closer than the far camera's near plane).
+                // Screen X,Y from getScreenCoordinates are still valid for direction-based projection.
+                if (cam.getDirection().dot(worldPos) <= 0f) {
+                    behindCamera++;
+                    continue;
+                }
+                Vector3f screen = cam.getScreenCoordinates(worldPos);
+
+                // Step 1: compute actual screen radius in pixels
+                double dist = worldPos.length();
+                double actualScreenRadius =
+                        (dist > 0 && bodyRadiusKm > 0) ? (bodyRadiusKm / dist) * halfHeight / tanHalfFov : 0.0;
+
+                // Step 2: effective pick radius — actual size, but at least PICK_MIN_SCREEN_RADIUS_PX
+                double effectivePickRadius = Math.max(actualScreenRadius, KepplrConstants.PICK_MIN_SCREEN_RADIUS_PX);
+
+                // Step 3: screen-space distance from click to body center
+                double dx = screenX - screen.x;
+                double dy = screenY - screen.y;
+                double screenDist = Math.sqrt(dx * dx + dy * dy);
+
+                if (screenDist > effectivePickRadius) continue;
+
+                candidates++;
+                // Step 4: among candidates, largest actual screen radius wins
+                if (actualScreenRadius > bestApparentPx) {
+                    bestApparentPx = actualScreenRadius;
+                    bestNaifId = naifId;
+                }
+            }
+        }
+        return bestNaifId;
     }
 
     // ─────────────────────────────────────────────────────────────────────────

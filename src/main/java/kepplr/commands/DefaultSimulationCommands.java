@@ -19,10 +19,8 @@ import kepplr.util.KepplrConstants;
  *
  * <ul>
  *   <li>{@code selectBody(id)}: sets selected only; no camera change (§4.3)
- *   <li>{@code focusBody(id)}: sets selected, focused, and targeted; clears tracked (§4.5, §4.6)
- *   <li>{@code targetBody(id)}: sets selected and targeted; clears tracked (§4.4, §4.6)
- *   <li>{@code trackBody(id)}: sets tracked only (§4.6)
- *   <li>{@code stopTracking()}: clears tracked (§4.6)
+ *   <li>{@code focusBody(id)}: sets selected, focused, and targeted (§4.5)
+ *   <li>{@code targetBody(id)}: sets selected and targeted (§4.4)
  *   <li>{@code setTimeRate(r)}: delegates to {@link SimulationClock} — absolute, no-jump (§2.3)
  *   <li>{@code setPaused(b)}: delegates to {@link SimulationClock} — clamp/resume logic (§1.2)
  *   <li>{@code setET(et)}: delegates to {@link SimulationClock} (§1.2)
@@ -47,15 +45,14 @@ public final class DefaultSimulationCommands implements SimulationCommands {
         this.transitionController = transitionController;
     }
 
-    /** Select a body for HUD display only (§4.3). Does not change focused, targeted, or tracked state. */
+    /** Select a body for HUD display only (§4.3). Does not change focused or targeted state. */
     @Override
     public void selectBody(int naifId) {
         state.setSelectedBodyId(naifId);
     }
 
     /**
-     * Focus the camera on a body (§4.5). Implicitly selects and targets the same body. Clears tracking and the tracking
-     * anchor because focusing implies a new point-at target (§4.6).
+     * Focus the camera on a body (§4.5). Implicitly selects and targets the same body.
      *
      * <p>Initiates a {@code pointAt} slew followed by a {@code goTo} translation (Step 18). The {@code goTo} is queued
      * and begins automatically when the {@code pointAt} completes.
@@ -65,8 +62,6 @@ public final class DefaultSimulationCommands implements SimulationCommands {
         state.setSelectedBodyId(naifId);
         state.setFocusedBodyId(naifId);
         state.setTargetedBodyId(naifId);
-        state.setTrackedBodyId(-1);
-        state.setTrackingAnchor(null);
         transitionController.requestPointAt(naifId, KepplrConstants.DEFAULT_SLEW_DURATION_SECONDS);
         transitionController.requestGoTo(
                 naifId,
@@ -75,8 +70,7 @@ public final class DefaultSimulationCommands implements SimulationCommands {
     }
 
     /**
-     * Target a body — "point at" (§4.4). Implicitly selects the body. Clears tracking and the tracking anchor because a
-     * new point-at disables tracking (§4.6).
+     * Target a body — "point at" (§4.4). Implicitly selects the body.
      *
      * <p>Initiates a {@code pointAt} slew (Step 18).
      */
@@ -84,19 +78,7 @@ public final class DefaultSimulationCommands implements SimulationCommands {
     public void targetBody(int naifId) {
         state.setSelectedBodyId(naifId);
         state.setTargetedBodyId(naifId);
-        state.setTrackedBodyId(-1);
-        state.setTrackingAnchor(null);
         transitionController.requestPointAt(naifId, KepplrConstants.DEFAULT_SLEW_DURATION_SECONDS);
-    }
-
-    /**
-     * Track a body — lock its screen position (§4.6). Resets the tracking anchor to {@code null} so the JME render loop
-     * establishes a fresh anchor on the next frame.
-     */
-    @Override
-    public void trackBody(int naifId) {
-        state.setTrackedBodyId(naifId);
-        state.setTrackingAnchor(null);
     }
 
     /** Initiate a {@code pointAt} slew (Step 18). Delegates to {@link TransitionController}. */
@@ -109,13 +91,6 @@ public final class DefaultSimulationCommands implements SimulationCommands {
     @Override
     public void goTo(int naifId, double apparentRadiusDeg, double durationSeconds) {
         transitionController.requestGoTo(naifId, apparentRadiusDeg, durationSeconds);
-    }
-
-    /** Stop tracking the currently tracked body (§4.6). Clears both the tracked body ID and the anchor. */
-    @Override
-    public void stopTracking() {
-        state.setTrackedBodyId(-1);
-        state.setTrackingAnchor(null);
     }
 
     /**

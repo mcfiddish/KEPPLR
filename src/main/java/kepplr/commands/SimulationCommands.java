@@ -41,18 +41,6 @@ public interface SimulationCommands {
      */
     void targetBody(int naifId);
 
-    /**
-     * Track a body — lock its screen position (§4.6).
-     *
-     * <p>The tracked body maintains a constant normalized screen position over time.
-     *
-     * @param naifId NAIF ID of the body to track
-     */
-    void trackBody(int naifId);
-
-    /** Stop tracking the currently tracked body (§4.6). */
-    void stopTracking();
-
     // ── Time commands (§1.2, §2.3) ──
 
     /**
