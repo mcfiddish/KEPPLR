@@ -181,15 +181,16 @@ public final class TransitionController {
     // ── JME-thread methods ────────────────────────────────────────────────────
 
     /**
-     * Cancel the active transition and discard all pending requests.
+     * Cancel the active animated transition and any pending {@code goTo}.
      *
      * <p>Must be called on the JME render thread. Called by {@code KepplrApp.simpleUpdate()} when manual navigation
-     * input is detected.
+     * input is detected. Does <b>not</b> clear the inbox, because manual navigation actions (mouse drag, keyboard) now
+     * post instant requests to the inbox in the same frame (Step 19c). Those requests must survive the cancel and be
+     * processed by the subsequent {@link #update} call.
      */
     public void cancel() {
         active = null;
         pendingGoTo = null;
-        inbox.clear();
         updateStateProperties();
     }
 
