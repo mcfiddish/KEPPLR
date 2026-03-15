@@ -533,6 +533,44 @@ applied on top of it.
 
 ---
 
+## D-023: Camera navigation commands added to SimulationCommands for scripting parity
+**Status:** Accepted
+**Roadmap step:** 19c
+
+**Context:** Step 20 requires every SimulationCommands method to be loggable
+as a replayable Groovy script. Camera navigation (zoom, orbit, tilt, roll,
+FOV, position, orientation) was implemented directly in CameraInputHandler
+without going through SimulationCommands, making it unscriptable. Full mouse-
+gesture parity was considered but rejected — replicating drag gestures as
+script primitives is unnatural and unhelpful.
+
+**Decision:** A selective set of camera commands is added to SimulationCommands
+covering the actions a script author would genuinely want: zoom, orbit, tilt,
+roll, setFov, setCameraPosition, setCameraLookDirection, and setSynodicFrame.
+All are non-blocking and use the existing TransitionController infrastructure
+from step 18. Fine-grained mouse drag navigation remains in CameraInputHandler
+and is intentionally unscriptable.
+
+setSynodicFrame(focusNaifId, targetNaifId, durationSeconds) changes only the
+camera frame — it does not update focused, targeted, or selected body state in
+SimulationState. setCameraFrame(SYNODIC) continues to derive focus and target
+from SimulationState for interactive use.
+
+setCameraPosition defaults to the current focus body as origin. The explicit
+overload accepts an originNaifId for scripts that need to position the camera
+relative to a specific body regardless of current focus state.
+
+**Alternatives considered:** Full mouse-gesture parity — rejected as unnatural
+for scripting. Blocking camera commands — rejected for consistency with the
+non-blocking transition model established in D-010.
+
+**Consequences:** CameraInputHandler delegates to SimulationCommands for all
+actions covered by this step. The Groovy wrapper (step 20) adds name resolution
+and default-duration overloads on top of these methods. No camera logic moves
+to the scripting layer — the Groovy wrapper calls SimulationCommands only.
+
+---
+
 *Last updated: Step 19*
 *Backfill note: Entries D-001 through D-009 were reconstructed retrospectively.
 D-010 onwards recorded in real time.*

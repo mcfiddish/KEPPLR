@@ -356,6 +356,187 @@ any body and any `VectorType`; the GUI exposes the common cases only.
 
 ---
 
+### 19c. Camera Scripting API
+
+This step adds camera navigation commands to `SimulationCommands` so that
+all meaningful camera actions are scriptable. `CameraInputHandler` is
+updated to delegate to these commands rather than manipulating camera state
+directly. No new camera behavior is introduced — this is a refactor that
+exposes existing behavior through the correct interface.
+
+**New methods on `SimulationCommands`** — all non-blocking, all use
+`TransitionController`. All must have complete Javadoc with usage examples.
+If `durationSeconds` is zero or negative, the camera snaps instantly on the
+next frame:
+```java
+/**
+ * Change the camera distance from the focus body by a multiplicative factor.
+ *
+ * <p>Example: {@code zoom(2.0, 1.0)} doubles the distance over one second.
+ * {@code zoom(0.5, 1.0)} halves it. Factor must be positive.
+ * Clamped to [1.1 × focusBodyRadius, 1e15 km] per zoom rules in §10.
+ *
+ * @param factor      multiplicative distance factor; must be positive
+ * @param durationSeconds transition duration in wall-clock seconds
+ */
+void zoom(double factor, double durationSeconds);
+
+/**
+ * Set the camera field of view.
+ *
+ * <p>Example: {@code setFov(45.0, 1.0)} transitions to a 45-degree FOV
+ * over one second. Clamped to [FOV_MIN_DEG, FOV_MAX_DEG] in KepplrConstants.
+ *
+ * @param degrees         desired field of view in degrees
+ * @param durationSeconds transition duration in wall-clock seconds
+ */
+void setFov(double degrees, double durationSeconds);
+
+/**
+ * Orbit the camera around the focus body by the given camera-relative angles.
+ *
+ * <p>Equivalent to a right-drag gesture. Positive {@code rightDegrees}
+ * orbits clockwise when viewed from above. Positive {@code upDegrees}
+ * orbits toward the camera's screen-up direction.
+ *
+ * <p>Example: {@code orbit(45.0, 0.0, 2.0)} orbits 45 degrees to the
+ * right over two seconds.
+ *
+ * @param rightDegrees    degrees to orbit around the camera's screen-up axis
+ * @param upDegrees       degrees to orbit around the camera's screen-right axis
+ * @param durationSeconds transition duration in wall-clock seconds
+ */
+void orbit(double rightDegrees, double upDegrees, double durationSeconds);
+
+/**
+ * Tilt the camera in place around its screen-right axis.
+ *
+ * <p>Example: {@code tilt(10.0, 0.5)} tilts up 10 degrees over half a second.
+ *
+ * @param degrees         tilt angle in degrees; positive tilts up
+ * @param durationSeconds transition duration in wall-clock seconds
+ */
+void tilt(double degrees, double durationSeconds);
+
+/**
+ * Roll the camera around its look axis.
+ *
+ * <p>Example: {@code roll(90.0, 1.0)} rotates the camera's up vector
+ * 90 degrees clockwise over one second.
+ *
+ * @param degrees         roll angle in degrees; positive rolls clockwise
+ * @param durationSeconds transition duration in wall-clock seconds
+ */
+void roll(double degrees, double durationSeconds);
+
+/**
+ * Set the camera position relative to the current focus body in the
+ * current camera frame.
+ *
+ * <p>Example: {@code setCameraPosition(0, 0, 10000, 2.0)} moves the camera
+ * to 10,000 km above the focus body's north pole (in body-fixed frame)
+ * over two seconds.
+ *
+ * @param x               x component in km
+ * @param y               y component in km
+ * @param z               z component in km
+ * @param durationSeconds transition duration in wall-clock seconds
+ */
+void setCameraPosition(double x, double y, double z,
+                       double durationSeconds);
+
+/**
+ * Set the camera position relative to an explicit origin body in
+ * the current camera frame.
+ *
+ * <p>Does not change the focused body. Useful for positioning the camera
+ * relative to a body other than the current focus.
+ *
+ * <p>Example: {@code setCameraPosition(0, 0, 50000, 301, 3.0)} moves
+ * the camera to 50,000 km above the Moon regardless of which body
+ * is currently focused.
+ *
+ * @param x               x component in km
+ * @param y               y component in km
+ * @param z               z component in km
+ * @param originNaifId    NAIF ID of the origin body
+ * @param durationSeconds transition duration in wall-clock seconds
+ */
+void setCameraPosition(double x, double y, double z,
+                       int originNaifId, double durationSeconds);
+
+/**
+ * Set the camera look direction and up vector in the current camera frame.
+ *
+ * <p>Vectors need not be normalized — they are normalized internally.
+ * The up vector must not be parallel to the look vector.
+ *
+ * <p>Example — point along the ecliptic toward vernal equinox:
+ * <pre>
+ *   setCameraLookDirection(1, 0, 0,   // look toward +X (vernal equinox)
+ *                          0, 0, 1,   // up toward +Z (ecliptic north)
+ *                          2.0);
+ * </pre>
+ *
+ * @param lookX           x component of look direction
+ * @param lookY           y component of look direction
+ * @param lookZ           z component of look direction
+ * @param upX             x component of up vector
+ * @param upY             y component of up vector
+ * @param upZ             z component of up vector
+ * @param durationSeconds transition duration in wall-clock seconds
+ */
+void setCameraLookDirection(double lookX, double lookY, double lookZ,
+                            double upX,   double upY,   double upZ,
+                            double durationSeconds);
+
+/**
+ * Switch to the synodic camera frame defined by explicit focus and target
+ * bodies, without changing focused, targeted, or selected body state.
+ *
+ * <p>Use this when a script needs a specific synodic view without
+ * disturbing interaction state. To switch to the synodic frame using
+ * the current SimulationState focus and target, use
+ * {@code setCameraFrame(CameraFrame.SYNODIC)} instead.
+ *
+ * <p>Example — Earth-Moon synodic view:
+ * <pre>
+ *   setSynodicFrame(399, 301); // focus=Earth, target=Moon
+ * </pre>
+ *
+ * @param focusNaifId  NAIF ID of the focus body defining the frame origin
+ * @param targetNaifId NAIF ID of the target body defining the +X axis
+ */
+void setSynodicFrame(int focusNaifId, int targetNaifId);
+```
+
+**`CameraInputHandler` refactor:**
+
+All navigation actions in `CameraInputHandler` that correspond to a new
+`SimulationCommands` method must delegate to it. Mouse drag and scroll
+events are converted to equivalent `zoom`, `orbit`, `tilt`, and `roll`
+calls with `durationSeconds = 0` (snap). Keyboard navigation shortcuts
+follow the same pattern. The input handler retains responsibility for
+detecting gestures and computing delta values — it does not retain
+responsibility for applying them to the camera.
+
+**Default durations:**
+
+`DEFAULT_CAMERA_TRANSITION_DURATION_SECONDS` added to `KepplrConstants`.
+Used by `CameraInputHandler` for keyboard navigation shortcuts (not mouse,
+which snaps). The Groovy wrapper uses it for no-duration overloads.
+
+**Hard constraints:**
+- No camera math moves to the scripting layer — the Groovy wrapper calls
+  `SimulationCommands` only.
+- All new methods fully Javadoc'd with parameter descriptions and at least
+  one usage example.
+- `setSynodicFrame` must not write to `selectedBodyId`, `focusedBodyId`,
+  or `targetedBodyId` in `SimulationState`.
+- `mvn test` passes with no new failures.
+
+---
+
 ### 20. Groovy Scripting Layer
 Groovy-friendly wrapper delegating to `SimulationCommands`. Exposes
 `waitSim()` and `waitWall()` timing primitives wired into the time model from
