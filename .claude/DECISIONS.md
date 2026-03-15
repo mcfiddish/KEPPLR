@@ -455,6 +455,84 @@ hardcoded in the menu handler.
 
 ---
 
+## D-020: Label and trail decluttering uses screen-space proximity to primary body
+**Status:** Accepted
+**Roadmap step:** 19b
+
+**Context:** Step 19b added zoom-dependent label and trail visibility. The
+requirement was that satellites cluster near their primary at large distances
+and become visible as the camera zooms in. Two approaches were considered:
+distance-based thresholds (suppress below N km from primary) and screen-space
+proximity (suppress when within N pixels of primary on screen).
+
+**Decision:** Decluttering is screen-space only. Each frame, a body's label
+(and trail) is suppressed if any body with a larger physical radius has its
+screen-space center within `LABEL_DECLUTTER_MIN_SEPARATION_PX` (or
+`TRAIL_DECLUTTER_MIN_SEPARATION_PX`) of the candidate body's screen center.
+Both thresholds are defined in `KepplrConstants`. The decluttering logic lives
+entirely in the rendering layer — not in `SimulationCommands` or `ui/`.
+
+**Alternatives considered:** Distance-based thresholds — rejected because the
+relevant perceptual quality is screen separation, not physical distance.
+Per-body priority rules — deferred as a future refinement (§14.5).
+
+**Consequences:** The render layer must project all visible bodies to screen
+space each frame before evaluating decluttering. This is already done for
+picking (D-018), so the projection data can be reused.
+
+---
+
+## D-021: Direction vectors and orbit trails use per-body color from configuration
+**Status:** Accepted
+**Roadmap step:** 19b
+
+**Context:** Direction vector arrows and orbit trail lines needed a color
+source. Options were a fixed default color, a color derived from body type
+(planet/spacecraft/asteroid), or a per-body color from the configuration file.
+
+**Decision:** Both direction vectors and orbit trails use the body's color
+from the configuration body block. If no color is specified for a body,
+a default fallback color defined in `KepplrConstants` is used. Color is
+resolved at render time from `KEPPLRConfiguration` — it is not cached in
+`SimulationState`.
+
+**Alternatives considered:** Fixed color per overlay type — rejected as
+visually undifferentiated when multiple bodies are visible. Body-type-derived
+color — rejected as less flexible than explicit configuration.
+
+**Consequences:** The configuration body block must support a color field.
+The trail and vector rendering subsystems must query the configuration at
+render time. No color state on `SimulationState` or `SimulationCommands`.
+
+---
+
+## D-022: Labels rendered only for sprite-class bodies
+**Status:** Accepted
+**Roadmap step:** 19b
+
+**Context:** Labels on full-geometry bodies (apparent radius ≥
+`DRAW_FULL_MIN_APPARENT_RADIUS_PX`) are redundant — the body is large enough
+to be unambiguously identified visually. Labels on large nearby bodies also
+clutter the view and overlap the body geometry itself.
+
+**Decision:** A label is never drawn for a body whose apparent screen radius
+is ≥ `DRAW_FULL_MIN_APPARENT_RADIUS_PX`. Labels are drawn only for
+sprite-class bodies. This threshold is the same constant already used to
+determine geometry vs. sprite rendering in step 11. No new constant is needed.
+
+**Alternatives considered:** Always drawing labels and relying on the
+decluttering policy to suppress them — rejected because the decluttering
+policy is proximity-based and would not suppress a label on a large isolated
+body. A separate label-suppression threshold — rejected as unnecessary
+duplication of an existing constant.
+
+**Consequences:** The label render pass must check apparent radius before
+drawing. The `setLabelVisible` API still controls whether a label is
+*eligible* to render — the apparent radius check is an additional suppression
+applied on top of it.
+
+---
+
 *Last updated: Step 19*
 *Backfill note: Entries D-001 through D-009 were reconstructed retrospectively.
 D-010 onwards recorded in real time.*
