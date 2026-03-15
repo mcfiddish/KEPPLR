@@ -166,7 +166,21 @@ Analytic physical eclipse geometry per §9.3 hybrid Option C. Sun treated as ext
 Sun halo implemented as a world-space billboard with custom GLSL 150 shader (`SunHalo.vert/frag`). Halo size scales with Sun's apparent angular diameter recomputed each frame. Brightness and falloff parameterized as named constants tuned visually. Halo always renders regardless of Sun body cull state; suppressed only when Sun is outside view frustum. Bodies and Saturn's rings occlude the halo correctly per §8.4. Halo node assigned to FAR frustum layer with a marked comment noting layer reassignment if Sun ever enters MID or NEAR range. `KepplrConstants.SUN_NAIF_ID = 10` promoted from `BodyNodeFactory`. `RenderQuality` sun halo quality stub replaced with real per-tier values.
 
 ### 18. Camera Transitions
-`pointAt(int naifId, double durationSeconds)` and `goTo(int naifId, double apparentRadiusDeg, double durationSeconds)` added to `SimulationCommands`. Transitions execute on the JME render thread, progressing each frame in `simpleUpdate()`. Transitions are non-blocking — commands return immediately and progress is tracked in `SimulationState`. `pointAt` slews the camera orientation from current look direction to the target body direction over `durationSeconds` using spherical linear interpolation (slerp). `goTo` waits for any in-progress `pointAt` to complete, then translates the camera along its current line of sight until the target body subtends the requested apparent radius. Both transitions use linear interpolation initially; acceleration/deceleration is a deferred refinement. `goTo` does not apply light-time correction to the translation path. `SimulationState` exposes `transitionActiveProperty()` (boolean) and `transitionProgressProperty()` (double in [0,1]) so the UI and scripting layer can observe completion. If a new `pointAt` or `goTo` is issued while a transition is in progress, the in-progress transition is cancelled and the new one begins immediately. `waitTransition()` implemented as a blocking primitive that returns when `transitionActiveProperty()` becomes false — defined here alongside the property it depends on and exposed through the Groovy scripting wrapper in step 20. Existing `focusBody()` and `targetBody()` implementations updated to drive `pointAt`/`goTo` internally so interaction mode semantics are consistent with the new transition system. All duration and interpolation constants in `KepplrConstants`.
+`pointAt(int naifId, double durationSeconds)` and `goTo(int naifId, double apparentRadiusDeg, double durationSeconds)` 
+added to `SimulationCommands`. Transitions execute on the JME render thread, progressing each frame in `simpleUpdate()`. 
+Transitions are non-blocking — commands return immediately and progress is tracked in `SimulationState`. `pointAt` slews 
+the camera orientation from current look direction to the target body direction over `durationSeconds` using spherical 
+linear interpolation (slerp). `goTo` waits for any in-progress `pointAt` to complete, then translates the camera along 
+its current line of sight until the target body subtends the requested apparent radius. Both transitions use linear 
+interpolation initially; acceleration/deceleration is a deferred refinement. `goTo` does not apply light-time correction 
+to the translation path. `SimulationState` exposes `transitionActiveProperty()` (boolean) and 
+`transitionProgressProperty()` (double in [0,1]) so the UI and scripting layer can observe completion. If a new 
+`pointAt` or `goTo` is issued while a transition is in progress, the in-progress transition is cancelled and the new one
+begins immediately. `waitTransition()` implemented as a blocking primitive that returns when `transitionActiveProperty()` 
+becomes false — defined here alongside the property it depends on and exposed through the Groovy scripting wrapper in 
+step 20. Existing `focusBody()` and `targetBody()` implementations updated to drive `pointAt`/`goTo` internally so 
+interaction mode semantics are consistent with the new transition system. All duration and interpolation constants in `
+KepplrConstants`.
 
 ---
 
@@ -181,11 +195,11 @@ unacceptable and the platform complexity is not justified for v0.1. Do not
 revisit this decision.
 
 The JavaFX stage is a normal, non-transparent, non-always-on-top window. It
-opens alongside the JME window at launch, positioned to its right. It closes
-when the JME window closes via the existing `destroy()` shutdown hook. No
-`WindowManager` class. No GLFW position/minimize/focus callbacks. No Linux
-X11 forcing workaround. No `kepplr.sh` launcher changes beyond what already
-exists.
+opens alongside the JME window at launch, positioned to its right. Both
+windows close regardless of which one the user closes — closing either window
+calls the same shutdown path as `destroy()`. No `WindowManager` class. No
+GLFW position/minimize/focus callbacks. No Linux X11 forcing workaround. No
+`kepplr.sh` launcher changes beyond what already exists.
 
 **Layout reference:** Read
 `../KEPPLR-pre/src/main/java/kepplr/ui/fx/FxUiController.java` before
@@ -194,12 +208,14 @@ implementing.
 **Control panel layout — collapsible sidebar anchored to the right edge of
 the JavaFX window:**
 
-(1) Current body readout — four labeled rows: Selected, Focused, Targeted,
-Tracked. Each row shows the body name resolved via
+(1) Current body readout — three labeled rows: Selected, Focused, Targeted.
+Each row shows the body name resolved via
 `SimulationStateFxBridge.formatBodyName(int id)`. Each label must be bound
 directly to the corresponding `SimulationStateFxBridge` observable property
 — not set once at init. The Selected row has Focus, Target, and Clear action
-buttons. If no body is active for a row, the label shows "—".
+buttons. If no body is active for a row, the label shows "—". There is no
+Tracked row — the active camera frame indicator in the View menu serves this
+purpose.
 
 (2) Time display and rate control from step 9.
 
@@ -221,10 +237,14 @@ the control panel must update immediately. Double-click →
 
 **Menus:**
 - File — Load Configuration (`KEPPLRConfiguration.reload(Path)`); parse errors
-  reported in status panel.
-- View (renamed from Camera) — Camera Frame submenu (Inertial / Body-Fixed /
-  Synodic radio items bound to `activeCameraFrameProperty()`), Stop Tracking,
-  Field of View control, camera frame fallback indicator.
+  reported in status panel. File picker defaults to properties files filter
+  but also offers an "All Files" filter option.
+- View — Camera Frame submenu (Inertial / Body-Fixed / Synodic radio items
+  bound to `activeCameraFrameProperty()`), Stop Tracking, Field of View
+  control, camera frame fallback indicator. Stop Tracking calls
+  `SimulationCommands.setCameraFrame(INERTIAL)` and is kept in sync with the
+  Camera Frame submenu radio items — selecting Inertial via the submenu and
+  pressing Stop Tracking are equivalent operations.
 - Time — unchanged from step 9.
 - Window — preset sizes: 1280×720, 1280×1024, 1920×1080, 2560×1440; resizes
   the JME window only. JavaFX window is not resized programmatically.
@@ -232,30 +252,44 @@ the control panel must update immediately. Double-click →
 **Keyboard shortcuts** — wired through the JME input handler, not JavaFX. All
 call `SimulationCommands`:
 - G — `goTo` focused body
-- F — follow/track focused body
+- F — if a targeted body is set, calls `SimulationCommands.setCameraFrame(SYNODIC)`;
+  no-op if no targeted body is set
 - T — target selected body
-- Escape — stop tracking
+- Escape — calls `SimulationCommands.setCameraFrame(INERTIAL)`; must not close
+  either window. JavaFX default Escape-closes-stage behavior must be suppressed.
 - Space — pause/resume
 - `[` / `]` — decrease / increase time rate
 
+The JME window must gain OS focus when the mouse enters it, so keyboard
+shortcuts work without the user explicitly clicking the JME window first.
+Implement via a mouse-entered listener on the JME window that calls
+`jmeWindow.requestFocus()`.
+
+**Tracking is not a separate camera behavior.** F and Stop Tracking are
+shortcuts for switching the camera frame to Synodic and Inertial respectively.
+`trackedBodyId`, `trackingAnchor`, `trackBody()`, and `stopTracking()` are
+removed. Any existing call sites are replaced with `setCameraFrame()` calls.
+
 **Mouse picking in the JME window:**
 
-Single click on a body in the render view → `SimulationCommands.selectBody(naifId)`.
-Double-click on a body → `SimulationCommands.focusBody(naifId)`.
-No mouse-based targeting — Target is only available via the T key or the
-control panel button.
+Single click on a body → `SimulationCommands.selectBody(naifId)`. Double-click
+on a body → `SimulationCommands.focusBody(naifId)`. No mouse-based targeting —
+Target is only available via the T key or the control panel button.
 
 Picking is a ray cast from the camera through the click position against all
-visible body nodes. On a hit, use the NAIF ID stored on the body node. On a
-miss (click on empty space), do nothing — do not clear the current selection.
-Picking is handled in the JME input handler alongside the keyboard shortcuts,
-not in JavaFX. Double-click detection uses a timing threshold constant defined
-in `KepplrConstants`.
+visible body nodes. The pick ray must be built in camera-relative scene space
+— body node positions in the JME scene graph are camera-relative due to the
+floating origin; a ray built from heliocentric coordinates will miss nearby
+bodies. Each body node must have a minimum screen-space pick radius (a constant
+in `KepplrConstants`) so that small or distant bodies remain clickable
+regardless of rendered size. On a hit, use the NAIF ID stored on the body
+node. On a miss (click on empty space), do nothing — do not clear the current
+selection. Double-click detection uses a timing threshold constant in
+`KepplrConstants`.
 
 **`SimulationStateFxBridge` extensions** (add without removing anything
 already present):
 - `selectedBodyActiveProperty()` (boolean)
-- `trackedBodyActiveProperty()` (boolean)
 - `cameraFrameFallbackActiveProperty()` (boolean)
 - `formatBodyName(int id)` — separate from existing `formatBodyId`
 - `transitionActiveProperty()` (boolean)
@@ -275,18 +309,23 @@ in `ui/`.
   a dark background.
 
 **Hard constraints — violations block sign-off:**
-- `Platform.runLater()` permitted only in `SimulationStateFxBridge`. Nowhere
-  else.
+- `Platform.runLater()` permitted only in `SimulationStateFxBridge` and in
+  `KepplrApp.destroy()` for lifecycle shutdown. The `destroy()` call site
+  must have a comment explaining it is a sanctioned use. Nowhere else.
 - No name resolution logic inside `ui/`.
 - The JME window must receive all mouse and keyboard events intended for it.
   The JavaFX window must not intercept input directed at the JME window.
+- `trackBody()`, `stopTracking()`, `trackedBodyId`, and `trackingAnchor` do
+  not exist anywhere in the codebase after this step.
 - `mvn test` passes with no new failures.
-```
 
 ---
 
 ### 20. Groovy Scripting Layer
-Groovy-friendly wrapper delegating to `SimulationCommands`. Exposes `waitSim()` and `waitWall()` timing primitives wired into the time model from step 7, and `waitTransition()` from step 18. Every `SimulationCommands` call must be loggable so real-time recordings can be transcribed as valid Groovy scripts with `waitWall()` calls inserted for timing. No generic `wait()` function per §11.2.
+Groovy-friendly wrapper delegating to `SimulationCommands`. Exposes `waitSim()` and `waitWall()` timing primitives wired 
+into the time model from step 7, and `waitTransition()` from step 18. Every `SimulationCommands` call must be loggable 
+so real-time recordings can be transcribed as valid Groovy scripts with `waitWall()` calls inserted for timing. No 
+generic `wait()` function per §11.2.
 
 ---
 

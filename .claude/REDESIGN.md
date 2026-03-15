@@ -170,15 +170,27 @@ At any time, the application maintains at most:
 
 ### 4.6 Tracked
 
-* Tracked means the tracked body’s center maintains a constant **screen position** over time.
-* Tracking anchor is defined in **normalized screen coordinates**, so tracking remains consistent under window resizing.
-* If the user moves the camera while tracking:
+Tracking is a shortcut for switching the camera frame to Synodic with the
+targeted body as the "other body." It is not a separate camera behavior —
+it is frame selection with a convenient name for users who do not think in
+terms of reference frames.
 
-  * tracking continues, and the “locked” screen position becomes the new position (i.e., tracking continues at the new pixel/normalized location).
-* Tracking must continue even if the tracked body goes offscreen.
-* If a new **Point At** (targeted body) is selected, tracking must be **disabled** automatically.
-* A **Stop Tracking** option must exist in the menu.
-* The JavaFX status window must display whether a body is currently tracked.
+* **F key** — if a targeted body is set, switches the camera frame to
+  Synodic. The targeted body becomes the synodic "other body" per the key
+  decision in the roadmap. If no targeted body is set, F is a no-op.
+* **Stop Tracking** (View menu) — switches the camera frame back to
+  Inertial. Equivalent to selecting Inertial in the Camera Frame submenu.
+* The Camera Frame submenu and the F key / Stop Tracking are kept in sync —
+  switching frame via the submenu updates the "tracked" state and vice versa.
+* The Tracked row in the body status panel is removed. The active camera
+  frame is already shown in the View menu indicator; a separate Tracked
+  row is redundant.
+* `trackedBodyId`, `trackingAnchor`, and all related properties on
+  `SimulationState` are removed. `SimulationStateFxBridge.trackedBodyActiveProperty()`
+  is removed. The F key handler calls `SimulationCommands.setCameraFrame(SYNODIC)`
+  instead of `trackBody()`. `SimulationCommands.stopTracking()` calls
+  `SimulationCommands.setCameraFrame(INERTIAL)`.
+* The `trackBody()` method on `SimulationCommands` is removed.
 
 ---
 
