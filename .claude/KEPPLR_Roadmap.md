@@ -172,23 +172,104 @@ Sun halo implemented as a world-space billboard with custom GLSL 150 shader (`Su
 
 ## Remaining Steps
 
-### 19. UI — Overlay, Body Selection, and Camera Controls
+### 19. UI — Body Selection and Camera Controls
 
-**Pre-implementation requirement:** Read the spike project source at `../KEPPLR-overlay-spike/` in full before writing any code. The spike contains working implementations of all platform workarounds described in the Spike Findings section. Carry those implementations forward exactly — do not reinvent them. Also read `../KEPPLR-pre/src/main/java/kepplr/ui/fx/FxUiController.java` for layout reference.
+**Architecture decision (final):** Two-window layout. The JME render window
+and the JavaFX control window are separate OS windows. The transparent overlay
+(Option B) was prototyped and rejected — position-sync lag on macOS is
+unacceptable and the platform complexity is not justified for v0.1. Do not
+revisit this decision.
 
-The existing two-window layout is replaced with a transparent JavaFX overlay stage positioned over the JME window per the Option B architecture confirmed by the spike. `WindowManager` in `com.kepplr.core` encapsulates the overlay stage, GLFW position/minimize/focus callbacks, and the sanctioned `Platform.runLater()` calls for window management. All four spike workarounds (Linux X11 forcing, macOS thread model, minimize/focus callbacks, `destroy()` shutdown hook) must be applied exactly as implemented in the spike. The Linux launcher script `kepplr.sh` is a production deliverable. Retina display coordinate alignment must be confirmed on a native MacBook display before marking done.
+The JavaFX stage is a normal, non-transparent, non-always-on-top window. It
+opens alongside the JME window at launch, positioned to its right. It closes
+when the JME window closes via the existing `destroy()` shutdown hook. No
+`WindowManager` class. No GLFW position/minimize/focus callbacks. No Linux
+X11 forcing workaround. No `kepplr.sh` launcher changes beyond what already
+exists.
 
-Control panel layout: a collapsible sidebar panel anchored to the right edge of the render view containing: (1) current body readout — selected, focused, targeted, tracked as labeled rows with body name and action buttons (Focus, Target, Clear) on the selected body row; (2) time display and rate control from step 9; (3) camera frame indicator and transition progress bar (visible only during active transition, collapses when idle).
+**Layout reference:** Read
+`../KEPPLR-pre/src/main/java/kepplr/ui/fx/FxUiController.java` before
+implementing.
 
-Body list panel: a separate collapsible panel showing all bodies from `KEPPLREphemeris.getKnownBodies()`, grouped in a tree by primary body, ordered by distance from the Sun. Top-level entries are bodies with Solar System Barycenter as primary (Sun, planet barycenters, spacecraft, asteroids, comets). Each planet barycenter expands to its satellites. Body names resolved via `SpiceBundle.getObjectName()`. List refreshes when `KEPPLRConfiguration.reload()` is called. Clicking a body selects it; double-clicking focuses it.
+**Control panel layout — collapsible sidebar anchored to the right edge of
+the JavaFX window:**
 
-Menus: File menu — Load Configuration (`KEPPLRConfiguration.reload(Path)`), parse errors reported in status panel. View menu (renamed from Camera) — Camera Frame submenu (Inertial/Body-Fixed/Synodic radio items bound to `activeCameraFrameProperty()`), Stop Tracking, Field of View control, camera frame fallback indicator. Time menu — unchanged from step 9. Window menu — preset window sizes (1280×720, 1280×1024, 1920×1080, 2560×1440); resizes JME window and repositions overlay accordingly.
+(1) Current body readout — four labeled rows: Selected, Focused, Targeted,
+Tracked. Each row shows the body name resolved via
+`SimulationStateFxBridge.formatBodyName(int id)`. Each label must be bound
+directly to the corresponding `SimulationStateFxBridge` observable property
+— not set once at init. The Selected row has Focus, Target, and Clear action
+buttons. If no body is active for a row, the label shows "—".
 
-Keyboard shortcuts wired through the JME input handler (not JavaFX), all calling `SimulationCommands`: G — go to focused body (`goTo`); F — follow/track focused body; T — target selected body; Escape — stop tracking; Space — pause/resume; `[`/`]` — decrease/increase time rate.
+(2) Time display and rate control from step 9.
 
-`SimulationStateFxBridge` extended with: `selectedBodyActiveProperty()` (boolean), `trackedBodyActiveProperty()` (boolean), `cameraFrameFallbackActiveProperty()` (boolean), `formatBodyName(int id)` (separate from existing `formatBodyId`), `transitionActiveProperty()`, `transitionProgressProperty()`.
+(3) Camera frame indicator and transition progress bar — visible only during
+an active transition (bound to `transitionActiveProperty()`), collapses to
+zero height when idle.
 
-Input fields accept either a name or a NAIF ID in a single field — distinguished by whether the input parses as an integer. Name resolution via `BodyLookupService` in `kepplr.ephemeris`; no name resolution logic in `ui/`.
+**Body list panel — separate collapsible panel:**
+
+Populated from `KEPPLREphemeris.getKnownBodies()`, grouped in a tree by
+primary body, ordered by distance from the Sun. Top-level entries are bodies
+with Solar System Barycenter as primary. Each planet barycenter expands to its
+satellites. Body names resolved via `SpiceBundle.getObjectName()`. List
+refreshes on `KEPPLRConfiguration.reload()`.
+
+Single click → `SimulationCommands.selectBody(naifId)`. The Selected row in
+the control panel must update immediately. Double-click →
+`SimulationCommands.focusBody(naifId)`.
+
+**Menus:**
+- File — Load Configuration (`KEPPLRConfiguration.reload(Path)`); parse errors
+  reported in status panel.
+- View (renamed from Camera) — Camera Frame submenu (Inertial / Body-Fixed /
+  Synodic radio items bound to `activeCameraFrameProperty()`), Stop Tracking,
+  Field of View control, camera frame fallback indicator.
+- Time — unchanged from step 9.
+- Window — preset sizes: 1280×720, 1280×1024, 1920×1080, 2560×1440; resizes
+  the JME window only. JavaFX window is not resized programmatically.
+
+**Keyboard shortcuts** — wired through the JME input handler, not JavaFX. All
+call `SimulationCommands`:
+- G — `goTo` focused body
+- F — follow/track focused body
+- T — target selected body
+- Escape — stop tracking
+- Space — pause/resume
+- `[` / `]` — decrease / increase time rate
+
+**`SimulationStateFxBridge` extensions** (add without removing anything
+already present):
+- `selectedBodyActiveProperty()` (boolean)
+- `trackedBodyActiveProperty()` (boolean)
+- `cameraFrameFallbackActiveProperty()` (boolean)
+- `formatBodyName(int id)` — separate from existing `formatBodyId`
+- `transitionActiveProperty()` (boolean)
+- `transitionProgressProperty()` (double, [0,1])
+
+**Input fields:** accept a body name or a NAIF ID in a single field —
+distinguished by whether the input parses as an integer. Name resolution via
+`BodyLookupService` in `kepplr.ephemeris`. No name resolution logic anywhere
+in `ui/`.
+
+**Styling constraints:**
+- Panel backgrounds: semi-opaque dark fill, minimum rgba(0,0,0,0.72).
+- All text: white or near-white (#e0e0e0 minimum). No grey-on-grey or
+  grey-on-black combinations anywhere.
+- Menu bar and menu item text: explicitly styled white via JavaFX CSS.
+- Do not rely on default JavaFX theme colors for any text that appears over
+  a dark background.
+
+**Hard constraints — violations block sign-off:**
+- `Platform.runLater()` permitted only in `SimulationStateFxBridge`. Nowhere
+  else.
+- No name resolution logic inside `ui/`.
+- The JME window must receive all mouse and keyboard events intended for it.
+  The JavaFX window must not intercept input directed at the JME window.
+- `mvn test` passes with no new failures.
+```
+
+---
 
 ### 20. Groovy Scripting Layer
 Groovy-friendly wrapper delegating to `SimulationCommands`. Exposes `waitSim()` and `waitWall()` timing primitives wired into the time model from step 7, and `waitTransition()` from step 18. Every `SimulationCommands` call must be loggable so real-time recordings can be transcribed as valid Groovy scripts with `waitWall()` calls inserted for timing. No generic `wait()` function per §11.2.
