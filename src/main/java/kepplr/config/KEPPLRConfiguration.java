@@ -169,6 +169,10 @@ public class KEPPLRConfiguration implements KEPPLRConfigBlock {
             instance.spacecraftBlocks.put(code, sbf.fromConfig(pc));
         }
 
+        Log4j2Configurator lc = Log4j2Configurator.getInstance();
+        lc.setLevel(Level.valueOf(instance.config.logLevel().toUpperCase().trim()));
+        lc.setPattern(instance.config.logFormat());
+
         return instance;
     }
 
@@ -200,6 +204,10 @@ public class KEPPLRConfiguration implements KEPPLRConfigBlock {
         instance.ephemeris = new ThreadLocal<>();
         instance.bodyBlocks.putAll(bodyBlocks);
         instance.spacecraftBlocks.putAll(spacecraftBlocks);
+
+        Log4j2Configurator lc = Log4j2Configurator.getInstance();
+        lc.setLevel(Level.valueOf(instance.config.logLevel().toUpperCase().trim()));
+        lc.setPattern(instance.config.logFormat());
 
         return instance;
     }
