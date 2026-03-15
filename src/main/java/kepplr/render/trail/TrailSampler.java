@@ -55,8 +55,9 @@ public final class TrailSampler {
         KEPPLREphemeris eph = KEPPLRConfiguration.getInstance().getEphemeris();
         SpiceBundle spiceBundle = eph.getSpiceBundle();
 
-        // Satellite path: IDs 100–999 not ending in 99 (same rule as BodyCuller.isSatellite)
-        boolean isSatellite = naifId >= 100 && naifId <= 999 && naifId % 100 != 99;
+        // Satellite path: IDs 100–999 not ending in 99, plus Pluto (999) orbiting barycenter 9
+        boolean isSatellite =
+                (naifId >= 100 && naifId <= 999 && naifId % 100 != 99) || naifId == KepplrConstants.PLUTO_NAIF_ID;
 
         if (isSatellite) {
             try {
@@ -160,8 +161,9 @@ public final class TrailSampler {
     public static List<double[]> sample(int naifId, double centerEt, double durationSec, String frame, int maxSamples) {
         KEPPLREphemeris eph = KEPPLRConfiguration.getInstance().getEphemeris();
 
-        // Satellite path: IDs 100–999 not ending in 99 (same rule as BodyCuller.isSatellite)
-        boolean isSatellite = naifId >= 100 && naifId <= 999 && naifId % 100 != 99;
+        // Satellite path: IDs 100–999 not ending in 99, plus Pluto (999) orbiting barycenter 9
+        boolean isSatellite =
+                (naifId >= 100 && naifId <= 999 && naifId % 100 != 99) || naifId == KepplrConstants.PLUTO_NAIF_ID;
 
         // For satellites, anchor the orbital arc to the barycenter's position at centerEt.
         // baryAnchor[3] holds the barycenter's heliocentric J2000 position at centerEt.

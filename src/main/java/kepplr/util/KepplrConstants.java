@@ -276,6 +276,12 @@ public final class KepplrConstants {
     /** NAIF ID of Earth. */
     public static final int EARTH_NAIF_ID = 399;
 
+    /** NAIF ID of Pluto. Treated as a satellite of its barycenter (9) for trail purposes. */
+    public static final int PLUTO_NAIF_ID = 999;
+
+    /** NAIF ID of the Pluto system barycenter. */
+    public static final int PLUTO_BARYCENTER_NAIF_ID = 9;
+
     // ── Saturn rings (REDESIGN.md §7.2, Step 16) ──────────────────────────────────────────────
 
     /**

@@ -191,9 +191,9 @@ public class TrailManager {
         }
     }
 
-    /** Returns true if {@code naifId} identifies a natural satellite (same rule as BodyCuller). */
+    /** Returns true if {@code naifId} identifies a natural satellite or Pluto (orbiting its barycenter). */
     private static boolean isSatellite(int naifId) {
-        return naifId >= 100 && naifId <= 999 && naifId % 100 != 99;
+        return (naifId >= 100 && naifId <= 999 && naifId % 100 != 99) || naifId == KepplrConstants.PLUTO_NAIF_ID;
     }
 
     /** Returns an unmodifiable view of the currently enabled NAIF IDs. Package-private for tests. */

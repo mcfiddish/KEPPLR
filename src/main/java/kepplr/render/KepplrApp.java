@@ -463,8 +463,9 @@ public class KepplrApp extends SimpleApplication {
             KEPPLREphemeris eph = KEPPLRConfiguration.getInstance().getEphemeris();
             VectorIJK satPos = eph.getHeliocentricPositionJ2000(naifId, et);
             if (satPos == null) return false;
-            // Primary planet: e.g. for Moon (301) → Earth (399)
+            // Primary planet: e.g. for Moon (301) → Earth (399), Pluto (999) → 999 (self, skip)
             int primaryId = (naifId / 100) * 100 + 99;
+            if (primaryId == naifId) return false;
             VectorIJK primaryPos = eph.getHeliocentricPositionJ2000(primaryId, et);
             if (primaryPos == null) return false;
 
@@ -518,9 +519,9 @@ public class KepplrApp extends SimpleApplication {
         });
     }
 
-    /** Returns true if {@code naifId} identifies a natural satellite (same rule as BodyCuller/TrailManager). */
+    /** Returns true if {@code naifId} identifies a natural satellite or Pluto (orbiting its barycenter). */
     private static boolean isSatellite(int naifId) {
-        return naifId >= 100 && naifId <= 999 && naifId % 100 != 99;
+        return (naifId >= 100 && naifId <= 999 && naifId % 100 != 99) || naifId == KepplrConstants.PLUTO_NAIF_ID;
     }
 
     /**
