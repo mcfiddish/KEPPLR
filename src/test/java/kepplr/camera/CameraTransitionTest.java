@@ -47,6 +47,7 @@ class CameraTransitionTest {
         controller = new TransitionController(state);
 
         cam = new Camera(800, 600);
+        cam.setFrustumPerspective(45f, 800f / 600f, 0.001f, 1e15f);
         cam.setLocation(Vector3f.ZERO);
         // Look along +X initially (away from Earth which is roughly in the ecliptic plane)
         cam.lookAt(new Vector3f(1f, 0f, 0f), Vector3f.UNIT_Y);
@@ -259,5 +260,183 @@ class CameraTransitionTest {
 
         assertFalse(controller.isActive(), "No transition should be active for invalid NAIF");
         assertFalse(state.transitionActiveProperty().get(), "transitionActive state should be false");
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Step 19c: Camera scripting transitions
+    // ─────────────────────────────────────────────────────────────────────────
+
+    @Test
+    @DisplayName("ZOOM with zero duration snaps camera to new distance from focused body")
+    void zoomInstantSnap() {
+        state.setFocusedBodyId(EARTH);
+        VectorIJK earthPos = eph.getHeliocentricPositionJ2000(EARTH, testEt);
+        double startDist = Math.sqrt(Math.pow(camPos[0] - earthPos.getI(), 2)
+                + Math.pow(camPos[1] - earthPos.getJ(), 2)
+                + Math.pow(camPos[2] - earthPos.getK(), 2));
+
+        controller.requestZoom(0.5, 0); // halve distance
+        controller.update(0.016f, cam, camPos);
+
+        double endDist = Math.sqrt(Math.pow(camPos[0] - earthPos.getI(), 2)
+                + Math.pow(camPos[1] - earthPos.getJ(), 2)
+                + Math.pow(camPos[2] - earthPos.getK(), 2));
+
+        assertEquals(startDist * 0.5, endDist, startDist * 0.02, "After zoom(0.5, 0), distance should be halved");
+        assertFalse(controller.isActive(), "No transition should be active after instant zoom");
+    }
+
+    @Test
+    @DisplayName("ZOOM with no focus body is a no-op")
+    void zoomNoFocusIsNoOp() {
+        double[] before = camPos.clone();
+        controller.requestZoom(0.5, 0);
+        controller.update(0.016f, cam, camPos);
+
+        assertArrayEquals(before, camPos, 1e-10, "Camera position should not change when no focus body");
+    }
+
+    @Test
+    @DisplayName("TILT with zero duration rotates camera pitch")
+    void tiltInstantSnap() {
+        Quaternion before = cam.getRotation().clone();
+        controller.requestTilt(10.0, 0);
+        controller.update(0.016f, cam, camPos);
+
+        Quaternion after = cam.getRotation();
+        float dot = Math.abs(before.dot(after));
+        assertTrue(dot < 0.999f, "Camera orientation should change after tilt; dot=" + dot);
+    }
+
+    @Test
+    @DisplayName("YAW with zero duration rotates camera yaw")
+    void yawInstantSnap() {
+        Quaternion before = cam.getRotation().clone();
+        controller.requestYaw(10.0, 0);
+        controller.update(0.016f, cam, camPos);
+
+        Quaternion after = cam.getRotation();
+        float dot = Math.abs(before.dot(after));
+        assertTrue(dot < 0.999f, "Camera orientation should change after yaw; dot=" + dot);
+    }
+
+    @Test
+    @DisplayName("ROLL with zero duration rotates camera roll")
+    void rollInstantSnap() {
+        Quaternion before = cam.getRotation().clone();
+        controller.requestRoll(45.0, 0);
+        controller.update(0.016f, cam, camPos);
+
+        Quaternion after = cam.getRotation();
+        float dot = Math.abs(before.dot(after));
+        assertTrue(dot < 0.999f, "Camera orientation should change after roll; dot=" + dot);
+    }
+
+    @Test
+    @DisplayName("ORBIT with zero duration moves camera around focused body")
+    void orbitInstantSnap() {
+        state.setFocusedBodyId(EARTH);
+        double[] before = camPos.clone();
+
+        controller.requestOrbit(45.0, 0.0, 0);
+        controller.update(0.016f, cam, camPos);
+
+        // Position should have changed
+        boolean moved = Math.abs(camPos[0] - before[0]) > 1e-6
+                || Math.abs(camPos[1] - before[1]) > 1e-6
+                || Math.abs(camPos[2] - before[2]) > 1e-6;
+        assertTrue(moved, "Camera position should change after orbit");
+
+        // Distance from Earth should be preserved
+        VectorIJK earthPos = eph.getHeliocentricPositionJ2000(EARTH, testEt);
+        double distBefore = Math.sqrt(Math.pow(before[0] - earthPos.getI(), 2)
+                + Math.pow(before[1] - earthPos.getJ(), 2)
+                + Math.pow(before[2] - earthPos.getK(), 2));
+        double distAfter = Math.sqrt(Math.pow(camPos[0] - earthPos.getI(), 2)
+                + Math.pow(camPos[1] - earthPos.getJ(), 2)
+                + Math.pow(camPos[2] - earthPos.getK(), 2));
+        assertEquals(
+                distBefore, distAfter, distBefore * 0.001, "Distance from focus body should be preserved during orbit");
+    }
+
+    @Test
+    @DisplayName("CAMERA_POSITION with zero duration moves camera to explicit offset from origin body")
+    void cameraPositionInstantSnap() {
+        state.setFocusedBodyId(EARTH);
+        VectorIJK earthPos = eph.getHeliocentricPositionJ2000(EARTH, testEt);
+
+        controller.requestCameraPosition(0, 0, 50000, EARTH, 0);
+        controller.update(0.016f, cam, camPos);
+
+        assertEquals(earthPos.getI(), camPos[0], 1.0, "Camera X should be at Earth X");
+        assertEquals(earthPos.getJ(), camPos[1], 1.0, "Camera Y should be at Earth Y");
+        assertEquals(earthPos.getK() + 50000.0, camPos[2], 1.0, "Camera Z should be 50000 km above Earth");
+    }
+
+    @Test
+    @DisplayName("CAMERA_LOOK_DIRECTION with zero duration snaps camera orientation")
+    void cameraLookDirectionInstantSnap() {
+        controller.requestCameraLookDirection(0, 0, 1, 0, 1, 0, 0); // look +Z, up +Y
+        controller.update(0.016f, cam, camPos);
+
+        Vector3f dir = cam.getDirection();
+        assertTrue(dir.z > 0.99f, "Camera should look along +Z; dir.z=" + dir.z);
+    }
+
+    @Test
+    @DisplayName("Animated TILT transition interpolates over duration")
+    void tiltAnimatedTransition() {
+        Quaternion before = cam.getRotation().clone();
+
+        controller.requestTilt(30.0, 2.0);
+        controller.update(0.0f, cam, camPos); // creates transition
+        assertTrue(controller.isActive(), "Tilt transition should be active");
+
+        // Advance halfway
+        controller.update(1.0f, cam, camPos);
+        assertTrue(controller.isActive(), "Tilt transition should still be active at t=0.5");
+
+        // Complete
+        controller.update(1.0f, cam, camPos);
+        assertFalse(controller.isActive(), "Tilt transition should complete at t=1.0");
+
+        // Orientation should be different from start
+        float dot = Math.abs(before.dot(cam.getRotation()));
+        assertTrue(dot < 0.999f, "Camera orientation should differ after 30-degree tilt");
+    }
+
+    @Test
+    @DisplayName("New camera command cancels active transition")
+    void newCommandCancelsActiveTransition() {
+        controller.requestTilt(30.0, 5.0);
+        controller.update(0.0f, cam, camPos);
+        assertTrue(controller.isActive(), "Tilt transition should be active");
+
+        // New roll request should cancel the tilt
+        controller.requestRoll(10.0, 0);
+        controller.update(0.016f, cam, camPos);
+        assertFalse(controller.isActive(), "Active transition should be cancelled by new request");
+    }
+
+    @Test
+    @DisplayName("FOV instant snap sets camera FOV")
+    void fovInstantSnap() {
+        float before = cam.getFov();
+        controller.requestFov(60.0, 0);
+        controller.update(0.016f, cam, camPos);
+
+        assertEquals(60.0f, cam.getFov(), 0.01f, "Camera FOV should be 60 after instant snap");
+    }
+
+    @Test
+    @DisplayName("FOV is clamped to [FOV_MIN_DEG, FOV_MAX_DEG]")
+    void fovIsClamped() {
+        controller.requestFov(0.1, 0);
+        controller.update(0.016f, cam, camPos);
+        assertEquals((float) KepplrConstants.FOV_MIN_DEG, cam.getFov(), 0.01f, "FOV should be clamped to minimum");
+
+        controller.requestFov(200.0, 0);
+        controller.update(0.016f, cam, camPos);
+        assertEquals((float) KepplrConstants.FOV_MAX_DEG, cam.getFov(), 0.01f, "FOV should be clamped to maximum");
     }
 }

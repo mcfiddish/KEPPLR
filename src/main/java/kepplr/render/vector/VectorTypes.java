@@ -125,6 +125,11 @@ public final class VectorTypes {
         public String toString() {
             return "velocity";
         }
+
+        @Override
+        public String toScript() {
+            return "VectorTypes.velocity()";
+        }
     }
 
     /**
@@ -191,6 +196,11 @@ public final class VectorTypes {
         @Override
         public String toString() {
             return "bodyAxis" + axisLabel();
+        }
+
+        @Override
+        public String toScript() {
+            return "VectorTypes.bodyAxis" + axisLabel() + "()";
         }
     }
 
@@ -263,6 +273,11 @@ public final class VectorTypes {
         @Override
         public String toString() {
             return "towardBody:" + targetNaifId;
+        }
+
+        @Override
+        public String toScript() {
+            return "VectorTypes.towardBody(" + targetNaifId + ")";
         }
     }
 }

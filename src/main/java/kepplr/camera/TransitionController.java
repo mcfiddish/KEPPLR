@@ -15,7 +15,7 @@ import picante.mechanics.EphemerisID;
 import picante.surfaces.Ellipsoid;
 
 /**
- * Owns and advances all in-progress camera transitions (Step 18).
+ * Owns and advances all in-progress camera transitions (Step 18, Step 19c).
  *
  * <p>Called from {@code KepplrApp.simpleUpdate()} on the JME render thread each frame. Transition requests are posted
  * from any thread (e.g., the JavaFX UI thread via {@link kepplr.commands.DefaultSimulationCommands}) through a
@@ -27,6 +27,9 @@ import picante.surfaces.Ellipsoid;
  * when the {@code pointAt} completes. If a new {@code pointAt} arrives while both an active transition and a pending
  * {@code goTo} exist, the pending {@code goTo} is discarded and the new {@code pointAt} takes over. Queue depth is
  * therefore at most 1: one active + one pending {@code goTo}.
+ *
+ * <p>All Step 19c camera commands (zoom, orbit, tilt, yaw, roll, fov, setCameraPosition, setCameraLookDirection) cancel
+ * any active transition when they arrive, same as a new {@code pointAt}.
  *
  * <h3>Manual navigation cancellation</h3>
  *
@@ -45,12 +48,45 @@ public final class TransitionController {
 
     // ── Thread-safe inbox (written from commands thread, drained on JME thread) ──
 
-    private sealed interface PendingRequest permits PointAtRequest, GoToRequest {}
+    private sealed interface PendingRequest
+            permits PointAtRequest,
+                    GoToRequest,
+                    ZoomRequest,
+                    FovRequest,
+                    OrbitRequest,
+                    TiltRequest,
+                    YawRequest,
+                    RollRequest,
+                    CameraPositionRequest,
+                    CameraLookDirectionRequest,
+                    CancelRequest {}
 
     private record PointAtRequest(int naifId, double durationSeconds) implements PendingRequest {}
 
     private record GoToRequest(int naifId, double apparentRadiusDeg, double durationSeconds)
             implements PendingRequest {}
+
+    private record ZoomRequest(double factor, double durationSeconds) implements PendingRequest {}
+
+    private record FovRequest(double degrees, double durationSeconds) implements PendingRequest {}
+
+    private record OrbitRequest(double rightDegrees, double upDegrees, double durationSeconds)
+            implements PendingRequest {}
+
+    private record TiltRequest(double degrees, double durationSeconds) implements PendingRequest {}
+
+    private record YawRequest(double degrees, double durationSeconds) implements PendingRequest {}
+
+    private record RollRequest(double degrees, double durationSeconds) implements PendingRequest {}
+
+    private record CameraPositionRequest(double x, double y, double z, int originNaifId, double durationSeconds)
+            implements PendingRequest {}
+
+    private record CameraLookDirectionRequest(
+            double lookX, double lookY, double lookZ, double upX, double upY, double upZ, double durationSeconds)
+            implements PendingRequest {}
+
+    private record CancelRequest() implements PendingRequest {}
 
     private final ConcurrentLinkedQueue<PendingRequest> inbox = new ConcurrentLinkedQueue<>();
 
@@ -104,18 +140,70 @@ public final class TransitionController {
         inbox.add(new GoToRequest(naifId, apparentRadiusDeg, durationSeconds));
     }
 
+    /** Request a zoom transition (Step 19c). Thread-safe. */
+    public void requestZoom(double factor, double durationSeconds) {
+        inbox.add(new ZoomRequest(factor, durationSeconds));
+    }
+
+    /** Request a FOV transition (Step 19c). Thread-safe. */
+    public void requestFov(double degrees, double durationSeconds) {
+        inbox.add(new FovRequest(degrees, durationSeconds));
+    }
+
+    /** Request an orbit transition (Step 19c). Thread-safe. */
+    public void requestOrbit(double rightDegrees, double upDegrees, double durationSeconds) {
+        inbox.add(new OrbitRequest(rightDegrees, upDegrees, durationSeconds));
+    }
+
+    /** Request a tilt transition (Step 19c). Thread-safe. */
+    public void requestTilt(double degrees, double durationSeconds) {
+        inbox.add(new TiltRequest(degrees, durationSeconds));
+    }
+
+    /** Request a yaw transition (Step 19c). Thread-safe. */
+    public void requestYaw(double degrees, double durationSeconds) {
+        inbox.add(new YawRequest(degrees, durationSeconds));
+    }
+
+    /** Request a roll transition (Step 19c). Thread-safe. */
+    public void requestRoll(double degrees, double durationSeconds) {
+        inbox.add(new RollRequest(degrees, durationSeconds));
+    }
+
+    /** Request a camera position transition (Step 19c). Thread-safe. */
+    public void requestCameraPosition(double x, double y, double z, int originNaifId, double durationSeconds) {
+        inbox.add(new CameraPositionRequest(x, y, z, originNaifId, durationSeconds));
+    }
+
+    /** Request a camera look direction transition (Step 19c). Thread-safe. */
+    public void requestCameraLookDirection(
+            double lookX, double lookY, double lookZ, double upX, double upY, double upZ, double durationSeconds) {
+        inbox.add(new CameraLookDirectionRequest(lookX, lookY, lookZ, upX, upY, upZ, durationSeconds));
+    }
+
+    /**
+     * Request cancellation of the active transition and any pending requests (Step 20).
+     *
+     * <p>Thread-safe. The cancel is enqueued and processed on the next JME render frame. This is the thread-safe
+     * alternative to {@link #cancel()} which must be called from the JME thread.
+     */
+    public void requestCancel() {
+        inbox.add(new CancelRequest());
+    }
+
     // ── JME-thread methods ────────────────────────────────────────────────────
 
     /**
-     * Cancel the active transition and discard all pending requests.
+     * Cancel the active animated transition and any pending {@code goTo}.
      *
      * <p>Must be called on the JME render thread. Called by {@code KepplrApp.simpleUpdate()} when manual navigation
-     * input is detected.
+     * input is detected. Does <b>not</b> clear the inbox, because manual navigation actions (mouse drag, keyboard) now
+     * post instant requests to the inbox in the same frame (Step 19c). Those requests must survive the cancel and be
+     * processed by the subsequent {@link #update} call.
      */
     public void cancel() {
         active = null;
         pendingGoTo = null;
-        inbox.clear();
         updateStateProperties();
     }
 
@@ -145,19 +233,30 @@ public final class TransitionController {
      * {@code CameraInputHandler.update()} and any manual-navigation cancellation.
      *
      * @param tpf time per frame in seconds (wall-clock delta, never negative)
-     * @param cam JME camera; orientation mutated for {@link CameraTransition.Type#POINT_AT} transitions
-     * @param cameraHelioJ2000 heliocentric J2000 camera position in km (length-3); mutated for
-     *     {@link CameraTransition.Type#GO_TO} transitions
+     * @param cam JME camera; orientation mutated for orientation-based transitions
+     * @param cameraHelioJ2000 heliocentric J2000 camera position in km (length-3); mutated for position-based
+     *     transitions
      * @return {@code true} if a transition completed this frame
      */
     public boolean update(float tpf, Camera cam, double[] cameraHelioJ2000) {
         // Drain the thread-safe inbox on the JME thread
         PendingRequest req;
         while ((req = inbox.poll()) != null) {
-            if (req instanceof PointAtRequest r) {
-                handlePointAtRequest(r, cam, cameraHelioJ2000);
-            } else if (req instanceof GoToRequest r) {
-                handleGoToRequest(r, cameraHelioJ2000);
+            switch (req) {
+                case PointAtRequest r -> handlePointAtRequest(r, cam, cameraHelioJ2000);
+                case GoToRequest r -> handleGoToRequest(r, cameraHelioJ2000);
+                case ZoomRequest r -> handleZoomRequest(r, cam, cameraHelioJ2000);
+                case FovRequest r -> handleFovRequest(r, cam);
+                case OrbitRequest r -> handleOrbitRequest(r, cam, cameraHelioJ2000);
+                case TiltRequest r -> handleTiltRequest(r, cam);
+                case YawRequest r -> handleYawRequest(r, cam);
+                case RollRequest r -> handleRollRequest(r, cam);
+                case CameraPositionRequest r -> handleCameraPositionRequest(r, cam, cameraHelioJ2000);
+                case CameraLookDirectionRequest r -> handleCameraLookDirectionRequest(r, cam);
+                case CancelRequest r -> {
+                    active = null;
+                    pendingGoTo = null;
+                }
             }
         }
 
@@ -178,10 +277,13 @@ public final class TransitionController {
         double t = active.getT();
 
         boolean earlyComplete = false;
-        if (active.getType() == CameraTransition.Type.POINT_AT) {
-            applyPointAt(active, t, cam);
-        } else {
-            earlyComplete = !applyGoTo(active, t, cameraHelioJ2000);
+        switch (active.getType()) {
+            case POINT_AT, TILT, YAW, ROLL, CAMERA_LOOK_DIRECTION -> applyOrientationTransition(active, t, cam);
+            case GO_TO -> earlyComplete = !applyGoTo(active, t, cameraHelioJ2000);
+            case ZOOM -> earlyComplete = !applyZoomTransition(active, t, cameraHelioJ2000);
+            case FOV -> applyFovTransition(active, t, cam);
+            case ORBIT -> earlyComplete = !applyOrbitTransition(active, t, cam, cameraHelioJ2000);
+            case CAMERA_POSITION -> earlyComplete = !applyCameraPositionTransition(active, t, cameraHelioJ2000);
         }
 
         if (t >= 1.0 || earlyComplete) {
@@ -203,7 +305,7 @@ public final class TransitionController {
         return false;
     }
 
-    // ── Private JME-thread helpers ─────────────────────────────────────────────
+    // ── Private: inbox handlers ──────────────────────────────────────────────────
 
     private void handlePointAtRequest(PointAtRequest r, Camera cam, double[] cameraHelioJ2000) {
         // A new pointAt always cancels whatever is active and discards any pending goTo
@@ -259,6 +361,297 @@ public final class TransitionController {
         }
     }
 
+    private void handleZoomRequest(ZoomRequest r, Camera cam, double[] cameraHelioJ2000) {
+        cancelForNewRequest();
+
+        int focusId = state.focusedBodyIdProperty().get();
+        if (focusId == -1) return;
+
+        double[] focusPos = getBodyPos(focusId);
+        if (focusPos == null) return;
+
+        double dx = cameraHelioJ2000[0] - focusPos[0];
+        double dy = cameraHelioJ2000[1] - focusPos[1];
+        double dz = cameraHelioJ2000[2] - focusPos[2];
+        double startDist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+        double endDist = clampZoomDistance(focusId, startDist * r.factor());
+
+        if (r.durationSeconds() <= KepplrConstants.CAMERA_TRANSITION_INSTANT_THRESHOLD_SEC) {
+            applyDistanceChange(focusPos, startDist, endDist, cameraHelioJ2000);
+            return;
+        }
+
+        active = CameraTransition.zoom(focusId, startDist, endDist, r.durationSeconds());
+    }
+
+    private void handleFovRequest(FovRequest r, Camera cam) {
+        cancelForNewRequest();
+
+        double startFov = cam.getFov();
+        double endFov = Math.max(KepplrConstants.FOV_MIN_DEG, Math.min(KepplrConstants.FOV_MAX_DEG, r.degrees()));
+
+        if (r.durationSeconds() <= KepplrConstants.CAMERA_TRANSITION_INSTANT_THRESHOLD_SEC) {
+            cam.setFov((float) endFov);
+            return;
+        }
+
+        active = CameraTransition.fov(startFov, endFov, r.durationSeconds());
+    }
+
+    private void handleOrbitRequest(OrbitRequest r, Camera cam, double[] cameraHelioJ2000) {
+        cancelForNewRequest();
+
+        int focusId = state.focusedBodyIdProperty().get();
+        if (focusId == -1) return;
+
+        double[] focusPos = getBodyPos(focusId);
+        if (focusPos == null) return;
+
+        // Compute end state by applying the full orbit angle
+        float deltaRight = (float) Math.toRadians(r.upDegrees());
+        float deltaUp = (float) Math.toRadians(r.rightDegrees());
+        Vector3f screenRight = cam.getLeft().negate();
+        Vector3f screenUp = cam.getUp();
+
+        CameraNavigator.OrbitResult result = CameraNavigator.orbit(
+                cameraHelioJ2000, cam.getRotation(), focusPos, screenRight, screenUp, deltaRight, deltaUp);
+
+        if (r.durationSeconds() <= KepplrConstants.CAMERA_TRANSITION_INSTANT_THRESHOLD_SEC) {
+            cameraHelioJ2000[0] = result.position()[0];
+            cameraHelioJ2000[1] = result.position()[1];
+            cameraHelioJ2000[2] = result.position()[2];
+            cam.setAxes(result.orientation());
+            state.setCameraPositionJ2000(cameraHelioJ2000);
+            return;
+        }
+
+        // Compute offsets from focus body
+        double[] startOff = {
+            cameraHelioJ2000[0] - focusPos[0], cameraHelioJ2000[1] - focusPos[1], cameraHelioJ2000[2] - focusPos[2]
+        };
+        double[] endOff = {
+            result.position()[0] - focusPos[0], result.position()[1] - focusPos[1], result.position()[2] - focusPos[2]
+        };
+
+        active = CameraTransition.orbit(
+                focusId, cam.getRotation(), result.orientation(), startOff, endOff, r.durationSeconds());
+    }
+
+    private void handleTiltRequest(TiltRequest r, Camera cam) {
+        cancelForNewRequest();
+
+        float angleRad = (float) Math.toRadians(r.degrees());
+        Vector3f screenRight = cam.getLeft().negate();
+        Quaternion startQ = cam.getRotation().clone();
+        Quaternion endQ = CameraNavigator.rotateInPlace(cam.getRotation(), screenRight, cam.getUp(), angleRad, 0f);
+
+        if (r.durationSeconds() <= KepplrConstants.CAMERA_TRANSITION_INSTANT_THRESHOLD_SEC) {
+            cam.setAxes(endQ);
+            return;
+        }
+
+        active = CameraTransition.orientation(CameraTransition.Type.TILT, startQ, endQ, r.durationSeconds());
+    }
+
+    private void handleYawRequest(YawRequest r, Camera cam) {
+        cancelForNewRequest();
+
+        float angleRad = (float) Math.toRadians(r.degrees());
+        Vector3f screenRight = cam.getLeft().negate();
+        Quaternion startQ = cam.getRotation().clone();
+        Quaternion endQ = CameraNavigator.rotateInPlace(cam.getRotation(), screenRight, cam.getUp(), 0f, angleRad);
+
+        if (r.durationSeconds() <= KepplrConstants.CAMERA_TRANSITION_INSTANT_THRESHOLD_SEC) {
+            cam.setAxes(endQ);
+            return;
+        }
+
+        active = CameraTransition.orientation(CameraTransition.Type.YAW, startQ, endQ, r.durationSeconds());
+    }
+
+    private void handleRollRequest(RollRequest r, Camera cam) {
+        cancelForNewRequest();
+
+        float angleRad = (float) Math.toRadians(r.degrees());
+        Vector3f lookDir = cam.getDirection().normalize();
+        Quaternion qRoll = new Quaternion().fromAngleNormalAxis(angleRad, lookDir);
+        Quaternion startQ = cam.getRotation().clone();
+        Quaternion endQ = qRoll.mult(cam.getRotation()).normalizeLocal();
+
+        if (r.durationSeconds() <= KepplrConstants.CAMERA_TRANSITION_INSTANT_THRESHOLD_SEC) {
+            cam.setAxes(endQ);
+            return;
+        }
+
+        active = CameraTransition.orientation(CameraTransition.Type.ROLL, startQ, endQ, r.durationSeconds());
+    }
+
+    private void handleCameraPositionRequest(CameraPositionRequest r, Camera cam, double[] cameraHelioJ2000) {
+        cancelForNewRequest();
+
+        int originId = r.originNaifId();
+        if (originId == -1) {
+            // Use current focus body as origin
+            originId = state.focusedBodyIdProperty().get();
+        }
+        if (originId == -1) return;
+
+        double[] originPos = getBodyPos(originId);
+        if (originPos == null) return;
+
+        double[] startOff = {
+            cameraHelioJ2000[0] - originPos[0], cameraHelioJ2000[1] - originPos[1], cameraHelioJ2000[2] - originPos[2]
+        };
+        double[] endOff = {r.x(), r.y(), r.z()};
+
+        if (r.durationSeconds() <= KepplrConstants.CAMERA_TRANSITION_INSTANT_THRESHOLD_SEC) {
+            cameraHelioJ2000[0] = originPos[0] + endOff[0];
+            cameraHelioJ2000[1] = originPos[1] + endOff[1];
+            cameraHelioJ2000[2] = originPos[2] + endOff[2];
+            state.setCameraPositionJ2000(cameraHelioJ2000);
+            return;
+        }
+
+        active = CameraTransition.cameraPosition(originId, startOff, endOff, r.durationSeconds());
+    }
+
+    private void handleCameraLookDirectionRequest(CameraLookDirectionRequest r, Camera cam) {
+        cancelForNewRequest();
+
+        Vector3f lookDir = new Vector3f((float) r.lookX(), (float) r.lookY(), (float) r.lookZ());
+        Vector3f upDir = new Vector3f((float) r.upX(), (float) r.upY(), (float) r.upZ());
+        if (lookDir.lengthSquared() < 1e-20f) return;
+        lookDir.normalizeLocal();
+
+        Quaternion startQ = cam.getRotation().clone();
+        Quaternion endQ = buildLookAtQuaternion(lookDir, upDir);
+
+        if (r.durationSeconds() <= KepplrConstants.CAMERA_TRANSITION_INSTANT_THRESHOLD_SEC) {
+            cam.setAxes(endQ);
+            return;
+        }
+
+        active = CameraTransition.orientation(
+                CameraTransition.Type.CAMERA_LOOK_DIRECTION, startQ, endQ, r.durationSeconds());
+    }
+
+    // ── Private: apply methods for animated transitions ─────────────────────────
+
+    /** Apply spherical linear interpolation to the camera orientation for orientation-based transitions. */
+    private static void applyOrientationTransition(CameraTransition transition, double t, Camera cam) {
+        Quaternion slerped = new Quaternion();
+        slerped.slerp(transition.getStartOrientation(), transition.getEndOrientation(), (float) t);
+        cam.setAxes(slerped.normalizeLocal());
+    }
+
+    /**
+     * Reposition the camera along its current focus-to-camera direction for a GO_TO transition.
+     *
+     * @return {@code true} if the body position is available and the camera was repositioned; {@code false} if the body
+     *     has no ephemeris (signals early completion)
+     */
+    private boolean applyGoTo(CameraTransition transition, double t, double[] cameraHelioJ2000) {
+        double targetDist = lerp(transition.getStartDistanceKm(), transition.getEndDistanceKm(), t);
+
+        double[] bodyPos = getBodyPos(transition.getTargetNaifId());
+        if (bodyPos == null) {
+            logger.warn("GO_TO: NAIF {} temporarily unavailable; completing early", transition.getTargetNaifId());
+            return false;
+        }
+
+        double dx = cameraHelioJ2000[0] - bodyPos[0];
+        double dy = cameraHelioJ2000[1] - bodyPos[1];
+        double dz = cameraHelioJ2000[2] - bodyPos[2];
+        double currentDist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+
+        if (currentDist > 0) {
+            double scale = targetDist / currentDist;
+            cameraHelioJ2000[0] = bodyPos[0] + dx * scale;
+            cameraHelioJ2000[1] = bodyPos[1] + dy * scale;
+            cameraHelioJ2000[2] = bodyPos[2] + dz * scale;
+        }
+        return true;
+    }
+
+    /**
+     * Apply zoom transition: lerp distance from focus body.
+     *
+     * @return {@code false} if focus body position unavailable (early completion)
+     */
+    private boolean applyZoomTransition(CameraTransition transition, double t, double[] cameraHelioJ2000) {
+        double targetDist = lerp(transition.getStartDistanceKm(), transition.getEndDistanceKm(), t);
+
+        double[] focusPos = getBodyPos(transition.getTargetNaifId());
+        if (focusPos == null) {
+            logger.warn("ZOOM: NAIF {} temporarily unavailable; completing early", transition.getTargetNaifId());
+            return false;
+        }
+
+        applyDistanceChange(focusPos, -1, targetDist, cameraHelioJ2000);
+        return true;
+    }
+
+    /** Apply FOV transition: lerp between start and end FOV. */
+    private static void applyFovTransition(CameraTransition transition, double t, Camera cam) {
+        double fov = lerp(transition.getStartFov(), transition.getEndFov(), t);
+        cam.setFov((float) fov);
+    }
+
+    /**
+     * Apply orbit transition: slerp orientation + lerp position offset relative to focus body.
+     *
+     * @return {@code false} if focus body position unavailable (early completion)
+     */
+    private boolean applyOrbitTransition(CameraTransition transition, double t, Camera cam, double[] cameraHelioJ2000) {
+        double[] focusPos = getBodyPos(transition.getTargetNaifId());
+        if (focusPos == null) {
+            logger.warn("ORBIT: NAIF {} temporarily unavailable; completing early", transition.getTargetNaifId());
+            return false;
+        }
+
+        // Slerp orientation
+        Quaternion slerped = new Quaternion();
+        slerped.slerp(transition.getStartOrientation(), transition.getEndOrientation(), (float) t);
+        cam.setAxes(slerped.normalizeLocal());
+
+        // Lerp position offset
+        double[] startOff = transition.getStartOffset();
+        double[] endOff = transition.getEndOffset();
+        cameraHelioJ2000[0] = focusPos[0] + lerp(startOff[0], endOff[0], t);
+        cameraHelioJ2000[1] = focusPos[1] + lerp(startOff[1], endOff[1], t);
+        cameraHelioJ2000[2] = focusPos[2] + lerp(startOff[2], endOff[2], t);
+        return true;
+    }
+
+    /**
+     * Apply camera position transition: lerp offset relative to origin body.
+     *
+     * @return {@code false} if origin body position unavailable (early completion)
+     */
+    private boolean applyCameraPositionTransition(CameraTransition transition, double t, double[] cameraHelioJ2000) {
+        double[] originPos = getBodyPos(transition.getTargetNaifId());
+        if (originPos == null) {
+            logger.warn(
+                    "CAMERA_POSITION: NAIF {} temporarily unavailable; completing early", transition.getTargetNaifId());
+            return false;
+        }
+
+        double[] startOff = transition.getStartOffset();
+        double[] endOff = transition.getEndOffset();
+        cameraHelioJ2000[0] = originPos[0] + lerp(startOff[0], endOff[0], t);
+        cameraHelioJ2000[1] = originPos[1] + lerp(startOff[1], endOff[1], t);
+        cameraHelioJ2000[2] = originPos[2] + lerp(startOff[2], endOff[2], t);
+        return true;
+    }
+
+    // ── Private helpers ──────────────────────────────────────────────────────────
+
+    /** Cancel active transition and pending goTo for a new Step 19c request. */
+    private void cancelForNewRequest() {
+        active = null;
+        pendingGoTo = null;
+    }
+
     private void startGoToNow(GoToRequest r, double[] cameraHelioJ2000) {
         double et = state.currentEtProperty().get();
         KEPPLREphemeris eph = KEPPLRConfiguration.getInstance().getEphemeris();
@@ -304,42 +697,48 @@ public final class TransitionController {
         active = CameraTransition.goTo(r.naifId(), startDistKm, endDistKm, r.durationSeconds());
     }
 
-    /** Apply spherical linear interpolation to the camera orientation for a POINT_AT transition. */
-    private static void applyPointAt(CameraTransition transition, double t, Camera cam) {
-        Quaternion slerped = new Quaternion();
-        slerped.slerp(transition.getStartOrientation(), transition.getEndOrientation(), (float) t);
-        cam.setAxes(slerped.normalizeLocal());
-    }
-
-    /**
-     * Reposition the camera along its current focus-to-camera direction for a GO_TO transition.
-     *
-     * @return {@code true} if the body position is available and the camera was repositioned; {@code false} if the body
-     *     has no ephemeris (signals early completion)
-     */
-    private boolean applyGoTo(CameraTransition transition, double t, double[] cameraHelioJ2000) {
-        double targetDist = lerp(transition.getStartDistanceKm(), transition.getEndDistanceKm(), t);
-
+    /** Get heliocentric J2000 position of a body at the current ET. Returns null if unavailable. */
+    private double[] getBodyPos(int naifId) {
         double et = state.currentEtProperty().get();
         KEPPLREphemeris eph = KEPPLRConfiguration.getInstance().getEphemeris();
-        VectorIJK bodyPos = eph.getHeliocentricPositionJ2000(transition.getTargetNaifId(), et);
-        if (bodyPos == null) {
-            logger.warn("GO_TO: NAIF {} temporarily unavailable; completing early", transition.getTargetNaifId());
-            return false;
-        }
+        VectorIJK pos = eph.getHeliocentricPositionJ2000(naifId, et);
+        if (pos == null) return null;
+        return new double[] {pos.getI(), pos.getJ(), pos.getK()};
+    }
 
-        double dx = cameraHelioJ2000[0] - bodyPos.getI();
-        double dy = cameraHelioJ2000[1] - bodyPos.getJ();
-        double dz = cameraHelioJ2000[2] - bodyPos.getK();
-        double currentDist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+    /** Clamp zoom distance to valid range for the given focus body. */
+    private double clampZoomDistance(int focusId, double distKm) {
+        double minDist = getBodyMinDist(focusId);
+        return Math.max(minDist, Math.min(KepplrConstants.FRUSTUM_FAR_MAX_KM, distKm));
+    }
 
-        if (currentDist > 0) {
-            double scale = targetDist / currentDist;
-            cameraHelioJ2000[0] = bodyPos.getI() + dx * scale;
-            cameraHelioJ2000[1] = bodyPos.getJ() + dy * scale;
-            cameraHelioJ2000[2] = bodyPos.getK() + dz * scale;
+    /** Get minimum zoom distance for a body (1.1× mean radius or fallback). */
+    private double getBodyMinDist(int focusId) {
+        KEPPLREphemeris eph = KEPPLRConfiguration.getInstance().getEphemeris();
+        EphemerisID id = eph.getSpiceBundle().getObject(focusId);
+        if (id != null) {
+            Ellipsoid shape = eph.getShape(id);
+            if (shape != null) {
+                double meanRadius = (shape.getA() + shape.getB() + shape.getC()) / 3.0;
+                return meanRadius * KepplrConstants.CAMERA_ZOOM_BODY_RADIUS_FACTOR;
+            }
         }
-        return true;
+        return KepplrConstants.CAMERA_ZOOM_FALLBACK_MIN_KM;
+    }
+
+    /** Apply a distance change along the camera-to-focus direction. If currentDist is -1, it is recomputed. */
+    private static void applyDistanceChange(
+            double[] focusPos, double currentDist, double targetDist, double[] cameraHelioJ2000) {
+        double dx = cameraHelioJ2000[0] - focusPos[0];
+        double dy = cameraHelioJ2000[1] - focusPos[1];
+        double dz = cameraHelioJ2000[2] - focusPos[2];
+        double dist = currentDist > 0 ? currentDist : Math.sqrt(dx * dx + dy * dy + dz * dz);
+        if (dist > 0) {
+            double scale = targetDist / dist;
+            cameraHelioJ2000[0] = focusPos[0] + dx * scale;
+            cameraHelioJ2000[1] = focusPos[1] + dy * scale;
+            cameraHelioJ2000[2] = focusPos[2] + dz * scale;
+        }
     }
 
     /**

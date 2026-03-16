@@ -52,6 +52,11 @@ public final class DefaultSimulationState implements SimulationState {
             new SimpleObjectProperty<>(new double[] {0.0, 0.0, 0.0});
     private final SimpleObjectProperty<double[]> cameraBodyFixedSpherical = new SimpleObjectProperty<>(null);
 
+    // ── Synodic frame overrides (Step 19c) ──
+
+    private final SimpleIntegerProperty synodicFrameFocusId = new SimpleIntegerProperty(-1);
+    private final SimpleIntegerProperty synodicFrameTargetId = new SimpleIntegerProperty(-1);
+
     // ── Render state (§7.3, §10.2) ──
 
     private final SimpleObjectProperty<List<BodyInView>> bodiesInView =
@@ -156,6 +161,16 @@ public final class DefaultSimulationState implements SimulationState {
     }
 
     @Override
+    public ReadOnlyIntegerProperty synodicFrameFocusIdProperty() {
+        return synodicFrameFocusId;
+    }
+
+    @Override
+    public ReadOnlyIntegerProperty synodicFrameTargetIdProperty() {
+        return synodicFrameTargetId;
+    }
+
+    @Override
     public ReadOnlyObjectProperty<RenderQuality> renderQualityProperty() {
         return renderQuality;
     }
@@ -257,6 +272,16 @@ public final class DefaultSimulationState implements SimulationState {
      */
     public void setBodiesInView(List<BodyInView> bodies) {
         bodiesInView.set(bodies);
+    }
+
+    /** Set the explicit synodic frame focus NAIF ID, or -1 to use interaction state (Step 19c). */
+    public void setSynodicFrameFocusId(int id) {
+        synodicFrameFocusId.set(id);
+    }
+
+    /** Set the explicit synodic frame target NAIF ID, or -1 to use interaction state (Step 19c). */
+    public void setSynodicFrameTargetId(int id) {
+        synodicFrameTargetId.set(id);
     }
 
     /** Set the render quality preset (§9.4). */

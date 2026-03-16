@@ -32,4 +32,23 @@ public interface VectorType {
      * @return unit direction vector in J2000, or {@code null} if unavailable
      */
     VectorIJK computeDirection(int originNaifId, double et);
+
+    /**
+     * Return a Groovy expression that recreates this {@code VectorType} instance via the {@link VectorTypes} factory.
+     *
+     * <p>Used by {@link kepplr.scripting.CommandRecorder} to serialize {@code setVectorVisible} calls into runnable
+     * Groovy scripts. Each built-in implementation returns the exact factory call that would produce an equivalent
+     * instance.
+     *
+     * <p>Examples:
+     *
+     * <ul>
+     *   <li>{@code VectorTypes.velocity().toScript()} → {@code "VectorTypes.velocity()"}
+     *   <li>{@code VectorTypes.bodyAxisX().toScript()} → {@code "VectorTypes.bodyAxisX()"}
+     *   <li>{@code VectorTypes.towardBody(10).toScript()} → {@code "VectorTypes.towardBody(10)"}
+     * </ul>
+     *
+     * @return Groovy expression string; never null
+     */
+    String toScript();
 }

@@ -557,6 +557,31 @@ public final class KepplrConstants {
      */
     public static final double CAMERA_POINT_AT_IDENTICAL_DIRECTION_EPSILON = 1e-6;
 
+    // ── Camera scripting defaults (Step 19c) ──────────────────────────────────────────────────
+
+    /**
+     * Default transition duration for scripted camera navigation commands (seconds).
+     *
+     * <p>Used by the Groovy wrapper for no-duration overloads and by {@code CameraInputHandler} for keyboard navigation
+     * shortcuts. Mouse gestures always use 0 (instant snap).
+     */
+    public static final double DEFAULT_CAMERA_TRANSITION_DURATION_SECONDS = 1.0;
+
+    /**
+     * Minimum camera field of view in degrees.
+     *
+     * <p>Clamping floor for {@code setFov()} commands. Prevents the FOV from becoming so narrow that rendering
+     * artifacts or numerical instability appear.
+     */
+    public static final double FOV_MIN_DEG = 1.0;
+
+    /**
+     * Maximum camera field of view in degrees.
+     *
+     * <p>Clamping ceiling for {@code setFov()} commands. Prevents extreme wide-angle distortion beyond practical use.
+     */
+    public static final double FOV_MAX_DEG = 120.0;
+
     // ── UI keyboard / time-rate controls (Step 19) ────────────────────────────────────────────
 
     /**
@@ -609,4 +634,15 @@ public final class KepplrConstants {
      * expanded to this radius for mouse-picking purposes. Prevents small/distant bodies from being impossible to click.
      */
     public static final float PICK_MIN_SCREEN_RADIUS_PX = 8.0f;
+
+    // ── Groovy scripting (REDESIGN.md §11, Step 20) ────────────────────────────────────────────
+
+    /** Polling interval in milliseconds for {@code waitSim}, {@code waitUntilSim}, and related scripting primitives. */
+    public static final long SCRIPT_WAIT_POLL_INTERVAL_MS = 50L;
+
+    /**
+     * Coalescing window in milliseconds for the {@code CommandRecorder}: instant camera commands within this window are
+     * merged into a single recorded command.
+     */
+    public static final long RECORDER_COALESCE_WINDOW_MS = 250L;
 }
