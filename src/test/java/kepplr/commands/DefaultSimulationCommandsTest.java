@@ -355,4 +355,19 @@ class DefaultSimulationCommandsTest {
                     state.vectorVisibleProperty(EARTH, VectorTypes.velocity()).get());
         }
     }
+
+    // ─────────────────────────────────────────────────────────────────
+    // Transition control (Step 20)
+    // ─────────────────────────────────────────────────────────────────
+
+    @Nested
+    @DisplayName("Transition control (Step 20)")
+    class TransitionControlTests {
+
+        @Test
+        @DisplayName("cancelTransition delegates to TransitionController without throwing")
+        void cancelTransitionDelegates() {
+            assertDoesNotThrow(() -> commands.cancelTransition());
+        }
+    }
 }

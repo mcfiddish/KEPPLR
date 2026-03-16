@@ -58,7 +58,8 @@ public final class TransitionController {
                     YawRequest,
                     RollRequest,
                     CameraPositionRequest,
-                    CameraLookDirectionRequest {}
+                    CameraLookDirectionRequest,
+                    CancelRequest {}
 
     private record PointAtRequest(int naifId, double durationSeconds) implements PendingRequest {}
 
@@ -84,6 +85,8 @@ public final class TransitionController {
     private record CameraLookDirectionRequest(
             double lookX, double lookY, double lookZ, double upX, double upY, double upZ, double durationSeconds)
             implements PendingRequest {}
+
+    private record CancelRequest() implements PendingRequest {}
 
     private final ConcurrentLinkedQueue<PendingRequest> inbox = new ConcurrentLinkedQueue<>();
 
@@ -178,6 +181,16 @@ public final class TransitionController {
         inbox.add(new CameraLookDirectionRequest(lookX, lookY, lookZ, upX, upY, upZ, durationSeconds));
     }
 
+    /**
+     * Request cancellation of the active transition and any pending requests (Step 20).
+     *
+     * <p>Thread-safe. The cancel is enqueued and processed on the next JME render frame. This is the thread-safe
+     * alternative to {@link #cancel()} which must be called from the JME thread.
+     */
+    public void requestCancel() {
+        inbox.add(new CancelRequest());
+    }
+
     // ── JME-thread methods ────────────────────────────────────────────────────
 
     /**
@@ -240,6 +253,10 @@ public final class TransitionController {
                 case RollRequest r -> handleRollRequest(r, cam);
                 case CameraPositionRequest r -> handleCameraPositionRequest(r, cam, cameraHelioJ2000);
                 case CameraLookDirectionRequest r -> handleCameraLookDirectionRequest(r, cam);
+                case CancelRequest r -> {
+                    active = null;
+                    pendingGoTo = null;
+                }
             }
         }
 

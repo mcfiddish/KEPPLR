@@ -1,6 +1,8 @@
 package kepplr.ui;
 
 import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -13,7 +15,9 @@ import java.util.function.BiConsumer;
 import javafx.beans.binding.Bindings;
 import javafx.geometry.Insets;
 import javafx.scene.Scene;
+import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
+import javafx.scene.control.ButtonType;
 import javafx.scene.control.CheckMenuItem;
 import javafx.scene.control.Label;
 import javafx.scene.control.Menu;
@@ -42,6 +46,8 @@ import kepplr.ephemeris.BodyLookupService;
 import kepplr.ephemeris.KEPPLREphemeris;
 import kepplr.ephemeris.spice.SpiceBundle;
 import kepplr.render.vector.VectorTypes;
+import kepplr.scripting.CommandRecorder;
+import kepplr.scripting.ScriptRunner;
 import kepplr.util.KepplrConstants;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -71,6 +77,8 @@ public final class KepplrStatusWindow {
     private final SimulationCommands commands;
     private Runnable jmeShutdown;
     private BiConsumer<Integer, Integer> jmeResizeCallback;
+    private ScriptRunner scriptRunner;
+    private CommandRecorder commandRecorder;
     private Stage stage;
     private TreeView<BodyTreeEntry> bodyTree;
 
@@ -99,6 +107,24 @@ public final class KepplrStatusWindow {
      */
     public void setJmeResizeCallback(BiConsumer<Integer, Integer> resizeCallback) {
         this.jmeResizeCallback = resizeCallback;
+    }
+
+    /**
+     * Set the script runner for "Run Script..." menu action.
+     *
+     * @param runner the script runner instance; must not be null
+     */
+    public void setScriptRunner(ScriptRunner runner) {
+        this.scriptRunner = runner;
+    }
+
+    /**
+     * Set the command recorder for "Start/Stop Recording" menu toggle.
+     *
+     * @param recorder the command recorder instance; must not be null
+     */
+    public void setCommandRecorder(CommandRecorder recorder) {
+        this.commandRecorder = recorder;
     }
 
     /**
@@ -433,7 +459,64 @@ public final class KepplrStatusWindow {
             }
         });
 
-        return new Menu("File", null, loadConfig);
+        // ── Run Script... ────────────────────────────────────────────────
+        MenuItem runScript = new MenuItem("Run Script...");
+        runScript.setOnAction(e -> {
+            if (scriptRunner == null) return;
+
+            // If a script is already running, confirm before interrupting
+            if (scriptRunner.isRunning()) {
+                Alert confirm = new Alert(
+                        Alert.AlertType.CONFIRMATION,
+                        "A script is already running. Stop it and run a new one?",
+                        ButtonType.OK,
+                        ButtonType.CANCEL);
+                confirm.setTitle("Script Running");
+                confirm.setHeaderText(null);
+                Optional<ButtonType> result = confirm.showAndWait();
+                if (result.isEmpty() || result.get() != ButtonType.OK) return;
+            }
+
+            FileChooser chooser = new FileChooser();
+            chooser.setTitle("Run Groovy Script");
+            chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("Groovy scripts", "*.groovy"));
+            chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("All Files", "*.*"));
+            File file = chooser.showOpenDialog(stage);
+            if (file != null) {
+                scriptRunner.runScript(file.toPath());
+            }
+        });
+
+        // ── Start/Stop Recording ─────────────────────────────────────────
+        CheckMenuItem recordToggle = new CheckMenuItem("Record Session");
+        recordToggle.setOnAction(e -> {
+            if (commandRecorder == null) return;
+
+            if (recordToggle.isSelected()) {
+                commandRecorder.startRecording();
+                logger.info("Command recording started");
+            } else {
+                commandRecorder.stopRecording();
+                String script = commandRecorder.getScript();
+                logger.info("Command recording stopped");
+
+                FileChooser chooser = new FileChooser();
+                chooser.setTitle("Save Recorded Script");
+                chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("Groovy scripts", "*.groovy"));
+                chooser.setInitialFileName("recorded.groovy");
+                File file = chooser.showSaveDialog(stage);
+                if (file != null) {
+                    try {
+                        Files.writeString(file.toPath(), script);
+                        logger.info("Recorded script saved to {}", file.getAbsolutePath());
+                    } catch (IOException ex) {
+                        logger.error("Failed to save recorded script: {}", ex.getMessage());
+                    }
+                }
+            }
+        });
+
+        return new Menu("File", null, loadConfig, new SeparatorMenuItem(), runScript, recordToggle);
     }
 
     private Menu buildViewMenu() {

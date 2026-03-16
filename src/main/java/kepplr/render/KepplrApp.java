@@ -33,6 +33,8 @@ import kepplr.render.label.LabelManager;
 import kepplr.render.trail.TrailManager;
 import kepplr.render.vector.VectorDefinition;
 import kepplr.render.vector.VectorManager;
+import kepplr.scripting.CommandRecorder;
+import kepplr.scripting.ScriptRunner;
 import kepplr.stars.catalogs.yaleBSC.YaleBrightStarCatalog;
 import kepplr.state.BodyInView;
 import kepplr.state.DefaultSimulationState;
@@ -160,6 +162,9 @@ public class KepplrApp extends SimpleApplication {
 
         DefaultSimulationCommands commands =
                 new DefaultSimulationCommands(simulationState, simulationClock, transitionController);
+        CommandRecorder recorder = new CommandRecorder(commands);
+        ScriptRunner scriptRunner = new ScriptRunner(commands, simulationState);
+
         SimulationStateFxBridge bridge = new SimulationStateFxBridge(simulationState);
         // On macOS, JavaFX is started here (after GLFW has claimed NSApplication) rather than in
         // main().  See main() comment for the full rationale.
@@ -169,7 +174,7 @@ public class KepplrApp extends SimpleApplication {
         // Capture a reference to this app for the FX-side shutdown callback
         KepplrApp appRef = this;
         Platform.runLater(() -> {
-            statusWindow = new KepplrStatusWindow(bridge, commands);
+            statusWindow = new KepplrStatusWindow(bridge, recorder);
             statusWindow.setJmeShutdown(appRef::stop);
             statusWindow.setJmeResizeCallback((w, h) -> appRef.enqueue(() -> {
                 long handle = getGlfwWindowHandle();
@@ -177,6 +182,8 @@ public class KepplrApp extends SimpleApplication {
                     GLFW.glfwSetWindowSize(handle, w, h);
                 }
             }));
+            statusWindow.setScriptRunner(scriptRunner);
+            statusWindow.setCommandRecorder(recorder);
             statusWindow.show();
         });
 
@@ -274,7 +281,7 @@ public class KepplrApp extends SimpleApplication {
         hud = new KepplrHud(guiNode, assetManager, cam);
         labelManager = new LabelManager(guiNode, assetManager);
         cameraInputHandler = new CameraInputHandler(cam, cameraHelioJ2000, simulationState);
-        cameraInputHandler.setSimulationCommands(commands);
+        cameraInputHandler.setSimulationCommands(recorder);
         cameraInputHandler.setPickNodes(nearNode, midNode, farNode);
         cameraInputHandler.register(inputManager);
 

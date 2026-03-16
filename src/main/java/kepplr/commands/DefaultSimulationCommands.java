@@ -231,4 +231,11 @@ public final class DefaultSimulationCommands implements SimulationCommands {
     public void setVectorVisible(int naifId, VectorType type, boolean visible) {
         state.setVectorVisible(naifId, type, visible);
     }
+
+    // ── Transition control (Step 20) ──
+
+    @Override
+    public void cancelTransition() {
+        transitionController.requestCancel();
+    }
 }

@@ -324,4 +324,21 @@ public interface SimulationCommands {
      * @param visible {@code true} to show, {@code false} to hide
      */
     void setVectorVisible(int naifId, VectorType type, boolean visible);
+
+    // ── Transition control (Step 20) ──
+
+    /**
+     * Cancel the active camera transition and discard any pending transition requests.
+     *
+     * <p>Thread-safe — may be called from any thread. The cancel is posted to the transition controller's inbox and
+     * processed on the next JME render frame.
+     *
+     * <p>Example: a Groovy script runner calls this on interrupt to ensure no partial transitions remain active after a
+     * script is stopped.
+     *
+     * <pre>{@code
+     * commands.cancelTransition();
+     * }</pre>
+     */
+    void cancelTransition();
 }

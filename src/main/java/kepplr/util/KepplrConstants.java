@@ -634,4 +634,15 @@ public final class KepplrConstants {
      * expanded to this radius for mouse-picking purposes. Prevents small/distant bodies from being impossible to click.
      */
     public static final float PICK_MIN_SCREEN_RADIUS_PX = 8.0f;
+
+    // ── Groovy scripting (REDESIGN.md §11, Step 20) ────────────────────────────────────────────
+
+    /** Polling interval in milliseconds for {@code waitSim}, {@code waitUntilSim}, and related scripting primitives. */
+    public static final long SCRIPT_WAIT_POLL_INTERVAL_MS = 50L;
+
+    /**
+     * Coalescing window in milliseconds for the {@code CommandRecorder}: instant camera commands within this window are
+     * merged into a single recorded command.
+     */
+    public static final long RECORDER_COALESCE_WINDOW_MS = 250L;
 }
