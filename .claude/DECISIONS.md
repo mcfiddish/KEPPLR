@@ -670,6 +670,27 @@ would cause a compilation error since `toScript()` has no default implementation
 
 ---
 
+## D-027: GLB shape model scale conventions
+** Status:** Accepted
+** Roadmap step:** 21
+
+** Context:** GLB shape models are sourced from different pipelines with different authoring conventions. A single scale rule would either break body models or spacecraft models.
+**Decision:** BodyBlock shape models are authored in kilometers — no scale transform is applied. SpacecraftBlock shape models are authored in meters — a uniform scale of 0.001 × SpacecraftBlock.scale() is applied at load time to convert to km. SpacecraftBlock.scale() defaults to 1.0 if not configured. These conventions are fixed; do not add runtime scale parameters or auto-detection logic.
+**Consequences:** BodyNodeFactory applies no scale to body GLBs. The spacecraft loading path applies the scale to glbModelRoot at construction time and never updates it per-frame.
+
+---
+
+## D-028: Spacecraft GLB materials are used as-is
+** Status:** Accepted
+** Roadmap step:** 21
+
+** Context:** Natural bodies go through KEPPLR's material pipeline (equirectangular texture mapping, textureAlignNode, center-longitude adjustment, PCK-driven orientation). Spacecraft models have their own PBR materials, colors, and textures embedded in the GLB, authored by the model creator.
+** Decision:** Spacecraft GLBs use their embedded PBR materials without override. KEPPLR applies only the standard SamplerPreset.QUALITY_DEFAULT (Trilinear min, Bilinear mag, anisotropy 8) for texture quality. Spacecraft are lit by the scene sun DirectionalLight in the same way as natural bodies. KEPPLR's body material pipeline (equirectangular mapping, texture alignment, center-longitude) is never applied to spacecraft.
+** Alternatives considered:** Applying KEPPLR's material pipeline to spacecraft — rejected because spacecraft models do not have equirectangular surface textures and their geometry is not a sphere.
+** Consequences:** BodyNodeFactory (or equivalent) must not apply body material setup to spacecraft nodes. Any future spacecraft material override must be added explicitly and documented here.
+
+---
+
 *Last updated: Step 20 — v0.1 feature-complete*
 *Backfill note: Entries D-001 through D-009 were reconstructed retrospectively.
 D-010 onwards recorded in real time.*

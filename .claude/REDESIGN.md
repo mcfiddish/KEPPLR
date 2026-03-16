@@ -284,13 +284,13 @@ switching the camera frame to Synodic with the targeted body as the
 * Trails must be renderable in **segments** such that different segments can be drawn in different frustums if needed.
 * Trail visibility must be togglable **per body** via `SimulationCommands.setTrailVisible(int naifId, boolean visible)`.
 * Trail duration must be settable **per body** via `SimulationCommands.setTrailDuration(int naifId, double seconds)`.
-* **Decluttering policy:** trails for satellite bodies are suppressed when the satellite's screen position is within 
-`TRAIL_DECLUTTER_MIN_SEPARATION_PX` of its primary body's screen position. As the camera zooms in and the satellite 
-separates from its primary on screen, its trail becomes visible. This threshold is defined in `KepplrConstants`.
+* **Decluttering policy:** trails for satellite bodies are suppressed when the satellite's screen position is within
+  `TRAIL_DECLUTTER_MIN_SEPARATION_PX` of its primary body's screen position. As the camera zooms in and the satellite
+  separates from its primary on screen, its trail becomes visible. This threshold is defined in `KepplrConstants`.
 * **Barycenter trail policy:** the GUI global trail toggle skips barycenter
-    bodies except the Pluto Barycenter (NAIF ID 9), whose trail is meaningful
-    due to the Pluto-Charon mass ratio. The per-body API imposes no such
-    restriction.
+  bodies except the Pluto Barycenter (NAIF ID 9), whose trail is meaningful
+  due to the Pluto-Charon mass ratio. The per-body API imposes no such
+  restriction.
 
 ### 7.6 Vector Overlays [D-003]
 
@@ -573,10 +573,83 @@ implemented in step 19b. Remaining deferred label types:
 * distance, light-time, phase angle, and other data labels
 * user-configurable label priority rules beyond the proximity-based policy
 
-### 14.6 Asset Pipeline Requirements
+### 14.6 GLB Shape Model Rendering
 
-* Specify supported model formats (e.g., glTF/GLB/OBJ) and texture conventions.
-* Define caching/loading behavior and graceful degradation when assets are missing.
+Shape models for bodies and spacecraft are loaded from GLB files and replace
+the default ellipsoid / point sprite geometry in the scene graph.
+
+#### 14.6.1 GLTFUtils
+
+`kepplr.visualization.jme.util.GLTFUtils` must be ported from the prototype.
+Its sole initial responsibility is `readModelToBodyFixedQuatFromGlb(Path)`,
+which reads the quaternion stored in the GLB JSON extras at
+`asset.extras.kepplr.modelToBodyFixedQuat.value = [x,y,z,w]` without a
+third-party JSON library. No other code may read this field directly.
+
+#### 14.6.2 Asset Manager Registration
+
+`KEPPLRConfiguration.getInstance().resourcesFolder()` must be registered as a
+JME `FileLocator` once, in the JME `simpleInitApp` path. Shape model paths
+returned by `BodyBlock.shapeModel()` and `SpacecraftBlock.shapeModel()` are
+relative to that folder and are passed directly to `assetManager.loadModel()`.
+
+#### 14.6.3 BodyBlock Shape Models
+
+Natural bodies (from `getKnownBodies()`) are full scene objects with lighting,
+material, and texture configuration. When `BodyBlock.shapeModel()` returns a
+non-null path:
+
+* Load the GLB via JME's `GlbLoader`. Apply `SamplerPreset.QUALITY_DEFAULT`
+  (Trilinear min, Bilinear mag, anisotropy 8) to all textures immediately after
+  load, using the same logic as the prototype viewer.
+* Read `modelToBodyFixedQuat` from the GLB extras via `GLTFUtils`.
+* Wrap the loaded Spatial in a Node named "glbModelRoot". Set
+  `modelToBodyFixedQuat` as its local rotation. Attach this node as a child of
+  `bodyFixedNode`, which already carries the time-varying SPICE body-fixed
+  frame rotation — the two rotations compose correctly by construction.
+* GLB files are authored in **kilometers**. No scale transform is applied.
+* The glbModelRoot replaces `fullGeom` (the ellipsoid) in the scene graph.
+  `spriteGeom` is unaffected.
+* If the path is null, the file is missing, or loading fails: log a warning at
+  WARN level and fall back to the existing ellipsoid. The simulation must
+  continue normally.
+
+#### 14.6.4 SpacecraftBlock Shape Models
+
+Spacecraft (from `getSpacecraft()`) use their GLB-embedded PBR materials
+as-is — colors, textures, and metallic/roughness values are defined in the
+GLB and must not be overridden. Spacecraft are lit by the scene sun light
+exactly as natural bodies are. They do not go through KEPPLR's body material
+pipeline (no equirectangular texture mapping, no `textureAlignNode`, no
+center-longitude adjustment). The standard sampler preset is applied to their
+textures. When `SpacecraftBlock.shapeModel()` returns a non-null path:
+
+* Load and apply the sampler preset identically to §14.6.3.
+* Read and apply `modelToBodyFixedQuat` identically to §14.6.3.
+* GLB files are authored in **meters**. Apply a uniform scale of
+  `0.001 × SpacecraftBlock.scale()` to convert to kilometers.
+  `SpacecraftBlock.scale()` defaults to 1.0 if not configured.
+* The glbModelRoot replaces the point sprite geometry in the scene graph.
+* If the path is null, the file is missing, or loading fails: log a warning at
+  WARN level and fall back to the existing point sprite. The simulation must
+  continue normally.
+
+#### 14.6.5 Frame Semantics
+
+* `bodyFixedNode` carries the time-varying SPICE body-fixed → J2000 rotation,
+  updated each frame by `BodySceneManager`, exactly as it does today for
+  ellipsoids and sprites. This update must not change.
+* `modelToBodyFixedQuat` (the constant quaternion from the GLB extras) is
+  applied once at load time as the local rotation of `glbModelRoot`. It maps
+  glTF model-space into the body-fixed frame expected by SPICE. It is never
+  reapplied or updated per-frame.
+
+#### 14.6.6 Iteration Scope
+
+`getKnownBodies()` provides the body set for §14.6.3. `getSpacecraft()`
+provides the spacecraft set for §14.6.4. Both sets are processed once at scene
+graph construction time. Dynamic loading of shape models at runtime is out of
+scope for this step.
 
 ### 14.7 Performance and Quality Acceptance Criteria
 

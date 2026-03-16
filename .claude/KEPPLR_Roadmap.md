@@ -428,6 +428,39 @@ can serialize `setVectorVisible` calls correctly (see D-026).
 
 ---
 
+### 21. GLB Shape Model Rendering
+    This step replaces ellipsoid and point sprite geometry with GLB shape models
+    for bodies and spacecraft that have them configured, while leaving all existing
+    rendering paths intact for bodies without models.
+    What this step delivers:
+
+- GLTFUtils ported from the prototype — reads the
+modelToBodyFixedQuat quaternion from GLB JSON extras with no
+third-party JSON library
+- resourcesFolder() registered as a JME FileLocator at startup so
+shape model paths from BodyBlock and SpacecraftBlock resolve correctly
+- BodyNodeFactory updated to load a GLB and attach it as glbModelRoot
+under bodyFixedNode when BodyBlock.shapeModel() is non-null; KEPPLR's
+body material pipeline (equirectangular mapping, texture alignment,
+center-longitude) applies as before
+- Spacecraft GLBs loaded similarly under their scene node; GLB-embedded PBR
+materials and textures are used as-is and lit by the scene sun light;
+uniform scale of 0.001 × SpacecraftBlock.scale() converts meters to km
+- Graceful fallback to ellipsoid (bodies) or point sprite (spacecraft) on
+null path, missing file, or load failure — WARN log, no crash
+
+** Frame semantics **: modelToBodyFixedQuat is applied once at load time as
+glbModelRoot's local rotation, composing with bodyFixedNode's
+time-varying SPICE frame rotation. It is never updated per-frame.
+** Out of scope for this step **: dynamic / hot-reload of shape models at
+runtime; LOD; shadow refinement using shape model geometry (§9.3).
+** Classes expected to change**: GLTFUtils (new, ported from prototype),
+BodyNodeFactory, BodySceneManager (asset manager registration),
+and the class holding SamplerPreset if it needs to move to a shared
+location.
+
+---
+
 ## Remaining Steps
 
 All planned v0.1 steps are complete. Remaining work consists of deferred items
@@ -451,7 +484,6 @@ management constraint. Behavior on Linux (X11) is untested and may differ.
 - Camera navigation inertia and damping (§14.2)
 - Full camera control bindings spec (§14.2)
 - Object search and autocomplete UI (§14.3)
-- Shape model rendering for irregular bodies (§14.6)
 - Determinism and reproducible replay (§14.1)
 - Performance acceptance criteria and LOD rules (§14.7)
 - Gaia star catalog (requires user-downloaded files)
