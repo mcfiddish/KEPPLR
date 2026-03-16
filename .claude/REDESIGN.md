@@ -437,15 +437,66 @@ All menu items call `SimulationCommands` only — no rendering logic in `ui/`.
 ### 11.1 Scripting Support
 
 * The system must support a Groovy scripting API.
+* Scripts are loaded from `.groovy` files via `File → Run Script` in the
+  JavaFX control window.
+* Each script runs on a dedicated daemon thread, separate from the JME render
+  thread and the JavaFX application thread. The simulation loop continues
+  normally while a script is executing.
+* If a script is already running when `Run Script` is invoked, a confirmation
+  dialog is shown before interrupting the current script.
 
 ### 11.2 Timing Functions
 
 * The scripting API must include:
 
-  * `waitSim(...)` — block until simulation time has advanced by the given amount
-  * `waitWall(...)` — block until wall time has advanced by the given amount
-  * `waitTransition()` — block until the active camera transition completes [D-015]
+  * `waitWall(double seconds)` — block the script thread until that many
+    wall-clock seconds have elapsed
+  * `waitSim(double seconds)` — block until simulation time has advanced by
+    the given number of seconds from the moment of the call. Polls at
+    `SCRIPT_WAIT_POLL_INTERVAL_MS` intervals. Handles negative time rates
+    (reverse time). **Blocks indefinitely if the simulation is paused or the
+    time rate works against the target** — scripts relying on this primitive
+    must ensure the simulation is running in the correct direction.
+  * `waitUntilSim(double etSeconds)` — block until simulation ET reaches the
+    given absolute value. Subject to the same indefinite-block caveat as
+    `waitSim`. If the target ET has already been passed in the current time
+    direction, returns immediately.
+  * `waitUntilSim(String utc)` — block until simulation time reaches the given
+    UTC string (same format accepted by `setUTC()`). Converts UTC to ET via
+    ephemeris at the point of call, then delegates to `waitUntilSim(double)`.
+  * `waitTransition()` — block until `transitionActiveProperty()` is false
+    [D-015]
+
 * The scripting API must **not** include a generic `wait(...)` function.
+
+### 11.3 Name Resolution
+
+* Every `SimulationCommands` method that accepts a NAIF ID has a corresponding
+  String-name overload on `KepplrScript`. For methods with more than one NAIF
+  ID parameter, one all-String overload is provided; mixed int/String
+  combinations are not.
+* Name resolution is performed by `BodyLookupService` in `kepplr.ephemeris`.
+  Resolution is case-insensitive. An unresolvable name logs the error and
+  throws `IllegalArgumentException`, stopping the script. Silent no-ops are
+  not permitted.
+* No name resolution logic may exist in `ui/` or in the scripting layer itself.
+  `KepplrScript` calls `BodyLookupService` exclusively.
+
+### 11.4 Session Recording
+
+* The system must support recording an interactive session as a runnable Groovy
+  script via `File → Start/Stop Recording` in the JavaFX control window.
+* `CommandRecorder` is a decorator on `SimulationCommands`. All interactive
+  paths (status window, camera input handler) are wired through the recorder
+  so every user action is capturable. Script execution is wired to raw
+  `SimulationCommands` directly — scripts are never self-recording.
+* When recording is stopped, the recorder serializes the captured log as a
+  Groovy script and opens a file-save dialog.
+* Instant camera commands (`durationSeconds == 0`) are coalesced within a
+  250ms window rather than recorded verbatim — see D-024.
+* Commands with `durationSeconds > 0` are always recorded verbatim.
+* `VectorType` arguments are serialized via `VectorType.toScript()` — see
+  D-026.
 
 ---
 

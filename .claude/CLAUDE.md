@@ -194,6 +194,7 @@ public interface SimulationCommands {
     void setCameraFrame(CameraFrame frame);
     void setTimeRate(double simSecondsPerWallSecond);
     void setPaused(boolean paused);
+    void cancelTransition();   // clean up on script interruption — see D-025
     // ... extend as needed
 }
 ```
@@ -202,8 +203,9 @@ public interface SimulationCommands {
 
 ## Testing Rules
 
-- Every class in `core/`, `ephemeris/`, `config/`, `camera/`, and `commands/` must have
-  a corresponding unit test class created at the same time as the class itself.
+- Every class in `core/`, `ephemeris/`, `config/`, `camera/`, `commands/`, and
+  `scripting/` must have a corresponding unit test class created at the same time
+  as the class itself.
 - UI classes (`ui/`) do not require unit tests but should have integration smoke tests.
 - Use JUnit 5. Mockito is permitted for mocking `KEPPLREphemeris` in tests.
 - Known-good SPICE values (e.g., Earth's heliocentric position at a fixed ET) must be

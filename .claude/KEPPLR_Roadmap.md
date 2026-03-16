@@ -26,7 +26,25 @@ These are non-obvious choices made during development. If CC questions them in a
 
 **`SimulationStateFxBridge` is the sole location of `Platform.runLater()` calls** with one additional sanctioned exception: `KepplrApp.destroy()` may call `Platform.runLater()` for lifecycle shutdown — this call site must have a comment explaining the sanctioned use. No other class may call `Platform.runLater()`.
 
-**`SimulationCommands` is also the Groovy scripting API.** The scripting layer (step 20) is a thin Groovy-friendly wrapper that delegates to `SimulationCommands`. Every method on `SimulationCommands` must be loggable so real-time recordings can be transcribed as executable Groovy scripts with `waitWall()` timing calls inserted between commands.
+**`SimulationCommands` is also the Groovy scripting API.** The scripting layer
+(step 20) is a thin Groovy-friendly wrapper (`KepplrScript`) that delegates to
+`SimulationCommands`. Every method on `SimulationCommands` must be loggable so
+real-time recordings can be transcribed as executable Groovy scripts with
+`waitWall()` timing calls inserted between commands.
+
+**`CommandRecorder` is a decorator on `SimulationCommands`, not a subclass.**
+Interactive use (status window, camera input handler) is wired through the
+recorder so all user actions are capturable. Script execution (`ScriptRunner`)
+uses raw `SimulationCommands` directly — scripts are never self-recording. See
+D-024, D-025.
+
+**`VectorType` carries a `toScript()` method for script serialization.**
+Because `VectorType` is a strategy interface (not an enum), `CommandRecorder`
+cannot introspect which factory method produced a given instance. Each concrete
+implementation returned by `VectorTypes` factory methods implements `toScript()`
+to return the exact Groovy expression that recreates it. Without this,
+`setVectorVisible` calls in recorded scripts would emit an unrunnable placeholder.
+See D-026.
 
 **The synodic frame "other body" is the currently targeted body.** No separate command or property is needed for this. If no targeted body exists, fall back to the inertial frame and log a warning.
 
@@ -352,199 +370,68 @@ any body and any `VectorType`; the GUI exposes the common cases only.
 
 ---
 
-## Remaining Steps
-
----
-
 ### 19c. Camera Scripting API
-
-This step adds camera navigation commands to `SimulationCommands` so that
-all meaningful camera actions are scriptable. `CameraInputHandler` is
-updated to delegate to these commands rather than manipulating camera state
-directly. No new camera behavior is introduced — this is a refactor that
-exposes existing behavior through the correct interface.
-
-**New methods on `SimulationCommands`** — all non-blocking, all use
-`TransitionController`. All must have complete Javadoc with usage examples.
-If `durationSeconds` is zero or negative, the camera snaps instantly on the
-next frame:
-```java
-/**
- * Change the camera distance from the focus body by a multiplicative factor.
- *
- * <p>Example: {@code zoom(2.0, 1.0)} doubles the distance over one second.
- * {@code zoom(0.5, 1.0)} halves it. Factor must be positive.
- * Clamped to [1.1 × focusBodyRadius, 1e15 km] per zoom rules in §10.
- *
- * @param factor      multiplicative distance factor; must be positive
- * @param durationSeconds transition duration in wall-clock seconds
- */
-void zoom(double factor, double durationSeconds);
-
-/**
- * Set the camera field of view.
- *
- * <p>Example: {@code setFov(45.0, 1.0)} transitions to a 45-degree FOV
- * over one second. Clamped to [FOV_MIN_DEG, FOV_MAX_DEG] in KepplrConstants.
- *
- * @param degrees         desired field of view in degrees
- * @param durationSeconds transition duration in wall-clock seconds
- */
-void setFov(double degrees, double durationSeconds);
-
-/**
- * Orbit the camera around the focus body by the given camera-relative angles.
- *
- * <p>Equivalent to a right-drag gesture. Positive {@code rightDegrees}
- * orbits clockwise when viewed from above. Positive {@code upDegrees}
- * orbits toward the camera's screen-up direction.
- *
- * <p>Example: {@code orbit(45.0, 0.0, 2.0)} orbits 45 degrees to the
- * right over two seconds.
- *
- * @param rightDegrees    degrees to orbit around the camera's screen-up axis
- * @param upDegrees       degrees to orbit around the camera's screen-right axis
- * @param durationSeconds transition duration in wall-clock seconds
- */
-void orbit(double rightDegrees, double upDegrees, double durationSeconds);
-
-/**
- * Tilt the camera in place around its screen-right axis.
- *
- * <p>Example: {@code tilt(10.0, 0.5)} tilts up 10 degrees over half a second.
- *
- * @param degrees         tilt angle in degrees; positive tilts up
- * @param durationSeconds transition duration in wall-clock seconds
- */
-void tilt(double degrees, double durationSeconds);
-
-/**
- * Roll the camera around its look axis.
- *
- * <p>Example: {@code roll(90.0, 1.0)} rotates the camera's up vector
- * 90 degrees clockwise over one second.
- *
- * @param degrees         roll angle in degrees; positive rolls clockwise
- * @param durationSeconds transition duration in wall-clock seconds
- */
-void roll(double degrees, double durationSeconds);
-
-/**
- * Set the camera position relative to the current focus body in the
- * current camera frame.
- *
- * <p>Example: {@code setCameraPosition(0, 0, 10000, 2.0)} moves the camera
- * to 10,000 km above the focus body's north pole (in body-fixed frame)
- * over two seconds.
- *
- * @param x               x component in km
- * @param y               y component in km
- * @param z               z component in km
- * @param durationSeconds transition duration in wall-clock seconds
- */
-void setCameraPosition(double x, double y, double z,
-                       double durationSeconds);
-
-/**
- * Set the camera position relative to an explicit origin body in
- * the current camera frame.
- *
- * <p>Does not change the focused body. Useful for positioning the camera
- * relative to a body other than the current focus.
- *
- * <p>Example: {@code setCameraPosition(0, 0, 50000, 301, 3.0)} moves
- * the camera to 50,000 km above the Moon regardless of which body
- * is currently focused.
- *
- * @param x               x component in km
- * @param y               y component in km
- * @param z               z component in km
- * @param originNaifId    NAIF ID of the origin body
- * @param durationSeconds transition duration in wall-clock seconds
- */
-void setCameraPosition(double x, double y, double z,
-                       int originNaifId, double durationSeconds);
-
-/**
- * Set the camera look direction and up vector in the current camera frame.
- *
- * <p>Vectors need not be normalized — they are normalized internally.
- * The up vector must not be parallel to the look vector.
- *
- * <p>Example — point along the ecliptic toward vernal equinox:
- * <pre>
- *   setCameraLookDirection(1, 0, 0,   // look toward +X (vernal equinox)
- *                          0, 0, 1,   // up toward +Z (ecliptic north)
- *                          2.0);
- * </pre>
- *
- * @param lookX           x component of look direction
- * @param lookY           y component of look direction
- * @param lookZ           z component of look direction
- * @param upX             x component of up vector
- * @param upY             y component of up vector
- * @param upZ             z component of up vector
- * @param durationSeconds transition duration in wall-clock seconds
- */
-void setCameraLookDirection(double lookX, double lookY, double lookZ,
-                            double upX,   double upY,   double upZ,
-                            double durationSeconds);
-
-/**
- * Switch to the synodic camera frame defined by explicit focus and target
- * bodies, without changing focused, targeted, or selected body state.
- *
- * <p>Use this when a script needs a specific synodic view without
- * disturbing interaction state. To switch to the synodic frame using
- * the current SimulationState focus and target, use
- * {@code setCameraFrame(CameraFrame.SYNODIC)} instead.
- *
- * <p>Example — Earth-Moon synodic view:
- * <pre>
- *   setSynodicFrame(399, 301); // focus=Earth, target=Moon
- * </pre>
- *
- * @param focusNaifId  NAIF ID of the focus body defining the frame origin
- * @param targetNaifId NAIF ID of the target body defining the +X axis
- */
-void setSynodicFrame(int focusNaifId, int targetNaifId);
-```
-
-**`CameraInputHandler` refactor:**
-
-All navigation actions in `CameraInputHandler` that correspond to a new
-`SimulationCommands` method must delegate to it. Mouse drag and scroll
-events are converted to equivalent `zoom`, `orbit`, `tilt`, and `roll`
-calls with `durationSeconds = 0` (snap). Keyboard navigation shortcuts
-follow the same pattern. The input handler retains responsibility for
-detecting gestures and computing delta values — it does not retain
-responsibility for applying them to the camera.
-
-**Default durations:**
-
-`DEFAULT_CAMERA_TRANSITION_DURATION_SECONDS` added to `KepplrConstants`.
-Used by `CameraInputHandler` for keyboard navigation shortcuts (not mouse,
-which snaps). The Groovy wrapper uses it for no-duration overloads.
-
-**Hard constraints:**
-- No camera math moves to the scripting layer — the Groovy wrapper calls
-  `SimulationCommands` only.
-- All new methods fully Javadoc'd with parameter descriptions and at least
-  one usage example.
-- `setSynodicFrame` must not write to `selectedBodyId`, `focusedBodyId`,
-  or `targetedBodyId` in `SimulationState`.
-- `mvn test` passes with no new failures.
-
----
+Camera navigation commands (`zoom`, `orbit`, `tilt`, `roll`, `yaw`, `setFov`,
+`setCameraPosition`, `setCameraLookDirection`, `setSynodicFrame`) added to
+`SimulationCommands`. `CameraInputHandler` refactored to delegate to these
+commands with `durationSeconds = 0` for all mouse and keyboard navigation.
+`DEFAULT_CAMERA_TRANSITION_DURATION_SECONDS`, `FOV_MIN_DEG`, and `FOV_MAX_DEG`
+added to `KepplrConstants`. Synodic frame override IDs (`synodicFrameFocusId`,
+`synodicFrameTargetId`) added to `DefaultSimulationState` for
+`setSynodicFrame()` without disturbing interaction state. All new methods fully
+Javadoc'd with usage examples per the hard constraint in the step entry.
 
 ### 20. Groovy Scripting Layer
-Groovy-friendly wrapper delegating to `SimulationCommands`. Exposes
-`waitSim()` and `waitWall()` timing primitives wired into the time model from
-step 7, and `waitTransition()` from step 18. Every `SimulationCommands` call
-must be loggable so real-time recordings can be transcribed as valid Groovy
-scripts with `waitWall()` calls inserted for timing. No generic `wait()`
-function per §11.2. All overlay commands added in step 19b are covered by
-this layer automatically since they are on `SimulationCommands`.
+Groovy scripting API implemented via three new classes in `kepplr.scripting`:
+
+- `KepplrScript` — the `kepplr` binding object exposed to scripts. Delegates
+  all `SimulationCommands` methods plus String-name overloads for every method
+  that takes a NAIF ID. Name resolution via `BodyLookupService` in
+  `kepplr.ephemeris`; unresolvable names log the error and throw
+  `IllegalArgumentException`, stopping the script. No camera math or
+  simulation logic in this layer.
+
+- `ScriptRunner` — loads and executes `.groovy` files via JSR 223 on a
+  dedicated daemon thread (`kepplr-groovy-script`), separate from the JME
+  render thread and JavaFX thread. If `Run Script` is invoked while a script
+  is already running, a confirmation dialog is shown; if confirmed, the current
+  thread is interrupted and `cancelTransition()` is called before the new
+  script starts.
+
+- `CommandRecorder` — decorator on `SimulationCommands` that intercepts every
+  method call and records method name, arguments, and wall timestamp. On stop,
+  serializes the log as a runnable Groovy script with `waitWall()` calls
+  inserted between commands. Instant camera commands (`durationSeconds == 0`)
+  are coalesced within a 250ms window using a hybrid pose-snapshot / delta
+  strategy rather than recorded verbatim (see D-024). Commands with
+  `durationSeconds > 0` are never coalesced.
+
+Timing primitives on `KepplrScript`: `waitWall(double seconds)`,
+`waitSim(double seconds)`, `waitUntilSim(double etSeconds)`,
+`waitUntilSim(String utc)`, `waitTransition()`. No generic `wait()` per §11.2.
+`waitSim` and `waitUntilSim` poll at `SCRIPT_WAIT_POLL_INTERVAL_MS` intervals;
+both block indefinitely if the simulation is paused or the time rate works
+against the target — documented in Javadoc.
+
+`cancelTransition()` added to `SimulationCommands` and implemented through
+`TransitionController` to support clean script interruption.
+
+`File → Run Script` and `File → Start/Stop Recording` (CheckMenuItem) added
+to `KepplrStatusWindow`. Recording start wraps the active `SimulationCommands`
+in a `CommandRecorder`; stop unwraps it and opens a file-save dialog.
+
+`VectorType.toScript()` added to the strategy interface so `CommandRecorder`
+can serialize `setVectorVisible` calls correctly (see D-026).
+
+`SCRIPT_WAIT_POLL_INTERVAL_MS` and `RECORDER_COALESCE_WINDOW_MS` added to
+`KepplrConstants`.
+
+---
+
+## Remaining Steps
+
+All planned v0.1 steps are complete. Remaining work consists of deferred items
+listed below.
 
 ---
 

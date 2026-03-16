@@ -571,7 +571,108 @@ to the scripting layer — the Groovy wrapper calls SimulationCommands only.
 
 ---
 
-*Last updated: Step 19*
+## D-024: CommandRecorder uses decorator pattern with hybrid coalescing for instant camera commands
+**Status:** Accepted
+**Roadmap step:** 20
+
+**Context:** Step 20 required a recording feature that captures interactive sessions
+as runnable Groovy scripts. Instant camera commands (`durationSeconds == 0`) from
+mouse and keyboard navigation fire many times per second — recording them verbatim
+would produce hundreds of lines per second of nearly identical incremental calls,
+making the output unreadable and difficult to edit.
+
+**Decision:** `CommandRecorder` is a decorator implementing `SimulationCommands` that
+wraps the live implementation. Instant same-type camera commands are coalesced within
+a 250ms window. A pose snapshot is taken on the first instant command after a flush
+to detect gesture boundaries; accumulated deltas are combined using type-appropriate
+math (sum degrees for orbit/tilt/roll/yaw; multiply factors for zoom; last-value-wins
+for setFov/setCameraPosition/setCameraLookDirection). The coalesced result is flushed
+as a single relative command when the window expires, a different command type arrives,
+or any command with `durationSeconds > 0` arrives. Commands with `durationSeconds > 0`
+are always recorded verbatim. The coalescing window constant
+`RECORDER_COALESCE_WINDOW_MS = 250L` is defined in `KepplrConstants`.
+
+**Alternatives considered:** Recording verbatim — rejected as producing unreadable
+output. Rate-limiting to one command per second — rejected because gesture end state
+might not be captured. Pure pose snapshots (absolute position + orientation) — rejected
+because absolute poses are frame-dependent and become incorrect at replay time if the
+simulation ET differs from record time; relative commands like `orbit()` and `zoom()`
+are ET-agnostic.
+
+**Consequences:** Recorded scripts are readable and editable. The pose snapshot is
+internal bookkeeping only and is never emitted to the script. `ScriptRunner` uses raw
+`SimulationCommands` directly, not the recorder, so script execution is never
+self-recording.
+
+---
+
+## D-025: Scripts run on a dedicated daemon thread; re-run shows confirmation dialog
+**Status:** Accepted
+**Roadmap step:** 20
+
+**Context:** Groovy scripts call blocking timing primitives (`waitTransition()`,
+`waitSim()`, `waitWall()`). If scripts ran on the JME render thread, blocking would
+freeze `simpleUpdate()` and prevent transitions from advancing, causing permanent
+deadlock.
+
+**Decision:** Each script runs on a dedicated daemon thread named
+`kepplr-groovy-script`, separate from both the JME render thread and the JavaFX
+application thread. `SimulationCommands` methods are already thread-safe (they post
+to `TransitionController`'s `ConcurrentLinkedQueue` inbox), so no additional
+synchronization is needed for script calls. If `Run Script` is invoked while a script
+is already running, a JavaFX confirmation dialog is shown: "A script is already
+running. Stop it and run the new one?" If confirmed, the current script thread is
+interrupted and `cancelTransition()` is called before the new script starts. A stopped
+script leaves `SimulationCommands` in a consistent state.
+
+**Alternatives considered:** Running scripts on the JME render thread — rejected due
+to deadlock risk. Running scripts on the JavaFX thread — rejected for the same reason
+and because it would block the UI. Silently replacing the running script without
+confirmation — rejected as too destructive without user intent.
+
+**Consequences:** `cancelTransition()` was added to `SimulationCommands` and
+implemented through `TransitionController` as a `CancelRequest` in the sealed
+`PendingRequest` hierarchy. `waitSim()` and `waitUntilSim()` block indefinitely if
+the simulation is paused or the time rate works against the target; this is documented
+in their Javadoc.
+
+---
+
+## D-026: VectorType carries a toScript() method for CommandRecorder serialization
+**Status:** Accepted
+**Roadmap step:** 20
+
+**Context:** `CommandRecorder` serializes every `SimulationCommands` call to a Groovy
+script. `setVectorVisible(int naifId, VectorType type, boolean visible)` takes a
+`VectorType` strategy interface instance. Because `VectorType` is an interface (D-003),
+not an enum, the recorder has no way to introspect which `VectorTypes` factory method
+produced a given instance. Without a solution, recorded `setVectorVisible` calls would
+emit an unrunnable placeholder comment.
+
+**Decision:** A `toScript()` method is added to the `VectorType` interface. Each
+concrete implementation returned by `VectorTypes` factory methods implements it to
+return the exact Groovy expression that recreates the instance:
+- `VectorTypes.velocity()` → `"VectorTypes.velocity()"`
+- `VectorTypes.bodyAxisX/Y/Z()` → `"VectorTypes.bodyAxisX()"` etc.
+- `VectorTypes.towardBody(10)` → `"VectorTypes.towardBody(10)"`
+
+`CommandRecorder` calls `vectorType.toScript()` when building the recorded line.
+
+**Alternatives considered:** Reflection-based introspection — rejected as brittle and
+dependent on implementation details. An enum-based registry mapping instances back to
+factory calls — rejected as incompatible with the strategy interface design and the
+parameterized `towardBody` case. Omitting `setVectorVisible` from recording — rejected
+as it would silently produce broken scripts.
+
+**Consequences:** Any future `VectorType` implementation added to `VectorTypes` must
+implement `toScript()`. This is a soft contract enforced by the interface; omitting it
+would cause a compilation error since `toScript()` has no default implementation.
+
+---
+
+*Last updated: Step 20 — v0.1 feature-complete*
 *Backfill note: Entries D-001 through D-009 were reconstructed retrospectively.
 D-010 onwards recorded in real time.*
+
+
 
