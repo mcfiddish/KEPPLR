@@ -571,7 +571,12 @@ public class KepplrApp extends SimpleApplication {
             } catch (NumberFormatException ignored) {
             }
         }
-        return ColorRGBA.White;
+        return switch (typeStr) {
+            case "bodyAxisX" -> ColorRGBA.Red;
+            case "bodyAxisY" -> ColorRGBA.Green;
+            case "bodyAxisZ" -> ColorRGBA.Blue;
+            default -> ColorRGBA.White;
+        };
     }
 
     /**
