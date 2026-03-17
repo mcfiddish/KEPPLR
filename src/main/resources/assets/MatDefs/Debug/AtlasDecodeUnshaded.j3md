@@ -1,0 +1,59 @@
+MaterialDef AtlasDecodeUnshaded {
+
+    MaterialParameters {
+
+        // Albedo texture (the atlas image).  Optional — if absent, BaseColorFactor is used directly.
+        Texture2D AlbedoMap
+
+        // Base color multiplier / fallback color (RGBA)
+        Color BaseColorFactor : 1 1 1 1
+
+        // ── Atlas decode parameters (set per-frame by GlbModelViewer) ─────────────────────────
+
+        // UV transform mode (integer: 0=atlas_decode, 1=offset_only, 2=none/pass-through)
+        Int UvTransformMode : 0
+
+        // Same mode as float (for materials that prefer float uniform)
+        Float UvMode : 0
+
+        // Base UV: floor of first tile (atlas_decode) or UV offset (offset_only)
+        Vector2 UvBase
+
+        // Tile counts (x = tilesU, y = tilesV); each >= 1
+        Vector2 Tiles : 1 1
+
+        // tilesU as a scalar (redundant with Tiles.x; kept for shader convenience)
+        Float TilesU : 1
+
+        // tilesV as a scalar (redundant with Tiles.y; kept for shader convenience)
+        Float TilesV : 1
+
+        // Which tile in the atlas to render (integer tile index as float vec2)
+        Vector2 SelectedTile
+
+        // When true: overlay a per-tile debug tint so tile boundaries are visible
+        Boolean DebugTileTint
+
+        // ── UV offset (used by UV-debug modes) ────────────────────────────────────────────────
+
+        // 1.0 = apply UvOffset; 0.0 = skip
+        Float UvOffsetEnabled : 0
+
+        // Additional UV translation applied on top of the atlas decode result
+        Vector2 UvOffset
+    }
+
+    Technique {
+        VertexShader   GLSL150: assets/Shaders/Debug/AtlasDecodeUnshaded.vert
+        FragmentShader GLSL150: assets/Shaders/Debug/AtlasDecodeUnshaded.frag
+
+        WorldParameters {
+            WorldViewProjectionMatrix
+        }
+
+        Defines {
+            ALBEDO_MAP      : AlbedoMap
+            DEBUG_TILE_TINT : DebugTileTint
+        }
+    }
+}
