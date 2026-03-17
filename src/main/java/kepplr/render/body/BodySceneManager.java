@@ -104,6 +104,20 @@ public class BodySceneManager {
     }
 
     /**
+     * Detach all managed body nodes from the scene graph and clear internal state.
+     *
+     * <p>Must be called on the JME render thread before discarding this manager (e.g., on config reload).
+     */
+    public void dispose() {
+        for (BodySceneNode bsn : bodyNodes.values()) {
+            bsn.detach();
+        }
+        bodyNodes.clear();
+        spacecraftIdSet = null;
+        saturnRingManager.detach();
+    }
+
+    /**
      * Update all body scene nodes for the current simulation time.
      *
      * <p>Ephemeris is acquired at point-of-use per §3.3.
@@ -222,6 +236,11 @@ public class BodySceneManager {
                     bodyNodes.computeIfAbsent(sc.id(), id -> BodyNodeFactory.createSpacecraftNode(sc, assetManager));
 
             bsn.updatePosition(new Vector3f(dx, dy, dz));
+
+            RotationMatrixIJK rotation = eph2.getJ2000ToBodyFixedRotation(sc.id(), et);
+            if (rotation != null) {
+                bsn.updateRotation(rotation);
+            }
 
             FrustumLayer layer = FrustumLayer.assign(dist, 0.0);
             bsn.apply(CullDecision.DRAW_SPRITE, layer, nearNode, midNode, farNode, dist, viewportHeight, fovYDeg);

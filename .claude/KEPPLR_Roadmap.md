@@ -48,9 +48,11 @@ See D-026.
 
 **The synodic frame "other body" is the currently targeted body.** No separate command or property is needed for this. If no targeted body exists, fall back to the inertial frame and log a warning.
 
-**Spacecraft are always rendered as point sprites for now.** Shape model rendering for spacecraft is explicitly deferred. Do not implement it before the deferred shape model step.
+**GLB shape models replace ellipsoids and sprites for configured bodies (Step 21).** Bodies with a `BodyBlock.shapeModel()` path use a GLB attached to `bodyFixedNode`; the ellipsoid is retained as a detached `EclipseShadowManager` proxy (never rendered). Spacecraft with `SpacecraftBlock.shapeModel()` replace the point sprite with a GLB scaled by `0.001 × SpacecraftBlock.scale()`. Fallback to ellipsoid/sprite on load failure. See D-027, D-028.
 
-**Ellipsoids only for body geometry.** `KEPPLREphemeris.getShape()` always returns an ellipsoid. Shape model rendering for irregular bodies is deferred. Do not use shape models before the deferred step.
+**Spacecraft FK frames are unified with PCK body-fixed frames.** `hasBodyFixedFrame()` and `getJ2000ToBodyFixed()` both return results for spacecraft (via their configured FK frame from `NH_SPACECRAFT` or equivalent), not just for natural bodies with PCK data. `BodySceneManager` calls `updateRotation()` for spacecraft every frame. See D-029.
+
+**Spacecraft camera proximity scales with SpacecraftBlock.scale().** Minimum zoom distance and `goTo` arrival distance use `scale × 0.001 km` as the effective radius rather than a fixed 1 km fallback. See D-030.
 
 **Orbit drag is camera-relative.** Right drag orbits around the camera's current screen-right and screen-up vectors, not fixed world axes. This must not be changed to world-axis orbit without explicit discussion.
 
@@ -452,12 +454,13 @@ null path, missing file, or load failure — WARN log, no crash
 ** Frame semantics **: modelToBodyFixedQuat is applied once at load time as
 glbModelRoot's local rotation, composing with bodyFixedNode's
 time-varying SPICE frame rotation. It is never updated per-frame.
-** Out of scope for this step **: dynamic / hot-reload of shape models at
-runtime; LOD; shadow refinement using shape model geometry (§9.3).
-** Classes expected to change**: GLTFUtils (new, ported from prototype),
-BodyNodeFactory, BodySceneManager (asset manager registration),
-and the class holding SamplerPreset if it needs to move to a shared
-location.
+**Out of scope for this step:** LOD; shadow refinement using shape model geometry (§9.3).
+
+**Post-completion refinements (same branch):**
+- Spacecraft FK frame registered in `stateTransformMap`; `hasBodyFixedFrame()` / `getJ2000ToBodyFixed()` unified to cover both PCK and FK frames; `BodySceneManager` calls `updateRotation()` for spacecraft each frame (D-029)
+- Camera min-zoom and `goTo` arrival distance scale with `SpacecraftBlock.scale() × 0.001` rather than a fixed 1 km fallback (D-030)
+- `BodySceneManager.dispose()` + `KepplrApp.rebuildBodyScene()` + `KepplrStatusWindow.configReloadCallback` enable shape model hot-reload when a new config file is loaded (D-031)
+- `VectorRenderer` and `TransitionController` fall back to `BODY_DEFAULT_RADIUS_KM` for shape-less bodies instead of skipping them entirely
 
 ---
 

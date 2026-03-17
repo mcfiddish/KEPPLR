@@ -60,7 +60,7 @@ public class BodyFixedFrame {
 
         KEPPLREphemeris eph = KEPPLRConfiguration.getInstance().getEphemeris();
 
-        // Body has no PCK orientation data
+        // Body has no body-fixed frame (neither PCK nor spacecraft FK)
         boolean hasBf;
         try {
             hasBf = eph.hasBodyFixedFrame(focusBodyId);

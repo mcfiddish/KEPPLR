@@ -2,6 +2,7 @@ package kepplr.render.body;
 
 import com.jme3.asset.AssetManager;
 import com.jme3.asset.plugins.FileLocator;
+import com.jme3.material.MatParamTexture;
 import com.jme3.material.Material;
 import com.jme3.math.ColorRGBA;
 import com.jme3.math.Quaternion;
@@ -11,11 +12,17 @@ import com.jme3.scene.Node;
 import com.jme3.scene.Spatial;
 import com.jme3.scene.shape.Sphere;
 import com.jme3.texture.Texture;
+import com.jme3.texture.image.ColorSpace;
 import java.awt.Color;
 import java.nio.file.Path;
+import java.util.Collections;
+import java.util.IdentityHashMap;
+import java.util.Set;
 import kepplr.config.BodyBlock;
 import kepplr.config.KEPPLRConfiguration;
+import kepplr.config.SpacecraftBlock;
 import kepplr.ephemeris.Spacecraft;
+import kepplr.render.util.GLTFUtils;
 import kepplr.util.KepplrConstants;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -27,7 +34,7 @@ import picante.surfaces.Ellipsoid;
  *
  * <p>All methods are static; this class is not instantiated.
  *
- * <h3>Body node hierarchy</h3>
+ * <h3>Body node hierarchy — ellipsoid (no shape model)</h3>
  *
  * <pre>
  * ephemerisNode
@@ -37,8 +44,31 @@ import picante.surfaces.Ellipsoid;
  * └── spriteGeom  (unit sphere, scaled per frame to constant pixel size)
  * </pre>
  *
- * <p>Initially: {@code fullGeom} is visible ({@code CullHint.Inherit}), {@code spriteGeom} is hidden
- * ({@code CullHint.Always}). {@link BodySceneNode#apply} switches between them each frame.
+ * <h3>Body node hierarchy — GLB shape model (§14.6.3)</h3>
+ *
+ * <pre>
+ * ephemerisNode
+ * ├── bodyFixedNode   (J2000 → body-fixed rotation, updated each frame)
+ * │   └── glbModelRoot  (localRotation = modelToBodyFixedQuat, set once at load)
+ * │       └── [loaded GLB Spatial]
+ * └── spriteGeom  (unchanged; used when apparent radius is below the sprite threshold)
+ * </pre>
+ *
+ * <p>When a GLB is present, {@code textureAlignNode} and {@code fullGeom} (the ellipsoid) are created but not attached
+ * to the scene. {@code fullGeom} retains its {@code EclipseLighting.j3md} material and {@code "eclipseMaterial"}
+ * UserData so that {@link EclipseShadowManager} can continue computing analytic shadow uniforms. Since the ellipsoid is
+ * not attached it is never rendered; eclipse shadow application to the GLB geometry nodes is deferred (REDESIGN.md
+ * §9.3).
+ *
+ * <h3>Spacecraft node hierarchy — GLB shape model (§14.6.4)</h3>
+ *
+ * <pre>
+ * ephemerisNode
+ * ├── bodyFixedNode
+ * │   └── glbModelRoot  (localRotation = modelToBodyFixedQuat; scale = 0.001 × block.scale())
+ * │       └── [loaded GLB Spatial, PBR materials used as-is]
+ * └── spriteGeom  (hidden when glbModelRoot is present)
+ * </pre>
  *
  * <h3>Sun (NAIF 10)</h3>
  *
@@ -62,11 +92,21 @@ public final class BodyNodeFactory {
     /**
      * Create a {@link BodySceneNode} for a celestial body.
      *
+     * <p>If {@code BodyBlock.shapeModel()} is non-blank, loads the GLB and attaches it as {@code glbModelRoot} under
+     * {@code bodyFixedNode}. Falls back to the ellipsoid on any load failure (WARN logged, simulation continues).
+     *
+     * <p><b>Usage example:</b>
+     *
+     * <pre>{@code
+     * BodySceneNode bsn = BodyNodeFactory.createBodyNode(bodyId, naifId, shape, assetManager);
+     * bsn.apply(CullDecision.DRAW_FULL, FrustumLayer.MID, nearNode, midNode, farNode, dist, h, fov);
+     * }</pre>
+     *
      * @param bodyId body EphemerisID (used for scene node names)
      * @param naifId integer NAIF ID (used to select Sun material and look up BodyBlock)
      * @param shape body ellipsoid from {@code KEPPLREphemeris.getShape()}; null → default radius, untextured
      * @param assetManager JME asset manager
-     * @return fully assembled BodySceneNode; fullGeom visible, spriteGeom hidden
+     * @return fully assembled BodySceneNode; fullGeom or glbModelRoot visible, spriteGeom hidden
      */
     public static BodySceneNode createBodyNode(
             EphemerisID bodyId, int naifId, Ellipsoid shape, AssetManager assetManager) {
@@ -103,9 +143,21 @@ public final class BodyNodeFactory {
         textureAlignNode.setLocalRotation(texRot);
         textureAlignNode.attachChild(fullGeom);
 
-        // Body-fixed node: updated each frame with J2000 → body-fixed rotation
+        // Body-fixed node: updated each frame with J2000 → body-fixed rotation.
         Node bodyFixedNode = new Node(bodyId.getName() + "-body-fixed");
-        bodyFixedNode.attachChild(textureAlignNode);
+
+        // Attempt to load a GLB shape model if configured.
+        Node glbModelRoot = tryLoadBodyGlb(bodyId.getName(), bodyFixedNode, assetManager);
+
+        if (glbModelRoot == null) {
+            // No GLB (or load failed): use the standard ellipsoid branch.
+            bodyFixedNode.attachChild(textureAlignNode);
+        }
+        // When glbModelRoot != null, textureAlignNode is intentionally NOT attached to
+        // bodyFixedNode. fullGeom (the ellipsoid) is kept as an EclipseShadowManager proxy:
+        // its CullHint is managed by BodySceneNode.apply() so the shadow manager can identify
+        // this as a DRAW_FULL body. Because textureAlignNode is detached, fullGeom is never
+        // rendered. See REDESIGN.md §9.3 for the deferred shape-model shadow refinement.
 
         // Point-sprite: tiny unit sphere, hidden by default
         Geometry spriteGeom = buildSprite(bodyId.getName(), naifId, assetManager);
@@ -117,23 +169,33 @@ public final class BodyNodeFactory {
         ephemerisNode.attachChild(bodyFixedNode);
         ephemerisNode.attachChild(spriteGeom);
 
-        return new BodySceneNode(ephemerisNode, bodyFixedNode, fullGeom, spriteGeom, naifId);
+        return new BodySceneNode(ephemerisNode, bodyFixedNode, fullGeom, spriteGeom, naifId, glbModelRoot, false);
     }
 
     /**
-     * Create a {@link BodySceneNode} for a spacecraft, rendered exclusively as a point sprite.
+     * Create a {@link BodySceneNode} for a spacecraft.
      *
-     * <p>The {@code fullGeom} is permanently hidden; shape model rendering is deferred.
+     * <p>If {@code SpacecraftBlock.shapeModel()} is non-blank, loads the GLB (units: meters) and attaches it as
+     * {@code glbModelRoot} under {@code bodyFixedNode} with a uniform scale of {@code 0.001 × SpacecraftBlock.scale()}
+     * to convert to km. GLB-embedded PBR materials are used as-is. Falls back to the point sprite on any load failure
+     * (WARN logged).
+     *
+     * <p><b>Usage example:</b>
+     *
+     * <pre>{@code
+     * BodySceneNode bsn = BodyNodeFactory.createSpacecraftNode(sc, assetManager);
+     * bsn.apply(CullDecision.DRAW_SPRITE, FrustumLayer.FAR, nearNode, midNode, farNode, dist, h, fov);
+     * }</pre>
      *
      * @param spacecraft spacecraft descriptor
      * @param assetManager JME asset manager
-     * @return BodySceneNode whose fullGeom is always culled
+     * @return BodySceneNode; glbModelRoot visible (if loaded) or spriteGeom visible
      */
     public static BodySceneNode createSpacecraftNode(Spacecraft spacecraft, AssetManager assetManager) {
         String name = spacecraft.id().getName();
         int naifId = spacecraft.code();
 
-        // Dummy full geom (permanently hidden — shape model rendering deferred)
+        // Dummy full geom (permanently hidden — spacecraft don't use the ellipsoid pipeline)
         Sphere dummyMesh = new Sphere(4, 4, 1f);
         Geometry fullGeom = new Geometry(name + "-shape", dummyMesh);
         fullGeom.setMaterial(unshadedMaterial(ColorRGBA.White, assetManager));
@@ -145,8 +207,12 @@ public final class BodyNodeFactory {
         bodyFixedNode.attachChild(textureAlignNode);
 
         Geometry spriteGeom = buildSprite(name, naifId, assetManager);
-        // Spacecraft always render as sprites: make sprite visible by default
-        spriteGeom.setCullHint(Spatial.CullHint.Inherit);
+
+        // Attempt to load a GLB shape model if configured.
+        Node glbModelRoot = tryLoadSpacecraftGlb(spacecraft, bodyFixedNode, assetManager);
+
+        // Spacecraft sprite is visible by default; hidden if GLB was loaded.
+        spriteGeom.setCullHint(glbModelRoot != null ? Spatial.CullHint.Always : Spatial.CullHint.Inherit);
 
         Node ephemerisNode = new Node(name + "-ephemeris");
         ephemerisNode.setUserData("naifId", naifId);
@@ -154,10 +220,185 @@ public final class BodyNodeFactory {
         ephemerisNode.attachChild(bodyFixedNode);
         ephemerisNode.attachChild(spriteGeom);
 
-        return new BodySceneNode(ephemerisNode, bodyFixedNode, fullGeom, spriteGeom, naifId);
+        return new BodySceneNode(
+                ephemerisNode, bodyFixedNode, fullGeom, spriteGeom, naifId, glbModelRoot, glbModelRoot != null);
     }
 
-    // ── private helpers ──────────────────────────────────────────────────────────────────────────
+    // ── GLB loading helpers ───────────────────────────────────────────────────────────────────────
+
+    /**
+     * Attempt to load a body GLB shape model and attach it to {@code bodyFixedNode}.
+     *
+     * <p>Returns the {@code glbModelRoot} Node on success, {@code null} on null/blank path, missing file, or any load
+     * failure. All failures are logged at WARN; the simulation continues normally.
+     *
+     * <p>GLB files for natural bodies are authored in <b>kilometers</b> — no scale transform is applied (§14.6.3,
+     * D-027).
+     *
+     * @param bodyName body name used for BodyBlock lookup and node naming
+     * @param bodyFixedNode node to attach glbModelRoot to on success
+     * @param assetManager JME asset manager (resourcesFolder already registered as FileLocator)
+     * @return glbModelRoot Node, or null if no GLB is configured or load failed
+     */
+    private static Node tryLoadBodyGlb(String bodyName, Node bodyFixedNode, AssetManager assetManager) {
+        BodyBlock block = bodyBlockFor(bodyName);
+        if (block == null) return null;
+
+        String modelPath = block.shapeModel();
+        if (modelPath == null || modelPath.isBlank()) return null;
+
+        // Resolve: absolute if starts with "/", else run-dir + resourcesFolder + configPath.
+        Path resolvedPath = resolveShapeModelPath(modelPath);
+
+        try {
+            // JME's AssetManager cannot accept absolute paths directly. Register the
+            // file's parent directory as a FileLocator and load by filename only.
+            assetManager.registerLocator(resolvedPath.getParent().toString(), FileLocator.class);
+            Spatial model = assetManager.loadModel(resolvedPath.getFileName().toString());
+            applySamplerPreset(model, SamplerPreset.QUALITY_DEFAULT);
+
+            Quaternion modelToBodyFixed = GLTFUtils.readModelToBodyFixedQuatFromGlb(resolvedPath);
+
+            Node glbModelRoot = new Node(bodyName + "-glbModelRoot");
+            glbModelRoot.attachChild(model);
+            // modelToBodyFixedQuat applied once at load time; maps glTF model-space into the
+            // body-fixed frame expected by SPICE. Never updated per-frame — the time-varying
+            // SPICE body-fixed → J2000 rotation is carried by bodyFixedNode (§14.6.5).
+            glbModelRoot.setLocalRotation(modelToBodyFixed);
+            bodyFixedNode.attachChild(glbModelRoot);
+
+            logger.info("Loaded GLB shape model for body {}: {}", bodyName, resolvedPath);
+            return glbModelRoot;
+
+        } catch (Exception e) {
+            logger.warn(
+                    "Failed to load GLB shape model for body {} ({}): {} — falling back to ellipsoid",
+                    bodyName,
+                    resolvedPath,
+                    e.getMessage());
+            logger.warn(e.getLocalizedMessage(), e);
+            return null;
+        }
+    }
+
+    /**
+     * Attempt to load a spacecraft GLB shape model and attach it to {@code bodyFixedNode}.
+     *
+     * <p>Returns the {@code glbModelRoot} Node on success, {@code null} on null/blank path, missing file, or any load
+     * failure. All failures are logged at WARN; the simulation continues normally.
+     *
+     * <p>GLB files for spacecraft are authored in <b>meters</b>. A uniform scale of {@code 0.001 ×
+     * SpacecraftBlock.scale()} is applied to convert to km (§14.6.4, D-027). GLB-embedded PBR materials are used as-is
+     * — no KEPPLR body material pipeline (D-028).
+     *
+     * @param spacecraft spacecraft descriptor
+     * @param bodyFixedNode node to attach glbModelRoot to on success
+     * @param assetManager JME asset manager (resourcesFolder already registered as FileLocator)
+     * @return glbModelRoot Node, or null if no GLB is configured or load failed
+     */
+    private static Node tryLoadSpacecraftGlb(Spacecraft spacecraft, Node bodyFixedNode, AssetManager assetManager) {
+        String modelPath = spacecraft.shapeModel();
+        if (modelPath == null || modelPath.isBlank()) return null;
+
+        String name = spacecraft.id().getName();
+        int naifId = spacecraft.code();
+
+        // Resolve: absolute if starts with "/", else run-dir + resourcesFolder + configPath.
+        Path resolvedPath = resolveShapeModelPath(modelPath);
+
+        try {
+            // JME's AssetManager cannot accept absolute paths directly. Register the
+            // file's parent directory as a FileLocator and load by filename only.
+            assetManager.registerLocator(resolvedPath.getParent().toString(), FileLocator.class);
+            Spatial model = assetManager.loadModel(resolvedPath.getFileName().toString());
+            applySamplerPreset(model, SamplerPreset.QUALITY_DEFAULT);
+
+            Quaternion modelToBodyFixed = GLTFUtils.readModelToBodyFixedQuatFromGlb(resolvedPath);
+
+            // Scale: GLB is in meters; KEPPLR world units are km (§14.6.4, D-027).
+            double scaleFactor = 0.001 * spacecraftScaleFactor(naifId);
+
+            Node glbModelRoot = new Node(name + "-glbModelRoot");
+            glbModelRoot.attachChild(model);
+            // modelToBodyFixedQuat applied once at load time; maps glTF model-space into the
+            // body-fixed frame expected by SPICE. Never updated per-frame — the time-varying
+            // SPICE body-fixed → J2000 rotation is carried by bodyFixedNode (§14.6.5).
+            glbModelRoot.setLocalRotation(modelToBodyFixed);
+            glbModelRoot.setLocalScale((float) scaleFactor);
+            bodyFixedNode.attachChild(glbModelRoot);
+
+            logger.info("Loaded GLB shape model for spacecraft {} (scale {}): {}", name, scaleFactor, resolvedPath);
+            return glbModelRoot;
+
+        } catch (Exception e) {
+            logger.warn(
+                    "Failed to load GLB shape model for spacecraft {} ({}): {} — falling back to sprite",
+                    name,
+                    resolvedPath,
+                    e.getMessage());
+            logger.warn(e.getLocalizedMessage(), e);
+            return null;
+        }
+    }
+
+    // ── Sampler preset application ────────────────────────────────────────────────────────────────
+
+    /**
+     * Apply a {@link SamplerPreset} to every texture in the loaded Spatial's geometry subtree.
+     *
+     * <p>Visits all {@link Geometry} nodes recursively. For each geometry, checks the {@code BaseColorMap} and
+     * {@code DiffuseMap} material parameters. Each unique texture (by identity) is updated at most once. Updates: wrap
+     * mode → {@code Clamp}, min/mag filter, anisotropy, and image colorspace → sRGB.
+     *
+     * <p><b>Usage example:</b>
+     *
+     * <pre>{@code
+     * Spatial model = assetManager.loadModel("shapes/eros.glb");
+     * BodyNodeFactory.applySamplerPreset(model, SamplerPreset.QUALITY_DEFAULT);
+     * }</pre>
+     *
+     * @param spatial root Spatial of the loaded GLB
+     * @param preset sampler preset to apply
+     */
+    static void applySamplerPreset(Spatial spatial, SamplerPreset preset) {
+        if (spatial == null || preset == null) return;
+        Set<Texture> visited = Collections.newSetFromMap(new IdentityHashMap<>());
+        applySamplerPresetRecursive(spatial, preset, visited);
+    }
+
+    private static void applySamplerPresetRecursive(Spatial spatial, SamplerPreset preset, Set<Texture> visited) {
+        if (spatial instanceof Geometry geometry) {
+            Material mat = geometry.getMaterial();
+            if (mat != null) {
+                applySamplerToParam(mat, "BaseColorMap", preset, visited);
+                applySamplerToParam(mat, "DiffuseMap", preset, visited);
+            }
+            return;
+        }
+        if (spatial instanceof Node node) {
+            for (Spatial child : node.getChildren()) {
+                applySamplerPresetRecursive(child, preset, visited);
+            }
+        }
+    }
+
+    private static void applySamplerToParam(
+            Material material, String paramName, SamplerPreset preset, Set<Texture> visited) {
+        MatParamTexture param = material.getTextureParam(paramName);
+        if (param == null) return;
+        Texture texture = param.getTextureValue();
+        if (texture == null || !visited.add(texture)) return;
+
+        texture.setWrap(Texture.WrapMode.Clamp);
+        texture.setMagFilter(preset.magFilter);
+        texture.setMinFilter(preset.minFilter);
+        texture.setAnisotropicFilter(preset.anisotropy);
+        if (texture.getImage() != null && texture.getImage().getColorSpace() != ColorSpace.sRGB) {
+            texture.getImage().setColorSpace(ColorSpace.sRGB);
+        }
+    }
+
+    // ── private helpers ───────────────────────────────────────────────────────────────────────────
 
     private static float meanRadius(Ellipsoid shape, String name) {
         if (shape == null) {
@@ -285,6 +526,20 @@ public final class BodyNodeFactory {
         }
     }
 
+    /**
+     * Returns the {@code SpacecraftBlock.scale()} factor for the given NAIF ID, or {@code 1.0} if no block is
+     * configured.
+     */
+    private static double spacecraftScaleFactor(int naifId) {
+        try {
+            SpacecraftBlock block = KEPPLRConfiguration.getInstance().spacecraftBlock(naifId);
+            return block != null ? block.scale() : 1.0;
+        } catch (Exception e) {
+            logger.warn("Could not look up SpacecraftBlock for NAIF {}: {}", naifId, e.getMessage());
+            return 1.0;
+        }
+    }
+
     private static ColorRGBA spriteColorFor(String bodyName, int naifId) {
         BodyBlock block = bodyBlockFor(bodyName);
         if (block != null) {
@@ -298,5 +553,40 @@ public final class BodyNodeFactory {
 
     private static ColorRGBA toColorRGBA(Color awtColor) {
         return new ColorRGBA(awtColor.getRed() / 255f, awtColor.getGreen() / 255f, awtColor.getBlue() / 255f, 1f);
+    }
+
+    /**
+     * Resolve a shape model path from the configuration file to an absolute {@link Path}.
+     *
+     * <p>Resolution rules:
+     *
+     * <ul>
+     *   <li>If {@code configPath} starts with {@code "/"}: treated as an absolute file-system path and returned as-is.
+     *   <li>Otherwise: resolved relative to the run directory joined with
+     *       {@code KEPPLRConfiguration.resourcesFolder()}, then made absolute via {@link Path#toAbsolutePath()} (which
+     *       uses the JVM working directory, i.e. the run directory).
+     * </ul>
+     *
+     * <p><b>Usage example:</b>
+     *
+     * <pre>{@code
+     * // config: shapeModel = shapes/phobos.glb, resourcesFolder = resources
+     * // result: /run/dir/resources/shapes/phobos.glb
+     * Path p = resolveShapeModelPath("shapes/phobos.glb");
+     *
+     * // config: shapeModel = /data/models/phobos.glb
+     * // result: /data/models/phobos.glb
+     * Path p = resolveShapeModelPath("/data/models/phobos.glb");
+     * }</pre>
+     *
+     * @param configPath path string from {@code BodyBlock.shapeModel()} or {@code SpacecraftBlock.shapeModel()}
+     * @return absolute Path to the shape model file
+     */
+    private static Path resolveShapeModelPath(String configPath) {
+        if (configPath.startsWith("/")) {
+            return Path.of(configPath);
+        }
+        return Path.of(KEPPLRConfiguration.getInstance().resourcesFolder(), configPath)
+                .toAbsolutePath();
     }
 }

@@ -112,11 +112,14 @@ class VectorRenderer {
             return;
         }
         Ellipsoid shape = eph.getShape(focusedBodyEphId);
+        double meanRadiusKm;
         if (shape == null) {
-            logger.warn("VectorRenderer: no shape data for focused body NAIF {}", focusedBodyId);
-            return;
+            // Spacecraft and other shape-less bodies (no PCK entry) use the default radius so
+            // vector arrows are still rendered at a visible scale (§7.6, KepplrConstants).
+            meanRadiusKm = KepplrConstants.BODY_DEFAULT_RADIUS_KM;
+        } else {
+            meanRadiusKm = (shape.getA() + shape.getB() + shape.getC()) / 3.0;
         }
-        double meanRadiusKm = (shape.getA() + shape.getB() + shape.getC()) / 3.0;
 
         for (VectorDefinition def : definitions) {
             try {

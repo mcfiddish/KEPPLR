@@ -223,10 +223,19 @@ public final class KepplrConstants {
      * {@link kepplr.render.vector.VectorDefinition#getScaleFactor()}. A value of 3.0 places the arrow tip at 3× the
      * mean radius from the body centre (i.e., 2× the mean radius above the surface).
      *
-     * <p>Vectors are not rendered when no body is focused (focus body ID == −1) or when the focused body has no shape
-     * data.
+     * <p>Vectors are not rendered when no body is focused (focus body ID == −1). When the focused body has no shape
+     * data (e.g. a spacecraft), {@link #BODY_DEFAULT_RADIUS_KM} is used as the mean radius.
      */
     public static final double VECTOR_ARROW_FOCUS_BODY_RADIUS_MULTIPLE = 3.0;
+
+    /**
+     * Fallback mean radius (km) used when a body has no PCK shape data.
+     *
+     * <p>Applied by {@link kepplr.render.body.BodyNodeFactory} for ellipsoid geometry and by
+     * {@link kepplr.render.vector.VectorRenderer} for vector arrow length when the focused body is a spacecraft or
+     * other shape-less object.
+     */
+    public static final double BODY_DEFAULT_RADIUS_KM = 1.0;
 
     // ── Star field (Step 14, REDESIGN.md §7.4) ──
 

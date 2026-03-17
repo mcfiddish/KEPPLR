@@ -77,6 +77,7 @@ public final class KepplrStatusWindow {
     private final SimulationCommands commands;
     private Runnable jmeShutdown;
     private BiConsumer<Integer, Integer> jmeResizeCallback;
+    private Runnable configReloadCallback;
     private ScriptRunner scriptRunner;
     private CommandRecorder commandRecorder;
     private Stage stage;
@@ -107,6 +108,15 @@ public final class KepplrStatusWindow {
      */
     public void setJmeResizeCallback(BiConsumer<Integer, Integer> resizeCallback) {
         this.jmeResizeCallback = resizeCallback;
+    }
+
+    /**
+     * Set the callback invoked on the JME render thread after a configuration file is successfully loaded.
+     *
+     * @param callback enqueues a JME-thread rebuild of the body scene; must not be null
+     */
+    public void setConfigReloadCallback(Runnable callback) {
+        this.configReloadCallback = callback;
     }
 
     /**
@@ -453,6 +463,9 @@ public final class KepplrStatusWindow {
                 try {
                     KEPPLRConfiguration.getInstance().reload(Path.of(file.getAbsolutePath()));
                     populateBodyTree();
+                    if (configReloadCallback != null) {
+                        configReloadCallback.run();
+                    }
                 } catch (Exception ex) {
                     logger.error("Failed to load configuration: {}", ex.getMessage());
                 }
