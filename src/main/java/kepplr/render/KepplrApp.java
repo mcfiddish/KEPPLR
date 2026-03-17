@@ -2,6 +2,7 @@ package kepplr.render;
 
 import com.jme3.app.LostFocusBehavior;
 import com.jme3.app.SimpleApplication;
+import com.jme3.asset.plugins.FileLocator;
 import com.jme3.light.AmbientLight;
 import com.jme3.light.PointLight;
 import com.jme3.math.ColorRGBA;
@@ -9,6 +10,7 @@ import com.jme3.math.Vector3f;
 import com.jme3.renderer.Camera;
 import com.jme3.renderer.ViewPort;
 import com.jme3.scene.Node;
+import com.jme3.scene.plugins.gltf.GlbLoader;
 import com.jme3.system.AppSettings;
 import java.time.Instant;
 import java.util.HashMap;
@@ -154,6 +156,14 @@ public class KepplrApp extends SimpleApplication {
         // Escape has no function in KEPPLR and must not close either window.
         inputManager.deleteMapping(INPUT_MAPPING_EXIT);
 
+        // ── Asset manager: shape model support (§14.6.2) ─────────────────────────────────────
+        // Register resourcesFolder() as a FileLocator so GLB paths from BodyBlock.shapeModel()
+        // and SpacecraftBlock.shapeModel() (which are relative to that folder) resolve correctly.
+        // Register GlbLoader for the "glb" extension (not registered by JME by default).
+        // Both registrations are done once here, before BodySceneManager is constructed.
+        assetManager.registerLocator(KEPPLRConfiguration.getInstance().resourcesFolder(), FileLocator.class);
+        assetManager.registerLoader(GlbLoader.class, "glb");
+
         // ── Simulation clock and commands ─────────────────────────────────────────────────────
         double startET = KEPPLRConfiguration.getInstance().getTimeConversion().instantToTDB(Instant.now());
         simulationState = new DefaultSimulationState();
@@ -182,6 +192,7 @@ public class KepplrApp extends SimpleApplication {
                     GLFW.glfwSetWindowSize(handle, w, h);
                 }
             }));
+            statusWindow.setConfigReloadCallback(() -> appRef.enqueue(appRef::rebuildBodyScene));
             statusWindow.setScriptRunner(scriptRunner);
             statusWindow.setCommandRecorder(recorder);
             statusWindow.show();
@@ -311,8 +322,12 @@ public class KepplrApp extends SimpleApplication {
         }
 
         simulationClock.advance();
-        cameraInputHandler.update();
-
+        try {
+            cameraInputHandler.update();
+        } catch (Exception e) {
+            logger.warn(e.getMessage());
+            return;
+        }
         // Cancel any active transition when the user takes manual control (Step 18)
         if (cameraInputHandler.consumeManualNavigation() && transitionController.isActive()) {
             transitionController.cancel();
@@ -397,7 +412,12 @@ public class KepplrApp extends SimpleApplication {
         trailManager.update(currentEt, cameraHelioJ2000);
         vectorManager.update(currentEt, cameraHelioJ2000, cam, focusedBodyId);
         starFieldManager.update(currentEt, cameraHelioJ2000);
-        sunHaloRenderer.update(cameraHelioJ2000, cam, tpf);
+        try {
+            sunHaloRenderer.update(cameraHelioJ2000, cam, tpf);
+        } catch (Exception e) {
+            logger.warn(e.getMessage());
+            return;
+        }
         labelManager.update(cam, nearNode, midNode, farNode);
         simulationState.setBodiesInView(inView);
         hud.update(currentEt, focusedBodyId, cameraHelioJ2000);
@@ -551,7 +571,12 @@ public class KepplrApp extends SimpleApplication {
             } catch (NumberFormatException ignored) {
             }
         }
-        return ColorRGBA.White;
+        return switch (typeStr) {
+            case "bodyAxisX" -> ColorRGBA.Red;
+            case "bodyAxisY" -> ColorRGBA.Green;
+            case "bodyAxisZ" -> ColorRGBA.Blue;
+            default -> ColorRGBA.White;
+        };
     }
 
     /**
@@ -572,6 +597,22 @@ public class KepplrApp extends SimpleApplication {
         } catch (Exception ignored) {
         }
         return ColorRGBA.White;
+    }
+
+    // ── Config-driven scene rebuild ────────────────────────────────────────────────────────────
+
+    /**
+     * Rebuild the body scene after a configuration reload. Must run on the JME render thread.
+     *
+     * <p>Disposes the current {@link BodySceneManager} (detaches all body nodes), re-registers the new
+     * {@code resourcesFolder()} as a FileLocator so GLB paths in the new config resolve correctly, then constructs a
+     * fresh {@link BodySceneManager} which reloads all shape models.
+     */
+    private void rebuildBodyScene() {
+        bodySceneManager.dispose();
+        assetManager.registerLocator(KEPPLRConfiguration.getInstance().resourcesFolder(), FileLocator.class);
+        bodySceneManager = new BodySceneManager(nearNode, midNode, farNode, assetManager, simulationState);
+        logger.info("Body scene rebuilt after configuration reload");
     }
 
     // ── private helpers ───────────────────────────────────────────────────────────────────────

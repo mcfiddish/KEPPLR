@@ -13,7 +13,7 @@ import picante.math.vectorspace.RotationMatrixIJK;
 /**
  * Holds the JME scene-graph node hierarchy for a single rendered body.
  *
- * <p>Scene hierarchy (created by {@link BodyNodeFactory}):
+ * <p>Scene hierarchy without a shape model (created by {@link BodyNodeFactory}):
  *
  * <pre>
  * ephemerisNode  — local translation = body's camera-relative position (km)
@@ -22,6 +22,20 @@ import picante.math.vectorspace.RotationMatrixIJK;
  * │       └── fullGeom  — textured or untextured ellipsoid
  * └── spriteGeom  — point sprite (tiny sphere, sized per frame)
  * </pre>
+ *
+ * <p>When a GLB shape model is loaded (§14.6), {@code glbModelRoot} is attached to {@code bodyFixedNode} instead of the
+ * {@code textureAlignNode → fullGeom} branch:
+ *
+ * <pre>
+ * ephemerisNode
+ * ├── bodyFixedNode
+ * │   └── glbModelRoot  — localRotation = modelToBodyFixedQuat (constant, set once at load)
+ * │       └── [loaded GLB Spatial]
+ * └── spriteGeom  — unchanged; used when apparent radius < threshold
+ * </pre>
+ *
+ * <p>For spacecraft with a GLB, {@code glbModelRoot} replaces {@code spriteGeom} as the visual geometry
+ * ({@code glbReplacesSprite == true}).
  *
  * <p>Each frame, {@link BodySceneManager} calls {@link #updatePosition}, optionally {@link #updateRotation}, and then
  * {@link #apply} to set the cull state and frustum attachment.
@@ -35,18 +49,42 @@ public class BodySceneNode {
     final Geometry fullGeom;
     final Geometry spriteGeom;
 
+    /**
+     * GLB model root node, or {@code null} when the body uses an ellipsoid / point sprite.
+     *
+     * <p>When non-null, this node is attached to {@code bodyFixedNode} and carries the constant
+     * {@code modelToBodyFixedQuat} rotation (set once at load time by {@link BodyNodeFactory}; never updated
+     * per-frame).
+     */
+    final Node glbModelRoot;
+
+    /**
+     * True when {@code glbModelRoot} replaces the point sprite (spacecraft), false when it replaces the full ellipsoid
+     * (natural body). Ignored when {@code glbModelRoot} is null.
+     */
+    final boolean glbReplacesSprite;
+
     /** NAIF integer ID of this body — used by {@link EclipseShadowManager} for ephemeris lookups. */
     final int naifId;
 
     /** Frustum layer node this body is currently attached to; null when culled. */
     private Node currentParent;
 
-    BodySceneNode(Node ephemerisNode, Node bodyFixedNode, Geometry fullGeom, Geometry spriteGeom, int naifId) {
+    BodySceneNode(
+            Node ephemerisNode,
+            Node bodyFixedNode,
+            Geometry fullGeom,
+            Geometry spriteGeom,
+            int naifId,
+            Node glbModelRoot,
+            boolean glbReplacesSprite) {
         this.ephemerisNode = ephemerisNode;
         this.bodyFixedNode = bodyFixedNode;
         this.fullGeom = fullGeom;
         this.spriteGeom = spriteGeom;
         this.naifId = naifId;
+        this.glbModelRoot = glbModelRoot;
+        this.glbReplacesSprite = glbReplacesSprite;
         this.currentParent = null;
     }
 
@@ -130,13 +168,33 @@ public class BodySceneNode {
         }
 
         if (decision == CullDecision.DRAW_FULL) {
-            fullGeom.setCullHint(Spatial.CullHint.Inherit);
+            if (glbModelRoot != null) {
+                // GLB body: show the shape model; fullGeom (ellipsoid) is on a detached
+                // textureAlignNode and is never rendered. Its CullHint is set to Inherit so
+                // EclipseShadowManager can identify this as a DRAW_FULL body and compute
+                // analytic shadow uniforms. Eclipse shadow application to GLB geometry nodes
+                // is deferred — see REDESIGN.md §9.3 near-frustum shape-model refinement stub.
+                glbModelRoot.setCullHint(Spatial.CullHint.Inherit);
+                fullGeom.setCullHint(Spatial.CullHint.Inherit);
+            } else {
+                fullGeom.setCullHint(Spatial.CullHint.Inherit);
+            }
             spriteGeom.setCullHint(Spatial.CullHint.Always);
         } else {
             // DRAW_SPRITE
-            fullGeom.setCullHint(Spatial.CullHint.Always);
-            spriteGeom.setCullHint(Spatial.CullHint.Inherit);
-            updateSpriteScale(distKm, viewportHeight, fovYDeg);
+            if (glbModelRoot != null && glbReplacesSprite) {
+                // Spacecraft with GLB: the GLB replaces the point sprite regardless of distance.
+                glbModelRoot.setCullHint(Spatial.CullHint.Inherit);
+                spriteGeom.setCullHint(Spatial.CullHint.Always);
+                fullGeom.setCullHint(Spatial.CullHint.Always);
+            } else {
+                if (glbModelRoot != null) {
+                    glbModelRoot.setCullHint(Spatial.CullHint.Always);
+                }
+                fullGeom.setCullHint(Spatial.CullHint.Always);
+                spriteGeom.setCullHint(Spatial.CullHint.Inherit);
+                updateSpriteScale(distKm, viewportHeight, fovYDeg);
+            }
         }
     }
 

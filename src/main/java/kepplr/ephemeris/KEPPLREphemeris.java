@@ -119,7 +119,6 @@ public class KEPPLREphemeris {
                 logger.warn(e.getLocalizedMessage());
             }
         }
-        stateTransformMap = Collections.unmodifiableMap(stateTransformMap);
         additionalStateTransformMap = new HashMap<>();
 
         instruments = new TreeSet<>();
@@ -154,7 +153,7 @@ public class KEPPLREphemeris {
                 FrameID frame =
                         sb.frame().isBlank() ? spiceBundle.getBodyFixedFrame(id) : spiceBundle.getFrame(sb.frame());
                 if (frame == null) logger.warn("Could not find body fixed frame for {}", id.getName());
-                else
+                else {
                     spacecraftMap.put(
                             id,
                             ImmutableSpacecraft.builder()
@@ -163,9 +162,16 @@ public class KEPPLREphemeris {
                                     .frameID(frame)
                                     .shapeModel(sb.shapeModel())
                                     .build());
+                    stateTransformMap.put(
+                            frame,
+                            spiceBundle
+                                    .getAbProvider()
+                                    .createStateTransformFunction(CelestialFrames.J2000, frame, Coverage.ALL_TIME));
+                }
             }
         });
         spacecraftMap = Collections.unmodifiableMap(spacecraftMap);
+        stateTransformMap = Collections.unmodifiableMap(stateTransformMap);
     }
 
     /**
@@ -241,8 +247,7 @@ public class KEPPLREphemeris {
      */
     public boolean hasBodyFixedFrame(int id) {
         EphemerisID body = spiceBundle.getObject(id);
-        FrameID bodyFixed = spiceBundle.getBodyFixedFrame(body);
-        return stateTransformMap.containsKey(bodyFixed);
+        return hasBodyFixedFrame(body);
     }
 
     /**
@@ -252,7 +257,8 @@ public class KEPPLREphemeris {
      * @return {@code true} if a body-fixed frame exists and a J2000-to-body-fixed transform was created
      */
     public boolean hasBodyFixedFrame(EphemerisID id) {
-        FrameID bodyFixed = spiceBundle.getBodyFixedFrame(id);
+        FrameID bodyFixed =
+                spacecraftMap.containsKey(id) ? spacecraftMap.get(id).frameID() : spiceBundle.getBodyFixedFrame(id);
         return stateTransformMap.containsKey(bodyFixed);
     }
 
@@ -288,7 +294,9 @@ public class KEPPLREphemeris {
      * @return transform from J2000 into the body's body-fixed frame, or {@code null} if no body-fixed frame is known
      */
     public StateTransformFunction getJ2000ToBodyFixed(EphemerisID body) {
-        FrameID bodyFixed = spiceBundle.getBodyFixedFrame(body);
+        FrameID bodyFixed = spacecraftMap.containsKey(body)
+                ? spacecraftMap.get(body).frameID()
+                : spiceBundle.getBodyFixedFrame(body);
         //        if (bodyFixed == null) logger.warn("Could not find body fixed frame for {}", body);
         return stateTransformMap.get(bodyFixed);
     }

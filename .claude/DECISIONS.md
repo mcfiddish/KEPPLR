@@ -670,7 +670,70 @@ would cause a compilation error since `toScript()` has no default implementation
 
 ---
 
-*Last updated: Step 20 — v0.1 feature-complete*
+## D-027: GLB shape model scale conventions
+** Status:** Accepted
+** Roadmap step:** 21
+
+** Context:** GLB shape models are sourced from different pipelines with different authoring conventions. A single scale rule would either break body models or spacecraft models.
+**Decision:** BodyBlock shape models are authored in kilometers — no scale transform is applied. SpacecraftBlock shape models are authored in meters — a uniform scale of 0.001 × SpacecraftBlock.scale() is applied at load time to convert to km. SpacecraftBlock.scale() defaults to 1.0 if not configured. These conventions are fixed; do not add runtime scale parameters or auto-detection logic.
+**Consequences:** BodyNodeFactory applies no scale to body GLBs. The spacecraft loading path applies the scale to glbModelRoot at construction time and never updates it per-frame.
+
+---
+
+## D-028: Spacecraft GLB materials are used as-is
+** Status:** Accepted
+** Roadmap step:** 21
+
+** Context:** Natural bodies go through KEPPLR's material pipeline (equirectangular texture mapping, textureAlignNode, center-longitude adjustment, PCK-driven orientation). Spacecraft models have their own PBR materials, colors, and textures embedded in the GLB, authored by the model creator.
+** Decision:** Spacecraft GLBs use their embedded PBR materials without override. KEPPLR applies only the standard SamplerPreset.QUALITY_DEFAULT (Trilinear min, Bilinear mag, anisotropy 8) for texture quality. Spacecraft are lit by the scene sun DirectionalLight in the same way as natural bodies. KEPPLR's body material pipeline (equirectangular mapping, texture alignment, center-longitude) is never applied to spacecraft.
+** Alternatives considered:** Applying KEPPLR's material pipeline to spacecraft — rejected because spacecraft models do not have equirectangular surface textures and their geometry is not a sphere.
+** Consequences:** BodyNodeFactory (or equivalent) must not apply body material setup to spacecraft nodes. Any future spacecraft material override must be added explicitly and documented here.
+
+---
+
+## D-029: Spacecraft FK frame unified with PCK body-fixed frames throughout the rendering and camera stack
+**Status:** Accepted
+**Roadmap step:** 21 (post-completion refinement)
+
+**Context:** After step 21, spacecraft have FK frames registered in `KEPPLREphemeris.stateTransformMap` (e.g. `NH_SPACECRAFT`). Two bugs resulted: (1) `BodySceneManager` never called `bsn.updateRotation()` for spacecraft — the GLB model never rotated. (2) `BodyFixedFrame` (camera co-rotation in BODY_FIXED mode) fell back to INERTIAL for spacecraft because `hasBodyFixedFrame()` only checked PCK body-fixed frames, not spacecraft FK frames.
+
+**Decision:** `KEPPLREphemeris.hasBodyFixedFrame(EphemerisID)` and `getJ2000ToBodyFixed(EphemerisID)` now prefer `Spacecraft.frameID()` for bodies present in `spacecraftMap`, falling through to `spiceBundle.getBodyFixedFrame()` for natural bodies. Spacecraft FK frames are added to `stateTransformMap` at `KEPPLREphemeris` construction time alongside PCK frames, so the existing `stateTransformMap` lookup returns the correct transform for both. `BodySceneManager` now calls `bsn.updateRotation(rotation)` for spacecraft every frame alongside the position update.
+
+**Alternatives considered:** A separate per-frame rotation code path for spacecraft — rejected because it would duplicate the logic already in the natural-body pass and add unnecessary branching.
+
+**Consequences:** `hasBodyFixedFrame(-98)` now returns `true` for spacecraft with configured FK frames. `VectorTypesTest.returnsNullForNoOrientation` was updated to use NAIF -999 (present in no kernel and not configured as a spacecraft) as the no-frame test case, since NAIF -98 now legitimately has a frame.
+
+---
+
+## D-030: Spacecraft camera proximity scales with SpacecraftBlock.scale()
+**Status:** Accepted
+**Roadmap step:** 21 (post-completion refinement)
+
+**Context:** `TransitionController.getBodyMinDist()` and `startGoToNow()` used `BODY_DEFAULT_RADIUS_KM = 1.0 km` as the fallback effective radius for any body with a null PCK shape. This gave spacecraft a minimum zoom distance of 1.1 km and a `goTo` arrival distance of ~6 km — far too large to see a meter-scale model.
+
+**Decision:** For bodies with null shape, check for a `SpacecraftBlock`. If present, use `block.scale() × 0.001 km` as the effective radius (matching the GLB scale convention: meters × 0.001 = km). `BODY_DEFAULT_RADIUS_KM = 1.0` is retained as the fallback when no `SpacecraftBlock` exists, and as the radius used by `VectorRenderer` for arrow scaling on shape-less bodies. `CAMERA_ZOOM_FALLBACK_MIN_KM = 100.0` is reserved for the case where the body's `EphemerisID` cannot be resolved at all. The goTo formula — `endDist = effectiveRadius / tan(apparentRadiusDeg)` — and the `1.1× radius` minimum zoom rule both use this effective radius, producing visually consistent results for spacecraft at the same default `apparentRadiusDeg` (10°) used for natural bodies.
+
+**Alternatives considered:** A separate `SpacecraftBlock.viewRadius` config field — rejected as redundant with the existing scale convention. Computing the GLB bounding box at load time — considered but rejected; the scale proxy is sufficient and avoids coupling the scene graph to the camera system.
+
+**Consequences:** Minimum zoom and goTo arrival distance for spacecraft scale with `SpacecraftBlock.scale()`. A spacecraft with `scale = 1.0` has a minimum zoom of ~1.1 m and a goTo arrival of ~5.7 m from the model.
+
+---
+
+## D-031: Shape models hot-reloaded when a new configuration file is loaded
+**Status:** Accepted
+**Roadmap step:** 21 (post-completion refinement)
+
+**Context:** `BodySceneManager` was constructed once in `simpleInitApp()`. Loading a new configuration via File → Load Configuration updated `KEPPLRConfiguration` but left the JME scene graph with geometry built from the old configuration. Shape models from the new config were never loaded.
+
+**Decision:** `BodySceneManager.dispose()` detaches all managed body nodes from the frustum layer roots, calls `SaturnRingManager.detach()`, and clears internal maps. `KepplrApp.rebuildBodyScene()` (JME render thread) calls `dispose()`, re-registers the new `resourcesFolder()` as a `FileLocator`, and constructs a fresh `BodySceneManager`. `KepplrStatusWindow` calls a `configReloadCallback` (set by `KepplrApp` in `simpleInitApp()`) after a successful `KEPPLRConfiguration.reload()`. The callback enqueues `rebuildBodyScene()` via `KepplrApp.enqueue()`, ensuring the rebuild runs on the JME thread (CLAUDE.md Rule 4). `TrailManager` and `VectorManager` are not rebuilt — they hold no shape-model geometry and update naturally on the next frame.
+
+**Alternatives considered:** Polling `KEPPLRConfiguration` for changes from `simpleUpdate()` — rejected as polling-based and unnecessarily coupling the render loop to config state. A `SimulationCommands.reloadConfig()` method — rejected because `BodySceneManager` is a render concern, not a simulation concern; the direct `enqueue()` callback is the established pattern already used for window resize.
+
+**Consequences:** The `configReloadCallback` is a `Runnable` on `KepplrStatusWindow`, following the same pattern as `jmeResizeCallback`. Any class that needs rebuild on config change must register its own callback or be covered by `rebuildBodyScene()`.
+
+---
+
+*Last updated: Step 21 (post-completion refinements)*
 *Backfill note: Entries D-001 through D-009 were reconstructed retrospectively.
 D-010 onwards recorded in real time.*
 

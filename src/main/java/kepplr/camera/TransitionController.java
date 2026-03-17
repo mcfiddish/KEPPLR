@@ -5,6 +5,7 @@ import com.jme3.math.Vector3f;
 import com.jme3.renderer.Camera;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import kepplr.config.KEPPLRConfiguration;
+import kepplr.config.SpacecraftBlock;
 import kepplr.ephemeris.KEPPLREphemeris;
 import kepplr.state.DefaultSimulationState;
 import kepplr.util.KepplrConstants;
@@ -663,11 +664,14 @@ public final class TransitionController {
             return;
         }
         Ellipsoid shape = eph.getShape(id);
-        if (shape == null) {
-            logger.warn("GO_TO: no shape data for NAIF {}; skipping transition", r.naifId());
-            return;
+        double meanRadius;
+        if (shape != null) {
+            meanRadius = (shape.getA() + shape.getB() + shape.getC()) / 3.0;
+        } else {
+            // Spacecraft: derive effective radius from SpacecraftBlock.scale() (GLB in meters → km).
+            SpacecraftBlock block = KEPPLRConfiguration.getInstance().spacecraftBlock(r.naifId());
+            meanRadius = block != null ? block.scale() * 0.001 : KepplrConstants.BODY_DEFAULT_RADIUS_KM;
         }
-        double meanRadius = (shape.getA() + shape.getB() + shape.getC()) / 3.0;
         // endDistance = bodyRadius / tan(apparentRadiusDeg) (REDESIGN.md §4.5)
         double endDistKm = meanRadius / Math.tan(Math.toRadians(r.apparentRadiusDeg()));
 
@@ -716,14 +720,20 @@ public final class TransitionController {
     private double getBodyMinDist(int focusId) {
         KEPPLREphemeris eph = KEPPLRConfiguration.getInstance().getEphemeris();
         EphemerisID id = eph.getSpiceBundle().getObject(focusId);
-        if (id != null) {
-            Ellipsoid shape = eph.getShape(id);
-            if (shape != null) {
-                double meanRadius = (shape.getA() + shape.getB() + shape.getC()) / 3.0;
-                return meanRadius * KepplrConstants.CAMERA_ZOOM_BODY_RADIUS_FACTOR;
-            }
+        if (id == null) {
+            return KepplrConstants.CAMERA_ZOOM_FALLBACK_MIN_KM;
         }
-        return KepplrConstants.CAMERA_ZOOM_FALLBACK_MIN_KM;
+        Ellipsoid shape = eph.getShape(id);
+        double meanRadius;
+        if (shape != null) {
+            meanRadius = (shape.getA() + shape.getB() + shape.getC()) / 3.0;
+        } else {
+            // Spacecraft or shape-less body: derive effective radius from SpacecraftBlock.scale()
+            // (GLB is in meters; 0.001 converts to km). Falls back to BODY_DEFAULT_RADIUS_KM.
+            SpacecraftBlock block = KEPPLRConfiguration.getInstance().spacecraftBlock(focusId);
+            meanRadius = block != null ? block.scale() * 0.001 : KepplrConstants.BODY_DEFAULT_RADIUS_KM;
+        }
+        return meanRadius * KepplrConstants.CAMERA_ZOOM_BODY_RADIUS_FACTOR;
     }
 
     /** Apply a distance change along the camera-to-focus direction. If currentDist is -1, it is recomputed. */

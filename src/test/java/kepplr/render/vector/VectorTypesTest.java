@@ -273,8 +273,9 @@ class VectorTypesTest {
         @Test
         @DisplayName("bodyAxisX returns null for a body with no orientation data")
         void returnsNullForNoOrientation() {
-            // New Horizons (-98) has no PCK body-fixed frame in the test kernels.
-            VectorIJK dir = VectorTypes.bodyAxisX().computeDirection(-98, et);
+            // NAIF -999 is not in any kernel and not configured as a spacecraft,
+            // so hasBodyFixedFrame returns false and bodyAxisX returns null.
+            VectorIJK dir = VectorTypes.bodyAxisX().computeDirection(-999, et);
             assertNull(dir, "bodyAxisX must return null when no body-fixed frame is available");
         }
     }

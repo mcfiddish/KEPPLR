@@ -48,9 +48,11 @@ See D-026.
 
 **The synodic frame "other body" is the currently targeted body.** No separate command or property is needed for this. If no targeted body exists, fall back to the inertial frame and log a warning.
 
-**Spacecraft are always rendered as point sprites for now.** Shape model rendering for spacecraft is explicitly deferred. Do not implement it before the deferred shape model step.
+**GLB shape models replace ellipsoids and sprites for configured bodies (Step 21).** Bodies with a `BodyBlock.shapeModel()` path use a GLB attached to `bodyFixedNode`; the ellipsoid is retained as a detached `EclipseShadowManager` proxy (never rendered). Spacecraft with `SpacecraftBlock.shapeModel()` replace the point sprite with a GLB scaled by `0.001 × SpacecraftBlock.scale()`. Fallback to ellipsoid/sprite on load failure. See D-027, D-028.
 
-**Ellipsoids only for body geometry.** `KEPPLREphemeris.getShape()` always returns an ellipsoid. Shape model rendering for irregular bodies is deferred. Do not use shape models before the deferred step.
+**Spacecraft FK frames are unified with PCK body-fixed frames.** `hasBodyFixedFrame()` and `getJ2000ToBodyFixed()` both return results for spacecraft (via their configured FK frame from `NH_SPACECRAFT` or equivalent), not just for natural bodies with PCK data. `BodySceneManager` calls `updateRotation()` for spacecraft every frame. See D-029.
+
+**Spacecraft camera proximity scales with SpacecraftBlock.scale().** Minimum zoom distance and `goTo` arrival distance use `scale × 0.001 km` as the effective radius rather than a fixed 1 km fallback. See D-030.
 
 **Orbit drag is camera-relative.** Right drag orbits around the camera's current screen-right and screen-up vectors, not fixed world axes. This must not be changed to world-axis orbit without explicit discussion.
 
@@ -428,6 +430,40 @@ can serialize `setVectorVisible` calls correctly (see D-026).
 
 ---
 
+### 21. GLB Shape Model Rendering
+    This step replaces ellipsoid and point sprite geometry with GLB shape models
+    for bodies and spacecraft that have them configured, while leaving all existing
+    rendering paths intact for bodies without models.
+    What this step delivers:
+
+- GLTFUtils ported from the prototype — reads the
+modelToBodyFixedQuat quaternion from GLB JSON extras with no
+third-party JSON library
+- resourcesFolder() registered as a JME FileLocator at startup so
+shape model paths from BodyBlock and SpacecraftBlock resolve correctly
+- BodyNodeFactory updated to load a GLB and attach it as glbModelRoot
+under bodyFixedNode when BodyBlock.shapeModel() is non-null; KEPPLR's
+body material pipeline (equirectangular mapping, texture alignment,
+center-longitude) applies as before
+- Spacecraft GLBs loaded similarly under their scene node; GLB-embedded PBR
+materials and textures are used as-is and lit by the scene sun light;
+uniform scale of 0.001 × SpacecraftBlock.scale() converts meters to km
+- Graceful fallback to ellipsoid (bodies) or point sprite (spacecraft) on
+null path, missing file, or load failure — WARN log, no crash
+
+** Frame semantics **: modelToBodyFixedQuat is applied once at load time as
+glbModelRoot's local rotation, composing with bodyFixedNode's
+time-varying SPICE frame rotation. It is never updated per-frame.
+**Out of scope for this step:** LOD; shadow refinement using shape model geometry (§9.3).
+
+**Post-completion refinements (same branch):**
+- Spacecraft FK frame registered in `stateTransformMap`; `hasBodyFixedFrame()` / `getJ2000ToBodyFixed()` unified to cover both PCK and FK frames; `BodySceneManager` calls `updateRotation()` for spacecraft each frame (D-029)
+- Camera min-zoom and `goTo` arrival distance scale with `SpacecraftBlock.scale() × 0.001` rather than a fixed 1 km fallback (D-030)
+- `BodySceneManager.dispose()` + `KepplrApp.rebuildBodyScene()` + `KepplrStatusWindow.configReloadCallback` enable shape model hot-reload when a new config file is loaded (D-031)
+- `VectorRenderer` and `TransitionController` fall back to `BODY_DEFAULT_RADIUS_KM` for shape-less bodies instead of skipping them entirely
+
+---
+
 ## Remaining Steps
 
 All planned v0.1 steps are complete. Remaining work consists of deferred items
@@ -451,7 +487,6 @@ management constraint. Behavior on Linux (X11) is untested and may differ.
 - Camera navigation inertia and damping (§14.2)
 - Full camera control bindings spec (§14.2)
 - Object search and autocomplete UI (§14.3)
-- Shape model rendering for irregular bodies (§14.6)
 - Determinism and reproducible replay (§14.1)
 - Performance acceptance criteria and LOD rules (§14.7)
 - Gaia star catalog (requires user-downloaded files)
