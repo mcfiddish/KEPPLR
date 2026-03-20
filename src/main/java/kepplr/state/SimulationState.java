@@ -189,4 +189,11 @@ public interface SimulationState {
      * @param type the vector type
      */
     ReadOnlyBooleanProperty vectorVisibleProperty(int naifId, VectorType type);
+
+    /**
+     * Whether the instrument frustum overlay is visible for the given instrument NAIF code (Step 22).
+     *
+     * @param naifCode NAIF code of the instrument (e.g. −98300 for NH_LORRI)
+     */
+    ReadOnlyBooleanProperty frustumVisibleProperty(int naifCode);
 }

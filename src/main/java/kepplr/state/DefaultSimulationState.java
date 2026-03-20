@@ -79,6 +79,7 @@ public final class DefaultSimulationState implements SimulationState {
     private final ConcurrentHashMap<Integer, SimpleBooleanProperty> trailVisibility = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<Integer, SimpleDoubleProperty> trailDuration = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<VectorKey, SimpleBooleanProperty> vectorVisibility = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<Integer, SimpleBooleanProperty> frustumVisibility = new ConcurrentHashMap<>();
 
     /** Composite key for per-body per-type vector visibility. */
     public record VectorKey(int naifId, VectorType type) {
@@ -391,5 +392,21 @@ public final class DefaultSimulationState implements SimulationState {
     /** Returns the vector visibility map. */
     public ConcurrentHashMap<VectorKey, SimpleBooleanProperty> getVectorVisibilityMap() {
         return vectorVisibility;
+    }
+
+    @Override
+    public ReadOnlyBooleanProperty frustumVisibleProperty(int naifCode) {
+        return frustumVisibility.computeIfAbsent(naifCode, id -> new SimpleBooleanProperty(false));
+    }
+
+    public void setFrustumVisible(int naifCode, boolean visible) {
+        frustumVisibility
+                .computeIfAbsent(naifCode, id -> new SimpleBooleanProperty(false))
+                .set(visible);
+    }
+
+    /** Returns the frustum visibility map. Package-private for render-loop and bridge access. */
+    public ConcurrentHashMap<Integer, SimpleBooleanProperty> getFrustumVisibilityMap() {
+        return frustumVisibility;
     }
 }

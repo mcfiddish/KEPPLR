@@ -654,4 +654,14 @@ public final class KepplrConstants {
      * merged into a single recorded command.
      */
     public static final long RECORDER_COALESCE_WINDOW_MS = 250L;
+
+    // ── Instrument frustum overlays (Step 22) ──────────────────────────────────────────────────
+
+    /**
+     * Default extent in km from the frustum apex to its base plane.
+     *
+     * <p>Each base vertex is placed at {@code apex + normalize(boundVectorJ2000) × INSTRUMENT_FRUSTUM_DEFAULT_EXTENT_KM}.
+     * Body-intersection shortening is out of scope and will be a later refinement.
+     */
+    public static final double INSTRUMENT_FRUSTUM_DEFAULT_EXTENT_KM = 100_000.0;
 }

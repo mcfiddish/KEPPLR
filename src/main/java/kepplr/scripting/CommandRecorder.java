@@ -474,4 +474,18 @@ public final class CommandRecorder implements SimulationCommands {
         recordCommand("kepplr.cancelTransition()");
         delegate.cancelTransition();
     }
+
+    // ── Instrument frustum overlays (Step 22) ──
+
+    @Override
+    public void setFrustumVisible(int instrumentNaifCode, boolean visible) {
+        recordCommand("kepplr.setFrustumVisible(" + instrumentNaifCode + ", " + fmtBool(visible) + ")");
+        delegate.setFrustumVisible(instrumentNaifCode, visible);
+    }
+
+    @Override
+    public void setFrustumVisible(String instrumentName, boolean visible) {
+        recordCommand("kepplr.setFrustumVisible(\"" + instrumentName + "\", " + fmtBool(visible) + ")");
+        delegate.setFrustumVisible(instrumentName, visible);
+    }
 }

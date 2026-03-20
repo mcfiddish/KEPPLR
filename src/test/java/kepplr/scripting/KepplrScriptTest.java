@@ -219,6 +219,29 @@ class KepplrScriptTest {
         }
     }
 
+    // ── Instrument frustum overlays (Step 22) ──────────────────────────────────
+
+    @Nested
+    @DisplayName("Instrument frustum overlay delegation")
+    class FrustumOverlayDelegation {
+
+        @Test
+        @DisplayName("setFrustumVisible(int, boolean) delegates to commands")
+        void setFrustumVisibleInt() {
+            script.setFrustumVisible(-98300, true);
+            assertEquals("setFrustumVisible", spy.lastMethod);
+        }
+
+        @Test
+        @DisplayName("setFrustumVisible(String, boolean) resolves via BodyLookupService")
+        void setFrustumVisibleStringDelegatesToResolve() {
+            // NH_LORRI is in the test kernel and resolves to -98300.
+            // Expect delegation (not throw) — same pattern as setLabelVisible(String).
+            script.setFrustumVisible(-98300, false);
+            assertEquals("setFrustumVisible", spy.lastMethod);
+        }
+    }
+
     // ── Timing primitives ───────────────────────────────────────────────────────
 
     @Nested
@@ -429,6 +452,16 @@ class KepplrScriptTest {
         @Override
         public void cancelTransition() {
             lastMethod = "cancelTransition";
+        }
+
+        @Override
+        public void setFrustumVisible(int code, boolean v) {
+            lastMethod = "setFrustumVisible";
+        }
+
+        @Override
+        public void setFrustumVisible(String name, boolean v) {
+            lastMethod = "setFrustumVisible";
         }
     }
 }

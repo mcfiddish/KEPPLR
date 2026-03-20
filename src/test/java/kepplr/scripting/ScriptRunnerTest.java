@@ -226,5 +226,11 @@ class ScriptRunnerTest {
         public void cancelTransition() {
             cancelTransitionCalled = true;
         }
+
+        @Override
+        public void setFrustumVisible(int code, boolean v) {}
+
+        @Override
+        public void setFrustumVisible(String name, boolean v) {}
     }
 }

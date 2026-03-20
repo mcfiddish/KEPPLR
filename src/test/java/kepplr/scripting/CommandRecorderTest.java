@@ -305,6 +305,35 @@ class CommandRecorderTest {
         }
     }
 
+    // ── Frustum overlay serialization (Step 22) ────────────────────────────────
+
+    @Nested
+    @DisplayName("Frustum overlay serialization")
+    class FrustumOverlaySerialization {
+
+        @Test
+        @DisplayName("setFrustumVisible(int, true) serializes with NAIF code")
+        void setFrustumVisibleIntSerialized() {
+            recorder.startRecording();
+            recorder.setFrustumVisible(-98300, true);
+            recorder.stopRecording();
+            String script = recorder.getScript();
+            assertTrue(script.contains("setFrustumVisible(-98300, true)"),
+                    "Expected setFrustumVisible(-98300, true) in: " + script);
+        }
+
+        @Test
+        @DisplayName("setFrustumVisible(String, false) serializes with quoted name")
+        void setFrustumVisibleNameSerialized() {
+            recorder.startRecording();
+            recorder.setFrustumVisible("NH_LORRI", false);
+            recorder.stopRecording();
+            String script = recorder.getScript();
+            assertTrue(script.contains("setFrustumVisible(\"NH_LORRI\", false)"),
+                    "Expected setFrustumVisible(\"NH_LORRI\", false) in: " + script);
+        }
+    }
+
     // ── No-op delegate ──────────────────────────────────────────────────────────
 
     static class NoOpCommands implements SimulationCommands {
@@ -452,6 +481,16 @@ class CommandRecorderTest {
         @Override
         public void cancelTransition() {
             lastMethod = "cancelTransition";
+        }
+
+        @Override
+        public void setFrustumVisible(int code, boolean v) {
+            lastMethod = "setFrustumVisible";
+        }
+
+        @Override
+        public void setFrustumVisible(String name, boolean v) {
+            lastMethod = "setFrustumVisible";
         }
     }
 }

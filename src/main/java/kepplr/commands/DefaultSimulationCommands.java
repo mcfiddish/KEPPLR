@@ -3,6 +3,7 @@ package kepplr.commands;
 import kepplr.camera.CameraFrame;
 import kepplr.camera.TransitionController;
 import kepplr.core.SimulationClock;
+import kepplr.ephemeris.BodyLookupService;
 import kepplr.render.RenderQuality;
 import kepplr.render.vector.VectorType;
 import kepplr.state.DefaultSimulationState;
@@ -237,5 +238,17 @@ public final class DefaultSimulationCommands implements SimulationCommands {
     @Override
     public void cancelTransition() {
         transitionController.requestCancel();
+    }
+
+    // ── Instrument frustum overlays (Step 22) ──
+
+    @Override
+    public void setFrustumVisible(int instrumentNaifCode, boolean visible) {
+        state.setFrustumVisible(instrumentNaifCode, visible);
+    }
+
+    @Override
+    public void setFrustumVisible(String instrumentName, boolean visible) {
+        setFrustumVisible(BodyLookupService.resolve(instrumentName), visible);
     }
 }

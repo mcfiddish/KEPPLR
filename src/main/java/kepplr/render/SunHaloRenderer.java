@@ -188,6 +188,15 @@ class SunHaloRenderer {
         haloNode.setCullHint(Spatial.CullHint.Inherit); // re-enable JME frustum culling
     }
 
+    /** Remove halo from the scene graph. Call before discarding this renderer. */
+    void dispose() {
+        if (currentLayerNode != null) {
+            currentLayerNode.detachChild(haloNode);
+            currentLayerNode = null;
+        }
+        haloTimeSec = 0f;
+    }
+
     // ── package-private for tests ──────────────────────────────────────────────────────────────
 
     /**

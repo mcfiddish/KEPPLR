@@ -325,6 +325,28 @@ public interface SimulationCommands {
      */
     void setVectorVisible(int naifId, VectorType type, boolean visible);
 
+    // ── Instrument frustum overlays (Step 22) ──
+
+    /**
+     * Toggle instrument frustum overlay visibility by NAIF code.
+     *
+     * @param instrumentNaifCode NAIF code of the instrument (e.g. −98300 for NH_LORRI)
+     * @param visible {@code true} to show, {@code false} to hide
+     */
+    void setFrustumVisible(int instrumentNaifCode, boolean visible);
+
+    /**
+     * Toggle instrument frustum overlay visibility by instrument name.
+     *
+     * <p>The name is resolved via {@link kepplr.ephemeris.BodyLookupService} (SPICE kernel pool lookup,
+     * case-insensitive).
+     *
+     * @param instrumentName instrument name as registered in the kernel pool (e.g. {@code "NH_LORRI"})
+     * @param visible {@code true} to show, {@code false} to hide
+     * @throws IllegalArgumentException if the name cannot be resolved
+     */
+    void setFrustumVisible(String instrumentName, boolean visible);
+
     // ── Transition control (Step 20) ──
 
     /**
