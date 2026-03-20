@@ -474,7 +474,7 @@ entirely in the rendering layer — not in `SimulationCommands` or `ui/`.
 
 **Alternatives considered:** Distance-based thresholds — rejected because the
 relevant perceptual quality is screen separation, not physical distance.
-Per-body priority rules — deferred as a future refinement (§14.5).
+Per-body priority rules — deferred as a future refinement (§16.5).
 
 **Consequences:** The render layer must project all visible bodies to screen
 space each frame before evaluating decluttering. This is already done for
@@ -729,11 +729,39 @@ would cause a compilation error since `toScript()` has no default implementation
 
 **Alternatives considered:** Polling `KEPPLRConfiguration` for changes from `simpleUpdate()` — rejected as polling-based and unnecessarily coupling the render loop to config state. A `SimulationCommands.reloadConfig()` method — rejected because `BodySceneManager` is a render concern, not a simulation concern; the direct `enqueue()` callback is the established pattern already used for window resize.
 
-**Consequences:** The `configReloadCallback` is a `Runnable` on `KepplrStatusWindow`, following the same pattern as `jmeResizeCallback`. Any class that needs rebuild on config change must register its own callback or be covered by `rebuildBodyScene()`.
+**Consequences:** The `configReloadCallback` is a `Runnable` on `KepplrStatusWindow`, following the same pattern as `jmeResizeCallback`. Originally `rebuildBodyScene()` rebuilt only `BodySceneManager`; Step 22 expanded this to a full render manager restart — see D-032.
 
 ---
 
-*Last updated: Step 21 (post-completion refinements)*
+## D-032: Config reload is a full render manager restart
+**Status:** Accepted
+**Roadmap step:** 22
+
+**Context:** D-031 introduced `rebuildBodyScene()` to rebuild `BodySceneManager` on config reload, but left `TrailManager`, `SunHaloRenderer`, `LabelManager`, `VectorManager`, and `StarFieldManager` alive with state from the old configuration. This was adequate when only shape models needed reloading, but Step 22 added `InstrumentFrustumManager` which reads IK kernels — also needing a full rebuild. The principle generalises: any render manager that reads from `KEPPLREphemeris` or `KEPPLRConfiguration` must be rebuilt when the configuration changes.
+
+**Decision:** A config reload rebuilds all render managers. Managers with persistent scene-graph state (`TrailManager`, `SunHaloRenderer`, `LabelManager`) gained `dispose()` methods that remove their geometry from the scene graph and clear internal maps. `VectorManager` and `StarFieldManager` require no separate dispose step because they detach all geometry on every `simpleUpdate()` call; they are simply reconstructed with the same constructor arguments. `activeTrailIds` and `activeVectorDefs` in `KepplrApp` are cleared so the sync methods rebuild them from the current `SimulationState` on the next frame.
+
+**Alternatives considered:** Selective rebuilds per manager type — rejected because the set of managers requiring rebuilds will grow and selective logic is fragile. Having each manager observe `KEPPLRConfiguration` reload events directly — rejected as coupling render concerns to the configuration lifecycle without a clear protocol.
+
+**Consequences:** Any new render manager added in the future must either (a) have a `dispose()` method and be included in `rebuildBodyScene()`, or (b) be stateless per-frame (detach all geometry each update) and simply be reconstructed. This is the established pattern.
+
+---
+
+## D-033: CIRCLE/ELLIPSE FOV shapes approximated as n-gon polygons
+**Status:** Accepted
+**Roadmap step:** 22
+
+**Context:** SPICE IK kernels define instrument FOVs as CIRCLE (1 bound vector), ELLIPSE (2 bound vectors), RECTANGLE (4), or POLYGON (3+). The frustum pyramid renderer allocates a `FloatBuffer` sized as `3×(2n−2)` vertices, which evaluates to 0 for n=1 and 6 for n=2 — both insufficient for the side-face loop that writes `n×9` floats. NH_REX, which has a 0.3° CIRCLE FOV, triggered a `BufferOverflowException` at render time.
+
+**Decision:** `InstrumentFrustumManager.approximateBounds(FOVSpice)` converts CIRCLE and ELLIPSE FOVs to synthetic polygon bound lists before mesh allocation. CIRCLE: the single bound vector is rotated around the normalized boresight axis in `INSTRUMENT_FRUSTUM_CIRCLE_APPROX_SIDES = 32` equal steps using Rodrigues' rotation formula. ELLIPSE: 32 points are computed as `cos(t)·a + sin(t)·b` for the two semi-axis bound vectors. RECTANGLE and POLYGON pass through unchanged. The effective bounds are computed once at load time and stored in `FrustumEntry.effectiveBounds`; `updateMesh()` uses `effectiveBounds` rather than calling `fovSpice.getBounds()` each frame.
+
+**Alternatives considered:** Skipping instruments with fewer than 3 bounds — rejected because a 0.3° circular FOV is meaningful and worth rendering. A separate rendering path for circular cones — rejected as additional complexity for no visual benefit at 32 sides. 16 sides — considered; 32 chosen as a better visual approximation at negligible extra cost.
+
+**Consequences:** `INSTRUMENT_FRUSTUM_CIRCLE_APPROX_SIDES = 32` defined in `KepplrConstants`. All four SPICE FOV shape types are renderable. The degenerate fallback (boresight length < 1e-10) returns raw bounds and logs a warning; such instruments are skipped by the `getBounds().isEmpty()` check in `buildEntries()`.
+
+---
+
+*Last updated: Step 22 (instrument frustum overlays)*
 *Backfill note: Entries D-001 through D-009 were reconstructed retrospectively.
 D-010 onwards recorded in real time.*
 

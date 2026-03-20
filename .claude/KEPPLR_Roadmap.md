@@ -464,10 +464,40 @@ time-varying SPICE frame rotation. It is never updated per-frame.
 
 ---
 
+### 22. Instrument Frustum Overlays
+
+Translucent frustum pyramid overlays for instrument fields of view, loaded from IK
+kernels via `KEPPLREphemeris.getInstruments()`.
+
+- `InstrumentFrustumManager` builds one pyramid mesh per instrument at load time,
+  recomputes vertex positions in-place each frame via `FloatBuffer` mutation, and
+  assigns the geometry to the correct frustum layer based on the spacecraft apex
+  distance — matching the `VectorRenderer` pattern (apex distance, not apex + extent).
+- CIRCLE FOVs (1 bound vector) and ELLIPSE FOVs (2 bound vectors) are approximated
+  as `INSTRUMENT_FRUSTUM_CIRCLE_APPROX_SIDES = 32`-sided polygons: CIRCLE via
+  Rodrigues' rotation of the bound vector around the boresight axis; ELLIPSE via
+  `cos(t)·a + sin(t)·b` parameterization. RECTANGLE and POLYGON FOVs use SPICE
+  bound vectors directly. Effective bounds are computed once at load time and stored
+  in `FrustumEntry.effectiveBounds` (see D-033).
+- `SimulationCommands.setFrustumVisible(int naifCode, boolean)` and
+  `setFrustumVisible(String name, boolean)` added. Visibility state held in
+  `DefaultSimulationState` via a per-instrument `ConcurrentHashMap`. `KepplrApp.syncFrustums()`
+  propagates state → manager each frame (idempotent on repeated same-value calls).
+- `InstrumentFrustumManager.reload()` called from `rebuildBodyScene()` — entries
+  are rebuilt when a new configuration is loaded.
+- `rebuildBodyScene()` expanded to a full render manager restart: `TrailManager`,
+  `SunHaloRenderer`, and `LabelManager` each gained `dispose()` methods; all
+  managers are torn down and reconstructed on every config reload (see D-032).
+
+**Out of scope for this step:** boresight line rendering; frustum shortening when the
+boresight intersects a body surface; per-instrument color configuration (hardcoded
+cyan); distance culling of frustums.
+
+---
+
 ## Remaining Steps
 
-All planned v0.1 steps are complete. Remaining work consists of deferred items
-listed below.
+All planned steps are complete. Remaining work consists of deferred items listed below.
 
 ---
 
@@ -484,11 +514,13 @@ management constraint. Behavior on Linux (X11) is untested and may differ.
 ## Deferred / Out of Scope for v0.1
 
 - Camera transition acceleration/deceleration (linear interpolation used initially)
-- Camera navigation inertia and damping (§14.2)
-- Full camera control bindings spec (§14.2)
-- Object search and autocomplete UI (§14.3)
-- Determinism and reproducible replay (§14.1)
-- Performance acceptance criteria and LOD rules (§14.7)
+- Camera navigation inertia and damping (§16.2)
+- Full camera control bindings spec (§16.2)
+- Object search and autocomplete UI (§16.3)
+- Determinism and reproducible replay (§16.1)
+- Performance acceptance criteria and LOD rules (§16.7)
 - Gaia star catalog (requires user-downloaded files)
 - Native Wayland support (Linux runs under XWayland)
-- Instrument overlays (Frustum, Boresight) — UI scaffolded in prototype, implementation deferred
+- Instrument boresight line rendering (frustum overlays implemented in Step 22; boresight as a separate line is deferred)
+- Frustum shortening when boresight intersects a body surface
+- Per-instrument frustum color configuration (hardcoded cyan for now)
