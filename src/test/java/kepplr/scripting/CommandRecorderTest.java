@@ -318,7 +318,8 @@ class CommandRecorderTest {
             recorder.setFrustumVisible(-98300, true);
             recorder.stopRecording();
             String script = recorder.getScript();
-            assertTrue(script.contains("setFrustumVisible(-98300, true)"),
+            assertTrue(
+                    script.contains("setFrustumVisible(-98300, true)"),
                     "Expected setFrustumVisible(-98300, true) in: " + script);
         }
 
@@ -329,7 +330,8 @@ class CommandRecorderTest {
             recorder.setFrustumVisible("NH_LORRI", false);
             recorder.stopRecording();
             String script = recorder.getScript();
-            assertTrue(script.contains("setFrustumVisible(\"NH_LORRI\", false)"),
+            assertTrue(
+                    script.contains("setFrustumVisible(\"NH_LORRI\", false)"),
                     "Expected setFrustumVisible(\"NH_LORRI\", false) in: " + script);
         }
     }

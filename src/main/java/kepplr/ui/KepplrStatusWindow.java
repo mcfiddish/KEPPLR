@@ -43,10 +43,10 @@ import kepplr.camera.CameraFrame;
 import kepplr.commands.SimulationCommands;
 import kepplr.config.KEPPLRConfiguration;
 import kepplr.ephemeris.BodyLookupService;
+import kepplr.ephemeris.Instrument;
 import kepplr.ephemeris.KEPPLREphemeris;
 import kepplr.ephemeris.spice.SpiceBundle;
 import kepplr.render.vector.VectorTypes;
-import kepplr.ephemeris.Instrument;
 import kepplr.scripting.CommandRecorder;
 import kepplr.scripting.ScriptRunner;
 import kepplr.util.KepplrConstants;
@@ -442,8 +442,8 @@ public final class KepplrStatusWindow {
     /**
      * Rebuild the Instruments menu from the current ephemeris after a configuration reload.
      *
-     * <p>Also tells the bridge to rebuild its per-instrument FX property map so that CheckMenuItem
-     * checked-state bindings remain live for the new instrument set.
+     * <p>Also tells the bridge to rebuild its per-instrument FX property map so that CheckMenuItem checked-state
+     * bindings remain live for the new instrument set.
      *
      * <p>Must be called on the JavaFX application thread.
      */
@@ -454,7 +454,8 @@ public final class KepplrStatusWindow {
 
         List<Instrument> instruments;
         try {
-            instruments = new ArrayList<>(KEPPLRConfiguration.getInstance().getEphemeris().getInstruments());
+            instruments = new ArrayList<>(
+                    KEPPLRConfiguration.getInstance().getEphemeris().getInstruments());
             instruments.sort(Comparator.comparing(i -> i.id().getName()));
         } catch (Exception e) {
             instruments = List.of();
@@ -752,7 +753,8 @@ public final class KepplrStatusWindow {
 
         List<Instrument> instruments;
         try {
-            instruments = new ArrayList<>(KEPPLRConfiguration.getInstance().getEphemeris().getInstruments());
+            instruments = new ArrayList<>(
+                    KEPPLRConfiguration.getInstance().getEphemeris().getInstruments());
             instruments.sort(Comparator.comparing(i -> i.id().getName()));
         } catch (Exception e) {
             instruments = List.of();

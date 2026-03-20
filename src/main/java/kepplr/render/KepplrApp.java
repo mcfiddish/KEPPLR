@@ -31,7 +31,6 @@ import kepplr.ephemeris.BodyLookupService;
 import kepplr.ephemeris.KEPPLREphemeris;
 import kepplr.render.body.BodySceneManager;
 import kepplr.render.frustum.FrustumLayer;
-import kepplr.render.InstrumentFrustumManager;
 import kepplr.render.label.LabelManager;
 import kepplr.render.trail.TrailManager;
 import kepplr.render.vector.VectorDefinition;
@@ -565,10 +564,9 @@ public class KepplrApp extends SimpleApplication {
     }
 
     /**
-     * Sync instrument frustum visibility from {@link DefaultSimulationState} to
-     * {@link InstrumentFrustumManager}. Calls {@link InstrumentFrustumManager#setVisible} for every
-     * entry in the frustum visibility map each frame; the manager's own visibility flag is idempotent so
-     * re-setting the same value is harmless.
+     * Sync instrument frustum visibility from {@link DefaultSimulationState} to {@link InstrumentFrustumManager}. Calls
+     * {@link InstrumentFrustumManager#setVisible} for every entry in the frustum visibility map each frame; the
+     * manager's own visibility flag is idempotent so re-setting the same value is harmless.
      */
     private void syncFrustums() {
         for (var entry : simulationState.getFrustumVisibilityMap().entrySet()) {
@@ -629,8 +627,8 @@ public class KepplrApp extends SimpleApplication {
      *
      * <p>A config reload is treated as an application restart: all managers that hold scene-graph state are disposed
      * and reconstructed from scratch. {@link VectorManager} and {@link StarFieldManager} are reconstructed without a
-     * separate dispose step because they detach all geometry on every {@link #simpleUpdate} call and hold no
-     * persistent scene nodes. {@code activeTrailIds} and {@code activeVectorDefs} are cleared so the next
+     * separate dispose step because they detach all geometry on every {@link #simpleUpdate} call and hold no persistent
+     * scene nodes. {@code activeTrailIds} and {@code activeVectorDefs} are cleared so the next
      * {@link #syncTrails}/{@link #syncVectors} call rebuilds them from the current state.
      */
     private void rebuildBodyScene() {

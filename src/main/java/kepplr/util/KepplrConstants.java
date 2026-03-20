@@ -660,8 +660,17 @@ public final class KepplrConstants {
     /**
      * Default extent in km from the frustum apex to its base plane.
      *
-     * <p>Each base vertex is placed at {@code apex + normalize(boundVectorJ2000) × INSTRUMENT_FRUSTUM_DEFAULT_EXTENT_KM}.
-     * Body-intersection shortening is out of scope and will be a later refinement.
+     * <p>Each base vertex is placed at {@code apex + normalize(boundVectorJ2000) ×
+     * INSTRUMENT_FRUSTUM_DEFAULT_EXTENT_KM}. Body-intersection shortening is out of scope and will be a later
+     * refinement.
      */
     public static final double INSTRUMENT_FRUSTUM_DEFAULT_EXTENT_KM = 100_000.0;
+
+    /**
+     * Number of polygon sides used to approximate a circular or elliptical instrument FOV.
+     *
+     * <p>SPICE CIRCLE FOVs have 1 bound vector and ELLIPSE FOVs have 2, which are insufficient to build a closed
+     * pyramid. Both are approximated as regular polygons with this many sides.
+     */
+    public static final int INSTRUMENT_FRUSTUM_CIRCLE_APPROX_SIDES = 32;
 }

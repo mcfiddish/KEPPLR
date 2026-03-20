@@ -265,7 +265,8 @@ public final class SimulationStateFxBridge {
         // getInstruments() is read once at bridge construction time; the instrument set is fixed for
         // the lifetime of the current kernel configuration.
         try {
-            for (Instrument inst : KEPPLRConfiguration.getInstance().getEphemeris().getInstruments()) {
+            for (Instrument inst :
+                    KEPPLRConfiguration.getInstance().getEphemeris().getInstruments()) {
                 int code = inst.code();
                 SimpleBooleanProperty fxProp = new SimpleBooleanProperty(false);
                 frustumVisibleFxMap.put(code, fxProp);
@@ -463,17 +464,17 @@ public final class SimulationStateFxBridge {
     /**
      * Rebuild the per-instrument frustum visibility FX property map after a configuration reload.
      *
-     * <p>Clears the existing map and re-reads {@code getInstruments()} from the current kernel. New
-     * listeners are registered on any newly discovered instrument state properties. Listeners on
-     * properties from the previous kernel are orphaned but harmless — they target replaced map
-     * entries that will never be observed again.
+     * <p>Clears the existing map and re-reads {@code getInstruments()} from the current kernel. New listeners are
+     * registered on any newly discovered instrument state properties. Listeners on properties from the previous kernel
+     * are orphaned but harmless — they target replaced map entries that will never be observed again.
      *
      * <p>Must be called on the JavaFX application thread.
      */
     public void reloadInstruments() {
         frustumVisibleFxMap.clear();
         try {
-            for (Instrument inst : KEPPLRConfiguration.getInstance().getEphemeris().getInstruments()) {
+            for (Instrument inst :
+                    KEPPLRConfiguration.getInstance().getEphemeris().getInstruments()) {
                 int code = inst.code();
                 SimpleBooleanProperty fxProp = new SimpleBooleanProperty(false);
                 frustumVisibleFxMap.put(code, fxProp);
