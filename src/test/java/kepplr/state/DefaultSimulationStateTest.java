@@ -338,5 +338,44 @@ class DefaultSimulationStateTest {
             assertTrue(state.labelVisibleProperty(EARTH).get());
             assertFalse(state.labelVisibleProperty(MOON).get());
         }
+
+        @Test
+        @DisplayName("frustumVisibleProperty defaults to false")
+        void frustumVisibleDefault() {
+            assertFalse(state.frustumVisibleProperty(-98300).get());
+        }
+
+        @Test
+        @DisplayName("setFrustumVisible(true) makes frustum visible")
+        void setFrustumVisibleTrue() {
+            state.setFrustumVisible(-98300, true);
+            assertTrue(state.frustumVisibleProperty(-98300).get());
+        }
+
+        @Test
+        @DisplayName("setFrustumVisible(false) hides frustum")
+        void setFrustumVisibleFalse() {
+            state.setFrustumVisible(-98300, true);
+            state.setFrustumVisible(-98300, false);
+            assertFalse(state.frustumVisibleProperty(-98300).get());
+        }
+
+        @Test
+        @DisplayName("frustum visibility is independent per instrument code")
+        void frustumVisibilityIndependentPerCode() {
+            state.setFrustumVisible(-98300, true);
+            state.setFrustumVisible(-98301, false);
+            assertTrue(state.frustumVisibleProperty(-98300).get());
+            assertFalse(state.frustumVisibleProperty(-98301).get());
+        }
+
+        @Test
+        @DisplayName("getFrustumVisibilityMap returns live entries")
+        void frustumVisibilityMap() {
+            state.setFrustumVisible(-98300, true);
+            var map = state.getFrustumVisibilityMap();
+            assertTrue(map.containsKey(-98300));
+            assertTrue(map.get(-98300).get());
+        }
     }
 }

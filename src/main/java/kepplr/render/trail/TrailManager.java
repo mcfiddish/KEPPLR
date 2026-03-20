@@ -196,6 +196,17 @@ public class TrailManager {
         return (naifId >= 100 && naifId <= 999 && naifId % 100 != 99) || naifId == KepplrConstants.PLUTO_NAIF_ID;
     }
 
+    /** Disable all trails and release all scene-graph resources. Call before discarding this manager. */
+    public void dispose() {
+        for (TrailRenderer renderer : renderers.values()) {
+            renderer.detach();
+        }
+        renderers.clear();
+        enabledIds.clear();
+        trailStates.clear();
+        liveFixedMap.clear();
+    }
+
     /** Returns an unmodifiable view of the currently enabled NAIF IDs. Package-private for tests. */
     Set<Integer> getEnabledIds() {
         return Collections.unmodifiableSet(enabledIds);

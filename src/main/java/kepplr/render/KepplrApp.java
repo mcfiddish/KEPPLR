@@ -135,6 +135,12 @@ public class KepplrApp extends SimpleApplication {
     // ── Sun halo ───────────────────────────────────────────────────────────────────────────────
     private SunHaloRenderer sunHaloRenderer;
 
+    // ── Star catalog (retained for reconstruction on config reload) ────────────────────────────
+    private YaleBrightStarCatalog starCatalog;
+
+    // ── Instrument frustum overlays (Step 22) ─────────────────────────────────────────────────
+    private InstrumentFrustumManager instrumentFrustumManager;
+
     // ── Overlay sync state (maps state → render managers each frame) ───────────────────────────
     /** Currently enabled trail IDs in TrailManager, kept in sync with state each frame. */
     private final Set<Integer> activeTrailIds = new HashSet<>();
@@ -279,14 +285,16 @@ public class KepplrApp extends SimpleApplication {
         vectorManager = new VectorManager(nearNode, midNode, farNode, assetManager);
 
         // ── Star field ────────────────────────────────────────────────────────────────────────
-        YaleBrightStarCatalog bsc =
-                YaleBrightStarCatalog.loadFromResource("/resources/kepplr/stars/catalogs/yaleBSC/ybsc5.gz");
+        starCatalog = YaleBrightStarCatalog.loadFromResource("/resources/kepplr/stars/catalogs/yaleBSC/ybsc5.gz");
         starFieldManager = new StarFieldManager(farNode, assetManager, simulationState);
-        starFieldManager.setCatalog(bsc);
+        starFieldManager.setCatalog(starCatalog);
 
         // ── Sun halo ──────────────────────────────────────────────────────────────────────────
         sunHaloRenderer = new SunHaloRenderer(farNode, midNode, nearNode, assetManager, simulationState);
         sunHaloRenderer.init();
+
+        // ── Instrument frustum overlays (Step 22) ────────────────────────────────────────────
+        instrumentFrustumManager = new InstrumentFrustumManager(nearNode, midNode, farNode, assetManager);
 
         // ── HUD, labels, and camera input ────────────────────────────────────────────────────
         hud = new KepplrHud(guiNode, assetManager, cam);
@@ -404,6 +412,7 @@ public class KepplrApp extends SimpleApplication {
         syncTrails();
         syncVectors();
         syncLabels();
+        syncFrustums();
 
         // ── HUD visibility ────────────────────────────────────────────────────────────────────
         hud.setTimeVisible(simulationState.hudTimeVisibleProperty().get());
@@ -411,6 +420,7 @@ public class KepplrApp extends SimpleApplication {
 
         trailManager.update(currentEt, cameraHelioJ2000);
         vectorManager.update(currentEt, cameraHelioJ2000, cam, focusedBodyId);
+        instrumentFrustumManager.update(currentEt, cameraHelioJ2000);
         starFieldManager.update(currentEt, cameraHelioJ2000);
         try {
             sunHaloRenderer.update(cameraHelioJ2000, cam, tpf);
@@ -553,6 +563,17 @@ public class KepplrApp extends SimpleApplication {
         });
     }
 
+    /**
+     * Sync instrument frustum visibility from {@link DefaultSimulationState} to {@link InstrumentFrustumManager}. Calls
+     * {@link InstrumentFrustumManager#setVisible} for every entry in the frustum visibility map each frame; the
+     * manager's own visibility flag is idempotent so re-setting the same value is harmless.
+     */
+    private void syncFrustums() {
+        for (var entry : simulationState.getFrustumVisibilityMap().entrySet()) {
+            instrumentFrustumManager.setVisible(entry.getKey(), entry.getValue().get());
+        }
+    }
+
     /** Returns true if {@code naifId} identifies a natural satellite or Pluto (orbiting its barycenter). */
     private static boolean isSatellite(int naifId) {
         return (naifId >= 100 && naifId <= 999 && naifId % 100 != 99) || naifId == KepplrConstants.PLUTO_NAIF_ID;
@@ -602,17 +623,37 @@ public class KepplrApp extends SimpleApplication {
     // ── Config-driven scene rebuild ────────────────────────────────────────────────────────────
 
     /**
-     * Rebuild the body scene after a configuration reload. Must run on the JME render thread.
+     * Rebuild all render managers after a configuration reload. Must run on the JME render thread.
      *
-     * <p>Disposes the current {@link BodySceneManager} (detaches all body nodes), re-registers the new
-     * {@code resourcesFolder()} as a FileLocator so GLB paths in the new config resolve correctly, then constructs a
-     * fresh {@link BodySceneManager} which reloads all shape models.
+     * <p>A config reload is treated as an application restart: all managers that hold scene-graph state are disposed
+     * and reconstructed from scratch. {@link VectorManager} and {@link StarFieldManager} are reconstructed without a
+     * separate dispose step because they detach all geometry on every {@link #simpleUpdate} call and hold no persistent
+     * scene nodes. {@code activeTrailIds} and {@code activeVectorDefs} are cleared so the next
+     * {@link #syncTrails}/{@link #syncVectors} call rebuilds them from the current state.
      */
     private void rebuildBodyScene() {
+        // Tear down managers that hold persistent scene-graph state
         bodySceneManager.dispose();
+        trailManager.dispose();
+        sunHaloRenderer.dispose();
+        labelManager.dispose();
+        activeTrailIds.clear();
+        activeVectorDefs.clear();
+
+        // Re-register the new resources folder before any manager that loads assets
         assetManager.registerLocator(KEPPLRConfiguration.getInstance().resourcesFolder(), FileLocator.class);
+
+        // Reconstruct all managers
         bodySceneManager = new BodySceneManager(nearNode, midNode, farNode, assetManager, simulationState);
-        logger.info("Body scene rebuilt after configuration reload");
+        instrumentFrustumManager.reload();
+        trailManager = new TrailManager(nearNode, midNode, farNode, assetManager, simulationState);
+        vectorManager = new VectorManager(nearNode, midNode, farNode, assetManager);
+        starFieldManager = new StarFieldManager(farNode, assetManager, simulationState);
+        starFieldManager.setCatalog(starCatalog);
+        sunHaloRenderer = new SunHaloRenderer(farNode, midNode, nearNode, assetManager, simulationState);
+        sunHaloRenderer.init();
+        labelManager = new LabelManager(guiNode, assetManager);
+        logger.info("All render managers rebuilt after configuration reload");
     }
 
     // ── private helpers ───────────────────────────────────────────────────────────────────────

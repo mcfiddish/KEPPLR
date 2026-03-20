@@ -370,4 +370,28 @@ class DefaultSimulationCommandsTest {
             assertDoesNotThrow(() -> commands.cancelTransition());
         }
     }
+
+    // ─────────────────────────────────────────────────────────────────
+    // Instrument frustum overlays (Step 22)
+    // ─────────────────────────────────────────────────────────────────
+
+    @Nested
+    @DisplayName("Instrument frustum overlays (Step 22)")
+    class FrustumOverlayTests {
+
+        @Test
+        @DisplayName("setFrustumVisible(int, true) updates state")
+        void setFrustumVisibleInt() {
+            commands.setFrustumVisible(-98300, true);
+            assertTrue(state.frustumVisibleProperty(-98300).get());
+        }
+
+        @Test
+        @DisplayName("setFrustumVisible(int, false) updates state")
+        void setFrustumVisibleIntFalse() {
+            commands.setFrustumVisible(-98300, true);
+            commands.setFrustumVisible(-98300, false);
+            assertFalse(state.frustumVisibleProperty(-98300).get());
+        }
+    }
 }

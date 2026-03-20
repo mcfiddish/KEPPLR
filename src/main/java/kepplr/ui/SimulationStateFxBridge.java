@@ -1,6 +1,8 @@
 package kepplr.ui;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.function.Consumer;
 import javafx.animation.AnimationTimer;
 import javafx.application.Platform;
@@ -17,6 +19,7 @@ import javafx.beans.property.SimpleStringProperty;
 import kepplr.camera.CameraFrame;
 import kepplr.config.KEPPLRConfiguration;
 import kepplr.ephemeris.BodyLookupService;
+import kepplr.ephemeris.Instrument;
 import kepplr.state.BodyInView;
 import kepplr.state.SimulationState;
 
@@ -80,6 +83,11 @@ public final class SimulationStateFxBridge {
     // ── Step 19b additions ───────────────────────────────────────────────────
     private final SimpleBooleanProperty hudTimeVisibleFx = new SimpleBooleanProperty(true);
     private final SimpleBooleanProperty hudInfoVisibleFx = new SimpleBooleanProperty(true);
+
+    // ── Step 22: per-instrument frustum visibility ────────────────────────────
+    /** Keyed by instrument NAIF code. Populated once at construction from getInstruments(). */
+    private final Map<Integer, SimpleBooleanProperty> frustumVisibleFxMap = new HashMap<>();
+
     // ── Production constructor ────────────────────────────────────────────────
 
     /**
@@ -252,6 +260,24 @@ public final class SimulationStateFxBridge {
             if (polling) return;
             dispatcher.accept(() -> hudInfoVisibleFx.set(newVal));
         });
+
+        // Initialise per-instrument frustum visibility FX properties and attach listeners.
+        // getInstruments() is read once at bridge construction time; the instrument set is fixed for
+        // the lifetime of the current kernel configuration.
+        try {
+            for (Instrument inst :
+                    KEPPLRConfiguration.getInstance().getEphemeris().getInstruments()) {
+                int code = inst.code();
+                SimpleBooleanProperty fxProp = new SimpleBooleanProperty(false);
+                frustumVisibleFxMap.put(code, fxProp);
+                state.frustumVisibleProperty(code).addListener((obs, oldVal, newVal) -> {
+                    if (polling) return;
+                    dispatcher.accept(() -> fxProp.set(newVal));
+                });
+            }
+        } catch (Exception e) {
+            // No instruments available (no IK loaded) — frustumVisibleFxMap remains empty.
+        }
     }
 
     // ── FX-thread polling (AnimationTimer) ───────────────────────────────────
@@ -302,6 +328,8 @@ public final class SimulationStateFxBridge {
         targetedBodyIdFx.set(state.targetedBodyIdProperty().get());
         hudTimeVisibleFx.set(state.hudTimeVisibleProperty().get());
         hudInfoVisibleFx.set(state.hudInfoVisibleProperty().get());
+        frustumVisibleFxMap.forEach(
+                (code, fxProp) -> fxProp.set(state.frustumVisibleProperty(code).get()));
     }
 
     // ── Exposed read-only properties ──────────────────────────────────────────
@@ -421,6 +449,43 @@ public final class SimulationStateFxBridge {
     /** Whether the HUD info display is visible (Step 19b). */
     public ReadOnlyBooleanProperty hudInfoVisibleProperty() {
         return hudInfoVisibleFx;
+    }
+
+    /**
+     * Whether the instrument frustum overlay is visible for the given instrument NAIF code (Step 22).
+     *
+     * @param naifCode NAIF code of the instrument
+     * @return the FX property, or {@code null} if the instrument is not known (no IK loaded)
+     */
+    public ReadOnlyBooleanProperty frustumVisibleProperty(int naifCode) {
+        return frustumVisibleFxMap.get(naifCode);
+    }
+
+    /**
+     * Rebuild the per-instrument frustum visibility FX property map after a configuration reload.
+     *
+     * <p>Clears the existing map and re-reads {@code getInstruments()} from the current kernel. New listeners are
+     * registered on any newly discovered instrument state properties. Listeners on properties from the previous kernel
+     * are orphaned but harmless — they target replaced map entries that will never be observed again.
+     *
+     * <p>Must be called on the JavaFX application thread.
+     */
+    public void reloadInstruments() {
+        frustumVisibleFxMap.clear();
+        try {
+            for (Instrument inst :
+                    KEPPLRConfiguration.getInstance().getEphemeris().getInstruments()) {
+                int code = inst.code();
+                SimpleBooleanProperty fxProp = new SimpleBooleanProperty(false);
+                frustumVisibleFxMap.put(code, fxProp);
+                state.frustumVisibleProperty(code).addListener((obs, oldVal, newVal) -> {
+                    if (polling) return;
+                    dispatcher.accept(() -> fxProp.set(newVal));
+                });
+            }
+        } catch (Exception e) {
+            // No instruments in new config — map stays empty.
+        }
     }
 
     // ── Formatting helpers (called on JME thread) ─────────────────────────────

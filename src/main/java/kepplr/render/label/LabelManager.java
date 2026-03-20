@@ -52,6 +52,15 @@ public class LabelManager {
         this.font = assetManager.loadFont("Interface/Fonts/Default.fnt");
     }
 
+    /** Remove all labels from the GUI node and clear all state. Call before discarding this manager. */
+    public void dispose() {
+        for (BitmapText label : labels.values()) {
+            label.removeFromParent();
+        }
+        labels.clear();
+        enabledLabels.clear();
+    }
+
     /** Enable or disable the label for the given body. */
     public void setLabelVisible(int naifId, boolean visible) {
         enabledLabels.put(naifId, visible);

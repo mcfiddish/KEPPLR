@@ -24,7 +24,7 @@ public interface Instrument extends Comparable<Instrument> {
     }
 
     /** @return {@link FOV#getFrameID()} */
-    default FrameID FrameID() {
+    default FrameID frameID() {
         return fov().getFrameID();
     }
 

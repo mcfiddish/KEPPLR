@@ -557,6 +557,33 @@ public final class KepplrScript {
         commands.setVectorVisible(resolve(bodyName), type, visible);
     }
 
+    // ── Instrument frustum overlays (Step 22) ────────────────────────────────────
+
+    /**
+     * Toggle instrument frustum overlay visibility by NAIF code.
+     *
+     * <p>Example: {@code kepplr.setFrustumVisible(-98300, true)}
+     *
+     * @param instrumentNaifCode NAIF code of the instrument
+     * @param visible {@code true} to show, {@code false} to hide
+     */
+    public void setFrustumVisible(int instrumentNaifCode, boolean visible) {
+        commands.setFrustumVisible(instrumentNaifCode, visible);
+    }
+
+    /**
+     * Toggle instrument frustum overlay visibility by instrument name.
+     *
+     * <p>Example: {@code kepplr.setFrustumVisible("NH_LORRI", true)}
+     *
+     * @param instrumentName instrument name as registered in the kernel pool
+     * @param visible {@code true} to show, {@code false} to hide
+     * @throws IllegalArgumentException if the name cannot be resolved
+     */
+    public void setFrustumVisible(String instrumentName, boolean visible) {
+        commands.setFrustumVisible(resolve(instrumentName), visible);
+    }
+
     // ── Transition control ──────────────────────────────────────────────────────
 
     /**

@@ -43,6 +43,7 @@ import kepplr.camera.CameraFrame;
 import kepplr.commands.SimulationCommands;
 import kepplr.config.KEPPLRConfiguration;
 import kepplr.ephemeris.BodyLookupService;
+import kepplr.ephemeris.Instrument;
 import kepplr.ephemeris.KEPPLREphemeris;
 import kepplr.ephemeris.spice.SpiceBundle;
 import kepplr.render.vector.VectorTypes;
@@ -82,6 +83,7 @@ public final class KepplrStatusWindow {
     private CommandRecorder commandRecorder;
     private Stage stage;
     private TreeView<BodyTreeEntry> bodyTree;
+    private Menu instrumentsMenu;
 
     /**
      * @param bridge the bridge exposing FX-thread-safe display properties; must not be null
@@ -437,6 +439,51 @@ public final class KepplrStatusWindow {
         bodyTree.setRoot(root);
     }
 
+    /**
+     * Rebuild the Instruments menu from the current ephemeris after a configuration reload.
+     *
+     * <p>Also tells the bridge to rebuild its per-instrument FX property map so that CheckMenuItem checked-state
+     * bindings remain live for the new instrument set.
+     *
+     * <p>Must be called on the JavaFX application thread.
+     */
+    void populateInstrumentsMenu() {
+        bridge.reloadInstruments();
+
+        instrumentsMenu.getItems().clear();
+
+        List<Instrument> instruments;
+        try {
+            instruments = new ArrayList<>(
+                    KEPPLRConfiguration.getInstance().getEphemeris().getInstruments());
+            instruments.sort(Comparator.comparing(i -> i.id().getName()));
+        } catch (Exception e) {
+            instruments = List.of();
+        }
+
+        if (instruments.isEmpty()) {
+            MenuItem noInstruments = new MenuItem("No instruments defined");
+            noInstruments.setDisable(true);
+            instrumentsMenu.getItems().add(noInstruments);
+            return;
+        }
+
+        for (Instrument instrument : instruments) {
+            String name = instrument.id().getName();
+            int code = instrument.code();
+            CheckMenuItem item = new CheckMenuItem(name);
+            item.setSelected(false);
+
+            javafx.beans.property.ReadOnlyBooleanProperty bridgeProp = bridge.frustumVisibleProperty(code);
+            if (bridgeProp != null) {
+                bridgeProp.addListener((obs, oldVal, newVal) -> item.setSelected(newVal));
+            }
+
+            item.setOnAction(e -> commands.setFrustumVisible(code, item.isSelected()));
+            instrumentsMenu.getItems().add(item);
+        }
+    }
+
     // ── Menu Bar ─────────────────────────────────────────────────────────────
 
     private MenuBar buildMenuBar() {
@@ -444,9 +491,10 @@ public final class KepplrStatusWindow {
         Menu viewMenu = buildViewMenu();
         Menu timeMenu = buildTimeMenu();
         Menu overlaysMenu = buildOverlaysMenu();
+        instrumentsMenu = buildInstrumentsMenu();
         Menu windowMenu = buildWindowMenu();
 
-        MenuBar bar = new MenuBar(fileMenu, viewMenu, timeMenu, overlaysMenu, windowMenu);
+        MenuBar bar = new MenuBar(fileMenu, viewMenu, timeMenu, overlaysMenu, instrumentsMenu, windowMenu);
         bar.setUseSystemMenuBar(false);
         return bar;
     }
@@ -463,6 +511,7 @@ public final class KepplrStatusWindow {
                 try {
                     KEPPLRConfiguration.getInstance().reload(Path.of(file.getAbsolutePath()));
                     populateBodyTree();
+                    populateInstrumentsMenu();
                     if (configReloadCallback != null) {
                         configReloadCallback.run();
                     }
@@ -697,6 +746,44 @@ public final class KepplrStatusWindow {
                 trajItem,
                 new SeparatorMenuItem(),
                 currentFocus);
+    }
+
+    private Menu buildInstrumentsMenu() {
+        Menu menu = new Menu("Instruments");
+
+        List<Instrument> instruments;
+        try {
+            instruments = new ArrayList<>(
+                    KEPPLRConfiguration.getInstance().getEphemeris().getInstruments());
+            instruments.sort(Comparator.comparing(i -> i.id().getName()));
+        } catch (Exception e) {
+            instruments = List.of();
+        }
+
+        if (instruments.isEmpty()) {
+            MenuItem noInstruments = new MenuItem("No instruments defined");
+            noInstruments.setDisable(true);
+            menu.getItems().add(noInstruments);
+            return menu;
+        }
+
+        for (Instrument instrument : instruments) {
+            String name = instrument.id().getName();
+            int code = instrument.code();
+            CheckMenuItem item = new CheckMenuItem(name);
+            item.setSelected(false);
+
+            // Bind checked state to SimulationState via the bridge (Rule 2: no direct state access from UI).
+            javafx.beans.property.ReadOnlyBooleanProperty bridgeProp = bridge.frustumVisibleProperty(code);
+            if (bridgeProp != null) {
+                bridgeProp.addListener((obs, oldVal, newVal) -> item.setSelected(newVal));
+            }
+
+            item.setOnAction(e -> commands.setFrustumVisible(code, item.isSelected()));
+            menu.getItems().add(item);
+        }
+
+        return menu;
     }
 
     private Menu buildWindowMenu() {

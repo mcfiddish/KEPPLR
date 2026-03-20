@@ -516,7 +516,46 @@ All menu items call `SimulationCommands` only — no rendering logic in `ui/`.
 
 ---
 
-## 13. Out of Scope / Not Yet Specified
+## 13. Instrument Frustum Overlays
+
+### 13.1 Frustum Rendering
+
+* The simulator must render translucent frustum pyramid overlays for instruments
+  defined in loaded IK kernels.
+* Each frustum is a closed pyramid whose apex is placed at the camera-relative
+  J2000 position of the instrument's center body, and whose base vertices are:
+
+  `base[i] = apex + normalize(boundVector_in_J2000) × INSTRUMENT_FRUSTUM_DEFAULT_EXTENT_KM`
+
+* Visibility must be controllable **per instrument** by NAIF code via
+  `SimulationCommands.setFrustumVisible(int naifCode, boolean)` and by name
+  via `setFrustumVisible(String name, boolean)`.
+* Instrument entries must be rebuilt when a new configuration is loaded.
+
+### 13.2 FOV Shape Handling
+
+* SPICE defines four FOV shapes: CIRCLE, ELLIPSE, RECTANGLE, POLYGON.
+* RECTANGLE and POLYGON FOVs use the SPICE bound vectors directly.
+* CIRCLE (1 bound vector) and ELLIPSE (2 bound vectors) must be approximated
+  as regular polygons with `INSTRUMENT_FRUSTUM_CIRCLE_APPROX_SIDES` sides
+  so the pyramid mesh can be constructed. See D-033.
+
+### 13.3 Frustum Layer Assignment
+
+* The frustum pyramid must be assigned to the layer containing its apex
+  (spacecraft position), using the apex distance — not apex + extent.
+  This matches the `VectorRenderer` pattern (§8.3).
+
+### 13.4 Out of Scope for v0.1
+
+* Boresight line rendering (separate from the pyramid faces)
+* Frustum shortening when the boresight intersects a body surface
+* Per-instrument color configuration (hardcoded cyan)
+* Distance culling of frustums
+
+---
+
+## 15. Out of Scope / Not Yet Specified
 
 The following are acknowledged areas not fully specified in v0.1 and may be refined:
 
@@ -528,11 +567,11 @@ The following are acknowledged areas not fully specified in v0.1 and may be refi
 
 ---
 
-## 14. Optional Requirements (Future)
+## 16. Optional Requirements (Future)
 
 This section lists commonly needed capabilities (e.g., in Cosmographia/Celestia-class tools) that are not required for v0.1 but are candidates for future requirement revisions.
 
-### 14.1 Determinism and Reproducibility
+### 16.1 Determinism and Reproducibility
 
 * Define deterministic replay requirements for:
 
@@ -540,7 +579,7 @@ This section lists commonly needed capabilities (e.g., in Cosmographia/Celestia-
   * capture pipelines (e.g., PNG sequence generation)
 * Define numeric tolerances for “same result” across platforms.
 
-### 14.2 Camera Controls and Navigation Semantics
+### 16.2 Camera Controls and Navigation Semantics
 
 * Specify input bindings and navigation modes (mouse/keyboard/gamepad), including:
 
@@ -549,7 +588,7 @@ This section lists commonly needed capabilities (e.g., in Cosmographia/Celestia-
   * optional collision/ground avoidance for near-surface viewing
 * Specify frame-switching UX invariants (e.g., preserve world pose vs preserve local orbit parameters).
 
-### 14.3 Object Search and Discovery
+### 16.3 Object Search and Discovery
 
 * Provide a searchable object catalog UI with:
 
@@ -557,7 +596,7 @@ This section lists commonly needed capabilities (e.g., in Cosmographia/Celestia-
   * recent objects
   * user-defined favorites/bookmarks
 
-### 14.4 Visibility Layers and Rendering Toggles
+### 16.4 Visibility Layers and Rendering Toggles
 
 Labels, HUD elements, orbit trails, and vector overlays are implemented in
 step 19b with per-body API and global GUI toggles. Remaining deferred items:
@@ -565,7 +604,7 @@ step 19b with per-body API and global GUI toggles. Remaining deferred items:
 * reference axes, grids, ring plane indicators
 * star magnitude cutoffs / density controls
 
-### 14.5 Labels and HUD Policy
+### 16.5 Labels and HUD Policy
 
 Name labels with zoom-dependent decluttering and HUD time/info displays are
 implemented in step 19b. Remaining deferred label types:
@@ -573,12 +612,12 @@ implemented in step 19b. Remaining deferred label types:
 * distance, light-time, phase angle, and other data labels
 * user-configurable label priority rules beyond the proximity-based policy
 
-### 14.6 GLB Shape Model Rendering
+### 16.6 GLB Shape Model Rendering
 
 Shape models for bodies and spacecraft are loaded from GLB files and replace
 the default ellipsoid / point sprite geometry in the scene graph.
 
-#### 14.6.1 GLTFUtils
+#### 16.6.1 GLTFUtils
 
 `kepplr.visualization.jme.util.GLTFUtils` must be ported from the prototype.
 Its sole initial responsibility is `readModelToBodyFixedQuatFromGlb(Path)`,
@@ -586,14 +625,14 @@ which reads the quaternion stored in the GLB JSON extras at
 `asset.extras.kepplr.modelToBodyFixedQuat.value = [x,y,z,w]` without a
 third-party JSON library. No other code may read this field directly.
 
-#### 14.6.2 Asset Manager Registration
+#### 16.6.2 Asset Manager Registration
 
 `KEPPLRConfiguration.getInstance().resourcesFolder()` must be registered as a
 JME `FileLocator` once, in the JME `simpleInitApp` path. Shape model paths
 returned by `BodyBlock.shapeModel()` and `SpacecraftBlock.shapeModel()` are
 relative to that folder and are passed directly to `assetManager.loadModel()`.
 
-#### 14.6.3 BodyBlock Shape Models
+#### 16.6.3 BodyBlock Shape Models
 
 Natural bodies (from `getKnownBodies()`) are full scene objects with lighting,
 material, and texture configuration. When `BodyBlock.shapeModel()` returns a
@@ -614,7 +653,7 @@ non-null path:
   WARN level and fall back to the existing ellipsoid. The simulation must
   continue normally.
 
-#### 14.6.4 SpacecraftBlock Shape Models
+#### 16.6.4 SpacecraftBlock Shape Models
 
 Spacecraft (from `getSpacecraft()`) use their GLB-embedded PBR materials
 as-is — colors, textures, and metallic/roughness values are defined in the
@@ -624,8 +663,8 @@ pipeline (no equirectangular texture mapping, no `textureAlignNode`, no
 center-longitude adjustment). The standard sampler preset is applied to their
 textures. When `SpacecraftBlock.shapeModel()` returns a non-null path:
 
-* Load and apply the sampler preset identically to §14.6.3.
-* Read and apply `modelToBodyFixedQuat` identically to §14.6.3.
+* Load and apply the sampler preset identically to §16.6.3.
+* Read and apply `modelToBodyFixedQuat` identically to §16.6.3.
 * GLB files are authored in **meters**. Apply a uniform scale of
   `0.001 × SpacecraftBlock.scale()` to convert to kilometers.
   `SpacecraftBlock.scale()` defaults to 1.0 if not configured.
@@ -634,7 +673,7 @@ textures. When `SpacecraftBlock.shapeModel()` returns a non-null path:
   WARN level and fall back to the existing point sprite. The simulation must
   continue normally.
 
-#### 14.6.5 Frame Semantics
+#### 16.6.5 Frame Semantics
 
 * `bodyFixedNode` carries the time-varying SPICE body-fixed → J2000 rotation,
   updated each frame by `BodySceneManager`, exactly as it does today for
@@ -644,14 +683,14 @@ textures. When `SpacecraftBlock.shapeModel()` returns a non-null path:
   glTF model-space into the body-fixed frame expected by SPICE. It is never
   reapplied or updated per-frame.
 
-#### 14.6.6 Iteration Scope
+#### 16.6.6 Iteration Scope
 
-`getKnownBodies()` provides the body set for §14.6.3. `getSpacecraft()`
-provides the spacecraft set for §14.6.4. Both sets are processed once at scene
+`getKnownBodies()` provides the body set for §16.6.3. `getSpacecraft()`
+provides the spacecraft set for §16.6.4. Both sets are processed once at scene
 graph construction time. Dynamic loading of shape models at runtime is out of
 scope for this step.
 
-### 14.7 Performance and Quality Acceptance Criteria
+### 16.7 Performance and Quality Acceptance Criteria
 
 * Expand quality presets into measurable acceptance criteria (e.g., target FPS at 1080p).
 * Define LOD and update-cadence rules for:
