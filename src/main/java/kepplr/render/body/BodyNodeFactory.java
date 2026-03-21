@@ -7,6 +7,9 @@ import com.jme3.material.Material;
 import com.jme3.math.ColorRGBA;
 import com.jme3.math.Quaternion;
 import com.jme3.math.Vector3f;
+import com.jme3.bounding.BoundingBox;
+import com.jme3.bounding.BoundingSphere;
+import com.jme3.bounding.BoundingVolume;
 import com.jme3.scene.Geometry;
 import com.jme3.scene.Node;
 import com.jme3.scene.Spatial;
@@ -223,11 +226,26 @@ public final class BodyNodeFactory {
         // Attempt to load a GLB shape model if configured.
         Node glbModelRoot = tryLoadSpacecraftGlb(spacecraft, bodyFixedNode, assetManager);
 
+        // Compute the GLB bounding radius (in km) for label suppression: labels disappear
+        // when the shape model is large enough on screen, just like natural body labels.
+        // For sprite-only spacecraft (no GLB), bodyRadiusKm stays 0.0 so the label always shows.
+        double glbRadiusKm = 0.0;
         if (glbModelRoot != null) {
             // Apply per-geometry EclipseLighting materials so each mesh part of the spacecraft
             // retains its own color from the glTF PBR material. EclipseShadowManager's spacecraft
             // pass walks the GLB tree and updates each geometry's material directly.
             applyEclipseLightingToSpacecraftGlb(glbModelRoot, naifId, assetManager);
+
+            // Force-compute world bounds for the bodyFixedNode subtree (glbModelRoot is attached).
+            // The GLB is in meters scaled by scaleFactor → km, so the bound radius is in km.
+            bodyFixedNode.updateGeometricState();
+            BoundingVolume bv = glbModelRoot.getWorldBound();
+            if (bv instanceof BoundingSphere bs) {
+                glbRadiusKm = bs.getCenter().length() + bs.getRadius();
+            } else if (bv instanceof BoundingBox bb) {
+                Vector3f ext = bb.getExtent(null);
+                glbRadiusKm = bb.getCenter().length() + Math.max(ext.x, Math.max(ext.y, ext.z));
+            }
         }
 
         // Spacecraft sprite is visible by default; hidden if GLB was loaded.
@@ -235,7 +253,7 @@ public final class BodyNodeFactory {
 
         Node ephemerisNode = new Node(name + "-ephemeris");
         ephemerisNode.setUserData("naifId", naifId);
-        ephemerisNode.setUserData("bodyRadiusKm", 0.0);
+        ephemerisNode.setUserData("bodyRadiusKm", glbRadiusKm);
         ephemerisNode.attachChild(bodyFixedNode);
         ephemerisNode.attachChild(spriteGeom);
 

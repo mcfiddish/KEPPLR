@@ -71,6 +71,7 @@ public final class SimulationStateFxBridge {
     private final SimpleBooleanProperty transitionActive = new SimpleBooleanProperty(false);
     private final SimpleDoubleProperty transitionProgress = new SimpleDoubleProperty(0.0);
     private final SimpleDoubleProperty fovDeg = new SimpleDoubleProperty(KepplrConstants.CAMERA_FOV_Y_DEG);
+    private final SimpleDoubleProperty currentEt = new SimpleDoubleProperty(0.0);
 
     // ── Step 19 additions ────────────────────────────────────────────────────
     private final SimpleStringProperty selectedBodyName = new SimpleStringProperty("—");
@@ -121,6 +122,7 @@ public final class SimulationStateFxBridge {
         selectedBodyText.set(formatBodyId(state.selectedBodyIdProperty().get()));
         focusedBodyText.set(formatBodyId(state.focusedBodyIdProperty().get()));
         targetedBodyText.set(formatBodyId(state.targetedBodyIdProperty().get()));
+        currentEt.set(state.currentEtProperty().get());
         utcTimeText.set(formatEt(state.currentEtProperty().get()));
         timeRateText.set(formatTimeRate(state.timeRateProperty().get()));
         pausedText.set(formatPaused(state.pausedProperty().get()));
@@ -165,8 +167,12 @@ public final class SimulationStateFxBridge {
         });
         state.currentEtProperty().addListener((obs, oldVal, newVal) -> {
             if (polling) return;
-            String s = formatEt(newVal.doubleValue());
-            dispatcher.accept(() -> utcTimeText.set(s));
+            double et = newVal.doubleValue();
+            String s = formatEt(et);
+            dispatcher.accept(() -> {
+                utcTimeText.set(s);
+                currentEt.set(et);
+            });
         });
         state.timeRateProperty().addListener((obs, oldVal, newVal) -> {
             if (polling) return;
@@ -313,6 +319,7 @@ public final class SimulationStateFxBridge {
         selectedBodyText.set(formatBodyId(state.selectedBodyIdProperty().get()));
         focusedBodyText.set(formatBodyId(state.focusedBodyIdProperty().get()));
         targetedBodyText.set(formatBodyId(state.targetedBodyIdProperty().get()));
+        currentEt.set(state.currentEtProperty().get());
         utcTimeText.set(formatEt(state.currentEtProperty().get()));
         timeRateText.set(formatTimeRate(state.timeRateProperty().get()));
         pausedText.set(formatPaused(state.pausedProperty().get()));
@@ -410,6 +417,10 @@ public final class SimulationStateFxBridge {
     /** Current camera field of view in degrees. */
     public ReadOnlyDoubleProperty fovDegProperty() {
         return fovDeg;
+    }
+
+    public ReadOnlyDoubleProperty currentEtProperty() {
+        return currentEt;
     }
 
     // ── Step 19 properties ───────────────────────────────────────────────────

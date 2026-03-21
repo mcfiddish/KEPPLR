@@ -52,6 +52,7 @@ import kepplr.scripting.ScriptRunner;
 import kepplr.util.KepplrConstants;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import picante.math.vectorspace.VectorIJK;
 import picante.mechanics.EphemerisID;
 
 /**
@@ -84,6 +85,7 @@ public final class KepplrStatusWindow {
     private Stage stage;
     private TreeView<BodyTreeEntry> bodyTree;
     private Menu instrumentsMenu;
+    private CheckMenuItem labelsItem;
 
     /**
      * @param bridge the bridge exposing FX-thread-safe display properties; must not be null
@@ -410,12 +412,31 @@ public final class KepplrStatusWindow {
                 groups.computeIfAbsent(code, k -> new ArrayList<>()).add(new int[] {code});
             }
 
-            // Build tree items — Sun first, then barycenters in order, then others
-            List<Integer> topLevel = new ArrayList<>(groups.keySet());
-            topLevel.sort(Comparator.comparingInt(k -> {
-                if (k == 10) return -1; // Sun first
-                return k;
-            }));
+            // Compute heliocentric distance for each group; skip groups with no position data.
+            double et = bridge.currentEtProperty().get();
+            Map<Integer, Double> groupDist = new java.util.HashMap<>();
+            for (int k : groups.keySet()) {
+                if (k == 10) {
+                    groupDist.put(k, 0.0); // Sun always at distance 0
+                    continue;
+                }
+                int representative = (k >= 1 && k <= 9) ? k * 100 + 99 : k;
+                try {
+                    VectorIJK pos = eph.getHeliocentricPositionJ2000(representative, et);
+                    if (pos == null && k >= 1 && k <= 9) {
+                        pos = eph.getHeliocentricPositionJ2000(k, et); // fall back to barycenter
+                    }
+                    if (pos != null) {
+                        groupDist.put(k, pos.getLength());
+                    }
+                    // No entry added when pos == null → group is excluded from the list
+                } catch (Exception ex) {
+                    // Position unavailable → exclude from list
+                }
+            }
+
+            List<Integer> topLevel = new ArrayList<>(groupDist.keySet());
+            topLevel.sort(Comparator.comparingDouble(groupDist::get));
 
             for (int groupKey : topLevel) {
                 List<int[]> members = groups.get(groupKey);
@@ -530,6 +551,10 @@ public final class KepplrStatusWindow {
                     populateInstrumentsMenu();
                     if (configReloadCallback != null) {
                         configReloadCallback.run();
+                    }
+                    // Re-apply current label state for any newly loaded spacecraft/bodies.
+                    if (labelsItem != null) {
+                        applyLabelVisibility(labelsItem.isSelected());
                     }
                 } catch (Exception ex) {
                     logger.error("Failed to load configuration: {}", ex.getMessage());
@@ -660,24 +685,26 @@ public final class KepplrStatusWindow {
         return new Menu("Time", null, pauseItem, new SeparatorMenuItem(), setTimeItem, setRateItem);
     }
 
+    /** Enable or disable labels for all currently known bodies and spacecraft. */
+    private void applyLabelVisibility(boolean show) {
+        try {
+            KEPPLREphemeris eph = KEPPLRConfiguration.getInstance().getEphemeris();
+            for (EphemerisID id : eph.getKnownBodies()) {
+                eph.getSpiceBundle().getObjectCode(id).ifPresent(code -> commands.setLabelVisible(code, show));
+            }
+            for (var sc : eph.getSpacecraft()) {
+                commands.setLabelVisible(sc.code(), show);
+            }
+        } catch (Exception ex) {
+            logger.warn("Failed to apply label visibility: {}", ex.getMessage(), ex);
+        }
+    }
+
     private Menu buildOverlaysMenu() {
         // ── Labels ────────────────────────────────────────────────────────────
-        CheckMenuItem labelsItem = new CheckMenuItem("Show Labels");
+        labelsItem = new CheckMenuItem("Show Labels");
         labelsItem.setSelected(false);
-        labelsItem.setOnAction(e -> {
-            boolean show = labelsItem.isSelected();
-            try {
-                KEPPLREphemeris eph = KEPPLRConfiguration.getInstance().getEphemeris();
-                for (EphemerisID id : eph.getKnownBodies()) {
-                    eph.getSpiceBundle().getObjectCode(id).ifPresent(code -> commands.setLabelVisible(code, show));
-                }
-                for (var sc : eph.getSpacecraft()) {
-                    commands.setLabelVisible(sc.code(), show);
-                }
-            } catch (Exception ex) {
-                logger.debug("Failed to toggle labels: {}", ex.getMessage());
-            }
-        });
+        labelsItem.setOnAction(e -> applyLabelVisibility(labelsItem.isSelected()));
 
         // ── HUD toggles ──────────────────────────────────────────────────────
         CheckMenuItem hudInfoItem = new CheckMenuItem("HUD / Info");
