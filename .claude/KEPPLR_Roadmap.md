@@ -513,34 +513,36 @@ management constraint. Behavior on Linux (X11) is untested and may differ.
 
 ## v0.2 Steps
 
-### 23. Rendering Enhancements
+### 23. Rendering Enhancements ✓
 
-Custom body surface shading to replace JME's default Lighting.j3md, based on
-side-by-side comparison with Cosmographia (Saturn, March 2026). Four specific
-deficiencies identified:
+Custom body surface shading and ring scattering improvements, based on
+side-by-side comparison with Cosmographia (Saturn, March 2026).
 
-**(1) Hard terminator.** The day/night boundary is nearly binary. Add a
-wrap-lighting term or smooth hermite/smoothstep ramp across the terminator to
-produce a gradual falloff instead of a hard cutoff.
+**Delivered:**
 
-**(2) No limb darkening.** The lit hemisphere is uniformly bright from center
-to edge. Add an Oren-Nayar or Minnaert reflectance model, or a simpler
-`pow(dot(N,V), k)` limb darkening term, to darken the disk toward its edges
-and give spheres perceived depth.
+- **sRGB color-space correction.** Textures loaded as sRGB; shader converts to
+  linear for lighting math, back to sRGB on output. Resolved oversaturated
+  colors (vivid yellows → muted creamy tones). Night-side ambient lowered to
+  linear 0.001 (≈ sRGB 3%) to preserve day/night contrast after gamma lift.
 
-**(3) Oversaturated colors.** KEPPLR's Saturn shows vivid yellows and oranges
-where Cosmographia's is muted and creamy. Before writing shader code, audit
-JME's gamma/color-space pipeline — check whether textures are being
-double-corrected (sRGB decoded as linear, or vice versa) and whether the
-ambient term is too bright. This may resolve the issue without shader changes.
+- **Wrap lighting (soft terminator).** Replaced hard `smoothstep(−0.05, 0.05,
+  NdotL)` with `(NdotL + wrap) / (1 + wrap)` where `BODY_WRAP_FACTOR = 0.15`.
+  Smooth gradient across the terminator instead of a hard cutoff.
 
-**(4) Flat illumination model.** The combined effect of (1)–(3). A custom
-`MaterialDef` with a GLSL fragment shader for body surfaces (parallel to the
-existing `SunHalo.frag`) is the likely implementation path.
+- **Minnaert limb darkening.** `pow(NdotL, k) × pow(NdotV, k−1)` with
+  `BODY_LIMB_DARKENING_K = 1.3`. Darkens disk edges, giving spheres perceived
+  depth. View direction obtained via `g_CameraPosition` world parameter.
 
-Ring shading is a separate concern — rings have angle-dependent scattering
-properties (forward vs. backscatter depending on viewing geometry relative to
-the Sun) that may warrant their own shader pass.
+- **Ring angle-dependent scattering.** Replaced inverted phase function in
+  `SaturnRings.frag` with correct forward/backscatter model. Backscatter
+  (same-side) brightness driven by phase angle; forward scatter (opposite-side)
+  boosted by `1 + strength × pow(cosForward, exponent)`. Three new constants:
+  `RING_FORWARD_SCATTER_STRENGTH = 0.8`, `RING_FORWARD_SCATTER_EXPONENT = 3.0`,
+  `RING_UNLIT_SIDE_BRIGHTNESS = 0.2`.
+
+- All constants in `KepplrConstants`, passed as shader uniforms.
+- Eclipse shadow system unchanged — penumbra/ring shadow layer on top.
+- Spacecraft GLBs unaffected (embedded PBR materials preserved per D-028).
 
 ---
 
