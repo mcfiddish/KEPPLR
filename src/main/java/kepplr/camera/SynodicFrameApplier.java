@@ -15,7 +15,7 @@ import picante.math.vectorspace.VectorIJK;
  *
  * <p>Each frame, this class computes the incremental rotation delta between the synodic frame basis at the previous and
  * current ET. That delta is applied to both the camera's position offset (relative to the focus body) and orientation,
- * causing the camera to co-rotate with the focus→target direction. From the camera's perspective, the target body
+ * causing the camera to co-rotate with the focus→selected direction. From the camera's perspective, the selected body
  * remains at a fixed screen position.
  *
  * <p>Effective-target rule: if {@code targetId == -1} or {@code targetId == focusId}, NAIF 10 (Sun) is used as the
