@@ -1,16 +1,13 @@
 // Eclipse lighting fragment shader (GLSL 150 -- version injected by JME)
 //
-// Implements analytic eclipse shadow geometry (REDESIGN.md §9.3, hybrid Option C).
+// Implements analytic eclipse shadow geometry (REDESIGN.md §9.3, hybrid Option C)
+// with wrap lighting, Minnaert limb darkening, and sRGB color-space handling (Step 23).
 //
 // Lighting model:
-//   finalColor = (ambientFactor + dayFactor * sunScale * eclipseFactor * ringShadowFactor) * diffuse
-//
-// where:
-//   ambientFactor  = BODY_AMBIENT_FACTOR (constant night-side floor)
-//   dayFactor      = smooth day/night terminator from N·L
-//   sunScale       = sun color (white * 2, to match JME PointLight intensity)
-//   eclipseFactor  = 1 − maxShadow across all occluders (continuous [0,1])
-//   ringShadowFactor = ring-plane ray trace result (Saturn only, 1 = no shadow)
+//   linearDiffuse = srgbToLinear(textureSample)
+//   day = wrapLighting(N, L, wrapFactor) * minnaert(NdotL, NdotV, limbK)
+//   lit = AMBIENT + (1 - AMBIENT) * day * eclipseFactor * ringShadowFactor
+//   fragColor = linearToSrgb(linearDiffuse * lit)
 //
 // Shadow uniforms are set every frame by EclipseShadowManager. All positions are in km
 // (floating-origin heliocentric J2000 world space).
@@ -36,6 +33,13 @@ uniform sampler2D m_DiffuseMap;
 #endif
 uniform vec4  m_DiffuseColor;   // fallback flat color (used when no DiffuseMap)
 
+// ── Surface shading uniforms (Step 23) ──────────────────────────────────────────────────────
+uniform float m_WrapFactor;      // wrap lighting constant (= KepplrConstants.BODY_WRAP_FACTOR)
+uniform float m_LimbDarkeningK;  // Minnaert exponent (= KepplrConstants.BODY_LIMB_DARKENING_K)
+
+// ── Camera position (for view-direction-dependent limb darkening) ────────────────────────────
+uniform vec3  g_CameraPosition;  // world-space camera position (km)
+
 in vec3 vWorldPos;
 in vec3 vWorldNormal;
 in vec2 vTexCoord;
@@ -43,16 +47,36 @@ in vec2 vTexCoord;
 out vec4 fragColor;
 
 // ── Constants ───────────────────────────────────────────────────────────────────────────────
-// Night-side luminance floor (matches KepplrConstants.BODY_AMBIENT_FACTOR).
-const float AMBIENT = 0.05;
+// Night-side luminance floor in linear space (matches KepplrConstants.BODY_AMBIENT_FACTOR).
+// With sRGB output, linear 0.001 ≈ sRGB 0.03, keeping night-side geometry barely visible.
+const float AMBIENT = 0.001;
 
-// Smooth-step half-width for the terminator (matches KepplrConstants.SHADOW_TERMINATOR_WIDTH_RAD).
-const float TERMINATOR_W = 0.05;
+// ── sRGB ↔ linear conversion ────────────────────────────────────────────────────────────────
+// Standard sRGB gamma. Equirectangular planet maps are authored in sRGB; we must convert to
+// linear for correct lighting math, then back to sRGB for display output.
+vec3 srgbToLinear(vec3 c) {
+    return pow(max(c, 0.0), vec3(2.2));
+}
 
-// ── Day/night terminator ────────────────────────────────────────────────────────────────────
-float dayFactor(vec3 worldNormal, vec3 sunDir) {
-    float NdotL = dot(normalize(worldNormal), sunDir);
-    return smoothstep(-TERMINATOR_W, TERMINATOR_W, NdotL);
+vec3 linearToSrgb(vec3 c) {
+    return pow(max(c, 0.0), vec3(1.0 / 2.2));
+}
+
+// ── Wrap lighting (soft terminator) ─────────────────────────────────────────────────────────
+// Extends illumination slightly past the geometric terminator for a softer day/night transition.
+// The smoothstep provides a continuous S-curve; the wrap term shifts the zero-crossing.
+float wrapLighting(float NdotL, float wrap) {
+    return clamp((NdotL + wrap) / (1.0 + wrap), 0.0, 1.0);
+}
+
+// ── Minnaert limb darkening ─────────────────────────────────────────────────────────────────
+// View-angle-dependent reflectance: pow(NdotL, k) × pow(NdotV, k-1).
+// k = 1.0 is pure Lambertian; k > 1.0 darkens the limb progressively.
+float minnaert(float NdotL, float NdotV, float k) {
+    // Guard: avoid pow(0, negative) when k < 1 (shouldn't happen with k >= 1.0, but be safe)
+    float safeNdotL = max(NdotL, 1e-4);
+    float safeNdotV = max(NdotV, 1e-4);
+    return pow(safeNdotL, k) * pow(safeNdotV, k - 1.0);
 }
 
 // ── Analytic eclipse shadow ─────────────────────────────────────────────────────────────────
@@ -139,21 +163,42 @@ void main() {
     vec4 diffuse;
 #ifdef DIFFUSE_MAP
     diffuse = texture(m_DiffuseMap, vTexCoord);
+    // sRGB → linear: equirectangular maps are authored in sRGB; lighting math must be in linear space.
+    diffuse.rgb = srgbToLinear(diffuse.rgb);
 #else
     diffuse = m_DiffuseColor;
+    // DiffuseColor is assumed already linear (engine-set fallback colors are typically linear).
 #endif
 
     // Sun direction from fragment
     vec3 toSun = m_SunPosition - vWorldPos;
     float dSun = length(toSun);
     if (!(dSun > 0.0)) {
-        fragColor = vec4(diffuse.rgb * AMBIENT, diffuse.a);
+        vec3 ambient = diffuse.rgb * AMBIENT;
+#ifdef DIFFUSE_MAP
+        ambient = linearToSrgb(ambient);
+#endif
+        fragColor = vec4(ambient, diffuse.a);
         return;
     }
     vec3 sunDir = toSun / dSun;
 
-    // Day/night terminator
-    float day = dayFactor(vWorldNormal, sunDir);
+    // Surface normal and view direction
+    vec3 N = normalize(vWorldNormal);
+    float NdotL = dot(N, sunDir);
+
+    // View direction for limb darkening
+    vec3 viewDir = normalize(g_CameraPosition - vWorldPos);
+    float NdotV = dot(N, viewDir);
+
+    // Day/night terminator with wrap lighting (Step 23)
+    float wrap = wrapLighting(NdotL, m_WrapFactor);
+
+    // Minnaert limb darkening (Step 23): applied only on the lit hemisphere
+    float limb = minnaert(max(NdotL, 0.0), max(NdotV, 0.0), m_LimbDarkeningK);
+
+    // Combined day factor: wrap provides the soft terminator shape, Minnaert darkens the limb
+    float day = wrap * limb;
 
     // Eclipse shadow: iterate occluders, take maximum shadow contribution
     float maxShadow = 0.0;
@@ -191,5 +236,11 @@ void main() {
     // Final color: ambient floor + day-side illumination scaled by eclipse and ring shadow.
     // Range: [AMBIENT, 1.0] — no clipping on lit side, dim but visible on night side.
     float lit = AMBIENT + (1.0 - AMBIENT) * day * eclipseFactor * rsf;
-    fragColor = vec4(diffuse.rgb * lit, diffuse.a);
+    vec3 result = diffuse.rgb * lit;
+
+    // Linear → sRGB for display output (only when input was converted from sRGB)
+#ifdef DIFFUSE_MAP
+    result = linearToSrgb(result);
+#endif
+    fragColor = vec4(result, diffuse.a);
 }

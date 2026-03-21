@@ -393,12 +393,32 @@ public final class KepplrConstants {
     public static final float SHADOW_TERMINATOR_WIDTH_RAD = 0.05f;
 
     /**
-     * Night-side ambient luminance factor for body surface shading.
+     * Night-side ambient luminance factor for body surface shading (linear space).
      *
-     * <p>The minimum base illumination applied to fragments where N·L ≤ 0 (full night side). Set to 5% of the diffuse
-     * color so night-side geometry remains faintly visible without appearing artificially bright.
+     * <p>The minimum base illumination applied to fragments where N·L ≤ 0 (full night side). In linear light space,
+     * 0.001 produces approximately 3% perceptual brightness after the linear→sRGB conversion in the shader
+     * ({@code pow(0.001, 1/2.2) ≈ 0.03}), keeping night-side geometry barely visible without appearing artificially
+     * bright.
      */
-    public static final float BODY_AMBIENT_FACTOR = 0.05f;
+    public static final float BODY_AMBIENT_FACTOR = 0.001f;
+
+    /**
+     * Wrap lighting factor for the day/night terminator (Step 23).
+     *
+     * <p>Controls how far illumination extends past the geometric terminator (N·L = 0). The wrap-lighting term is
+     * {@code (NdotL + wrap) / (1 + wrap)}, which shifts the terminator slightly onto the night side for a softer, more
+     * physically plausible transition. 0.0 = hard Lambertian cutoff; higher values = softer transition.
+     */
+    public static final float BODY_WRAP_FACTOR = 0.15f;
+
+    /**
+     * Minnaert limb darkening exponent for body surface shading (Step 23).
+     *
+     * <p>Controls the view-angle-dependent darkening near the limb of a body. The Minnaert reflectance model is
+     * {@code pow(NdotL, k) × pow(NdotV, k − 1)}. At {@code k = 1.0} this reduces to pure Lambertian; values above 1.0
+     * produce progressively darker limbs, appropriate for rough rocky/icy surfaces.
+     */
+    public static final float BODY_LIMB_DARKENING_K = 1.3f;
 
     /**
      * Saturn-shadow darkness on the ring surface (Step 16b).

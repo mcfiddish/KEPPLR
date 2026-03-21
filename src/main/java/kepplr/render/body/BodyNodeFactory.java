@@ -447,6 +447,10 @@ public final class BodyNodeFactory {
                     Texture tex =
                             assetManager.loadTexture(resolved.getFileName().toString());
                     tex.setWrap(Texture.WrapMode.Repeat);
+                    // Tag as sRGB so the shader can convert to linear for correct lighting math.
+                    if (tex.getImage() != null && tex.getImage().getColorSpace() != ColorSpace.sRGB) {
+                        tex.getImage().setColorSpace(ColorSpace.sRGB);
+                    }
                     mat.setTexture("DiffuseMap", tex);
                 } catch (Exception e) {
                     logger.warn("Could not load texture for {}: {}", bodyName, e.getMessage());
@@ -462,6 +466,10 @@ public final class BodyNodeFactory {
         if (naifId == kepplr.util.KepplrConstants.SATURN_NAIF_ID) {
             mat.setBoolean("HasRings", true);
         }
+
+        // Surface shading parameters (Step 23): wrap lighting and Minnaert limb darkening.
+        mat.setFloat("WrapFactor", kepplr.util.KepplrConstants.BODY_WRAP_FACTOR);
+        mat.setFloat("LimbDarkeningK", kepplr.util.KepplrConstants.BODY_LIMB_DARKENING_K);
 
         return mat;
     }

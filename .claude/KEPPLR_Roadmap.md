@@ -437,19 +437,19 @@ can serialize `setVectorVisible` calls correctly (see D-026).
     What this step delivers:
 
 - GLTFUtils ported from the prototype — reads the
-modelToBodyFixedQuat quaternion from GLB JSON extras with no
-third-party JSON library
+  modelToBodyFixedQuat quaternion from GLB JSON extras with no
+  third-party JSON library
 - resourcesFolder() registered as a JME FileLocator at startup so
-shape model paths from BodyBlock and SpacecraftBlock resolve correctly
+  shape model paths from BodyBlock and SpacecraftBlock resolve correctly
 - BodyNodeFactory updated to load a GLB and attach it as glbModelRoot
-under bodyFixedNode when BodyBlock.shapeModel() is non-null; KEPPLR's
-body material pipeline (equirectangular mapping, texture alignment,
-center-longitude) applies as before
+  under bodyFixedNode when BodyBlock.shapeModel() is non-null; KEPPLR's
+  body material pipeline (equirectangular mapping, texture alignment,
+  center-longitude) applies as before
 - Spacecraft GLBs loaded similarly under their scene node; GLB-embedded PBR
-materials and textures are used as-is and lit by the scene sun light;
-uniform scale of 0.001 × SpacecraftBlock.scale() converts meters to km
+  materials and textures are used as-is and lit by the scene sun light;
+  uniform scale of 0.001 × SpacecraftBlock.scale() converts meters to km
 - Graceful fallback to ellipsoid (bodies) or point sprite (spacecraft) on
-null path, missing file, or load failure — WARN log, no crash
+  null path, missing file, or load failure — WARN log, no crash
 
 ** Frame semantics **: modelToBodyFixedQuat is applied once at load time as
 glbModelRoot's local rotation, composing with bodyFixedNode's
@@ -495,9 +495,9 @@ cyan); distance culling of frustums.
 
 ---
 
-## Remaining Steps
+## v0.1 Complete
 
-All planned steps are complete. Remaining work consists of deferred items listed below.
+Steps 1–22 constitute the v0.1 release. All items below are post-v0.1 work.
 
 ---
 
@@ -511,9 +511,143 @@ management constraint. Behavior on Linux (X11) is untested and may differ.
 
 ---
 
-## Deferred / Out of Scope for v0.1
+## v0.2 Steps
 
-- Camera transition acceleration/deceleration (linear interpolation used initially)
+### 23. Rendering Enhancements
+
+Custom body surface shading to replace JME's default Lighting.j3md, based on
+side-by-side comparison with Cosmographia (Saturn, March 2026). Four specific
+deficiencies identified:
+
+**(1) Hard terminator.** The day/night boundary is nearly binary. Add a
+wrap-lighting term or smooth hermite/smoothstep ramp across the terminator to
+produce a gradual falloff instead of a hard cutoff.
+
+**(2) No limb darkening.** The lit hemisphere is uniformly bright from center
+to edge. Add an Oren-Nayar or Minnaert reflectance model, or a simpler
+`pow(dot(N,V), k)` limb darkening term, to darken the disk toward its edges
+and give spheres perceived depth.
+
+**(3) Oversaturated colors.** KEPPLR's Saturn shows vivid yellows and oranges
+where Cosmographia's is muted and creamy. Before writing shader code, audit
+JME's gamma/color-space pipeline — check whether textures are being
+double-corrected (sRGB decoded as linear, or vice versa) and whether the
+ambient term is too bright. This may resolve the issue without shader changes.
+
+**(4) Flat illumination model.** The combined effect of (1)–(3). A custom
+`MaterialDef` with a GLSL fragment shader for body surfaces (parallel to the
+existing `SunHalo.frag`) is the likely implementation path.
+
+Ring shading is a separate concern — rings have angle-dependent scattering
+properties (forward vs. backscatter depending on viewing geometry relative to
+the Sun) that may warrant their own shader pass.
+
+---
+
+### 24. Cinematic Camera Commands and Transition Easing
+
+Two related improvements to the camera transition system:
+
+**Cinematic commands.** `truck(double km, double durationSeconds)`,
+`crane(double km, double durationSeconds)`, and
+`dolly(double km, double durationSeconds)` added to `SimulationCommands`.
+These translate the camera along its screen-right, screen-up, and look
+direction axes respectively, preserving orientation. All three are
+non-blocking, use `TransitionController`, and are loggable by
+`CommandRecorder`. Unlike `goTo` (which targets a body), these are pure
+spatial translations with no body reference — useful for framing shots in
+scripts. Coalescing in `CommandRecorder` follows the same hybrid strategy as
+`orbit`/`zoom` (D-024). `CameraInputHandler` does not delegate to these —
+they are script-only primitives unless a future UI binding is added. See
+D-023 for the command structure pattern established in step 19c.
+
+**Transition easing.** Replace linear interpolation with
+acceleration/deceleration curves for `pointAt`, `goTo`, and the new cinematic
+commands. A smoothstep or cubic ease-in-out applied to the interpolation
+parameter `t` before it reaches the slerp/lerp call is the minimal change.
+Easing constants in `KepplrConstants`. The scripting API and
+`CommandRecorder` are unaffected — easing is internal to
+`TransitionController`.
+
+---
+
+### 25. Screenshot Capture and Animation Sequences
+
+Two capabilities:
+
+**(1) Single screenshot.** `File → Save Screenshot` menu action and
+`SimulationCommands.saveScreenshot(Path)` (with a String overload on
+`KepplrScript`). Writes the current JME framebuffer to a PNG file.
+`ViewPort.addProcessor()` with a `ScreenshotAppState` or equivalent is the
+JME pattern — the capture must wait for the frame to finish rendering. The
+command is loggable by `CommandRecorder`. The GUI action opens a file-save
+dialog; the scripting API writes to the specified path directly.
+
+**(2) Animation sequences.** `captureSequence(String outputDir,
+double startET, int frameCount, double etStep)` on `KepplrScript`. Sets ET
+to `startET`, pauses the simulation, then loops `frameCount` times: advance
+ET by `etStep`, wait for one frame to render, capture a screenshot to
+`outputDir/frame_NNNN.png`. The sequence runs on the script thread and must
+block until each frame is rendered before capturing. The user combines the
+resulting PNGs into video externally (e.g., ffmpeg). After the sequence
+completes, the simulation remains paused at the final ET.
+
+The single-screenshot primitive is a prerequisite for the sequence — the
+sequence is implemented as a loop calling the single-frame capture.
+
+---
+
+### 26. State Snapshot Strings
+
+A compact serialized encoding of the current simulation state as a single
+copy-pasteable string.
+
+**Format:** Base64-encoded (URL-safe variant), versioned with a leading
+version byte so future field additions don't break older strings. Internal
+representation TBD — JSON for readability during development, packed binary
+if string length becomes a concern.
+
+**Minimal field set:** ET, time rate, paused flag, camera position and
+orientation in heliocentric J2000 (the canonical frame per §1.4), camera
+frame enum, focused/targeted/selected NAIF IDs, FOV. Overlay visibility
+(labels, trails, vectors, frustums) deferred to a future "full snapshot"
+extension.
+
+**Integration points:**
+- `SimulationCommands.getStateString()` / `setStateString(String)` — scripts
+  can capture and restore snapshots. `setStateString` jumps instantly (no
+  transition animation) for predictable script behavior; a future
+  `setStateStringAnimated` could be added if smooth restoration is wanted.
+- GUI: `Edit → Copy State` copies to clipboard; `Edit → Paste State` reads
+  from clipboard and applies. Both are loggable by `CommandRecorder`.
+
+---
+
+### 27. Script Configuration Reload and Menu Tooltips
+
+Two small items bundled as a cleanup step.
+
+**Script-initiated configuration reload.** Add
+`loadConfiguration(String path)` to `SimulationCommands` (and a String
+overload on `KepplrScript`). Delegates to the same
+`KEPPLRConfiguration.reload(Path)` + `rebuildBodyScene()` path already used
+by `File → Load Configuration`. This allows a script to switch kernel sets
+mid-execution — e.g., load a comet configuration, run a flyby sequence, then
+reload the default. The command is loggable by `CommandRecorder`. Error
+handling matches the interactive path: parse errors are reported via the
+status window and the script continues with the previous configuration.
+
+**Menu item tooltips.** Add descriptive tooltips to all menu items in the
+JavaFX control window. Tooltip text describes the action and shows the
+keyboard shortcut if one exists (e.g., "Point the camera at the selected
+body (T)"). JavaFX `MenuItem` supports tooltips indirectly via a custom
+graphic node or by setting a tooltip on the internal label. This is a polish
+pass with no architectural impact.
+
+---
+
+## Backlog (unsequenced, post-v0.2)
+
 - Camera navigation inertia and damping (§16.2)
 - Full camera control bindings spec (§16.2)
 - Object search and autocomplete UI (§16.3)

@@ -1,8 +1,9 @@
 // Eclipse lighting vertex shader (GLSL 150 -- version injected by JME)
 //
-// Outputs world-space position and world-space normal for per-fragment eclipse shadow
-// computation. The normal is transformed via the inverse-transpose of the world matrix
-// (g_WorldMatrixInverseTranspose), which correctly handles non-uniformly scaled ellipsoids.
+// Outputs world-space position, world-space normal, and texture coordinates for per-fragment
+// eclipse shadow and surface shading computation. The normal is transformed via the
+// inverse-transpose of the world matrix (g_WorldMatrixInverseTranspose), which correctly
+// handles non-uniformly scaled ellipsoids.
 //
 // All positions are in km (floating-origin heliocentric J2000 world space).
 
