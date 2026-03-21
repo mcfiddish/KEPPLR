@@ -65,6 +65,13 @@ public class BodySceneManager {
     private final Map<EphemerisID, BodySceneNode> bodyNodes = new HashMap<>();
 
     /**
+     * Per-frame cache of effective rendered radius (km) keyed by NAIF ID. For natural bodies this is the mean
+     * ellipsoid radius; for spacecraft it is the GLB bounding-sphere radius set by {@link BodyNodeFactory}. Updated
+     * each frame during {@link #update}; cleared in {@link #dispose}.
+     */
+    private final Map<Integer, Double> sceneBodyRadiiKm = new HashMap<>();
+
+    /**
      * Set of EphemerisIDs that belong to configured spacecraft. Used to skip spacecraft in the general body loop so
      * they are not double-rendered. Populated on first {@link #update} call.
      */
@@ -113,6 +120,7 @@ public class BodySceneManager {
             bsn.detach();
         }
         bodyNodes.clear();
+        sceneBodyRadiiKm.clear();
         spacecraftIdSet = null;
         saturnRingManager.detach();
     }
@@ -202,6 +210,7 @@ public class BodySceneManager {
 
             FrustumLayer layer = FrustumLayer.assign(frame.dist(), frame.bodyRadiusKm());
             bsn.apply(effective, layer, nearNode, midNode, farNode, frame.dist(), viewportHeight, fovYDeg);
+            sceneBodyRadiiKm.put(frame.naifId(), frame.bodyRadiusKm());
 
             if (frame.naifId() == KepplrConstants.SATURN_NAIF_ID && effective == CullDecision.DRAW_FULL) {
                 saturnBsn = bsn;
@@ -243,6 +252,9 @@ public class BodySceneManager {
 
             FrustumLayer layer = FrustumLayer.assign(dist, 0.0);
             bsn.apply(CullDecision.DRAW_SPRITE, layer, nearNode, midNode, farNode, dist, viewportHeight, fovYDeg);
+
+            Number radiusNum = bsn.ephemerisNode.getUserData("bodyRadiusKm");
+            sceneBodyRadiiKm.put(naifId, radiusNum != null ? radiusNum.doubleValue() : 0.0);
         }
 
         // ── Detach bodies no longer visible ────────────────────────────────────────────────────
@@ -256,6 +268,16 @@ public class BodySceneManager {
 
         inView.sort(Comparator.comparingDouble(BodyInView::distanceKm));
         return inView;
+    }
+
+    /**
+     * Returns the effective rendered radius (km) for the given NAIF ID as last observed during {@link #update}.
+     *
+     * <p>For natural bodies this is the mean ellipsoid radius; for spacecraft it is the GLB bounding-sphere radius
+     * (or 0.0 if the spacecraft has no GLB model, or if the body has not yet been rendered).
+     */
+    public double getEffectiveBodyRadiusKm(int naifId) {
+        return sceneBodyRadiiKm.getOrDefault(naifId, 0.0);
     }
 
     // ── private helpers ──────────────────────────────────────────────────────────────────────────

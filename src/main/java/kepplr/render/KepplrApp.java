@@ -284,6 +284,7 @@ public class KepplrApp extends SimpleApplication {
 
         // ── Body scene manager ────────────────────────────────────────────────────────────────
         bodySceneManager = new BodySceneManager(nearNode, midNode, farNode, assetManager, simulationState);
+        transitionController.setBodySceneManager(bodySceneManager);
 
         // ── Trail manager ─────────────────────────────────────────────────────────────────────
         trailManager = new TrailManager(nearNode, midNode, farNode, assetManager, simulationState);
@@ -664,6 +665,7 @@ public class KepplrApp extends SimpleApplication {
 
         // Reconstruct all managers
         bodySceneManager = new BodySceneManager(nearNode, midNode, farNode, assetManager, simulationState);
+        transitionController.setBodySceneManager(bodySceneManager);
         instrumentFrustumManager.reload();
         trailManager = new TrailManager(nearNode, midNode, farNode, assetManager, simulationState);
         vectorManager = new VectorManager(nearNode, midNode, farNode, assetManager);
