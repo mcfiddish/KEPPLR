@@ -2598,6 +2598,11 @@ class SaturnRingManager {
         mat.setVector3("SunDir", new Vector3f(1f, 0f, 0f));
         mat.setVector3("ObserverPos", Vector3f.ZERO);
 
+        // Ring scattering parameters (Step 23)
+        mat.setFloat("ForwardScatterStrength", KepplrConstants.RING_FORWARD_SCATTER_STRENGTH);
+        mat.setFloat("ForwardScatterExponent", KepplrConstants.RING_FORWARD_SCATTER_EXPONENT);
+        mat.setFloat("UnlitSideBrightness", KepplrConstants.RING_UNLIT_SIDE_BRIGHTNESS);
+
         // Step 16b shadow parameters — disabled in 16a (defaults from .j3md are 0)
         // ShadowDarkness, MoonShadowDarkness, NumShadowCasters stay at default 0
 

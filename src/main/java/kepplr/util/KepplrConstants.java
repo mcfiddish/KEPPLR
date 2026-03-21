@@ -446,6 +446,31 @@ public final class KepplrConstants {
      */
     public static final float RING_TAU_SCALE = 1.0f;
 
+    /**
+     * Forward-scatter intensity boost for Saturn's rings (Step 23).
+     *
+     * <p>When the camera and Sun are on opposite sides of the ring plane, ring particles scatter sunlight toward the
+     * camera. This constant scales the forward-scatter lobe intensity: {@code 1 + strength × pow(cosAngle, exponent)}.
+     * Higher values produce a brighter forward-scatter glow.
+     */
+    public static final float RING_FORWARD_SCATTER_STRENGTH = 0.8f;
+
+    /**
+     * Forward-scatter lobe sharpness exponent for Saturn's rings (Step 23).
+     *
+     * <p>Controls how narrow the forward-scatter peak is. Higher values concentrate the brightness boost into a smaller
+     * angular range around the exact forward-scatter direction. 2.0 = broad lobe, 8.0 = tight peak.
+     */
+    public static final float RING_FORWARD_SCATTER_EXPONENT = 3.0f;
+
+    /**
+     * Ambient brightness for the unlit (night) side of Saturn's rings (Step 23).
+     *
+     * <p>The side of the ring plane facing away from the Sun receives this fraction of the base ring brightness. Ring
+     * particles are not a solid surface, so some light passes through gaps. 0.0 = fully dark, 1.0 = same as lit.
+     */
+    public static final float RING_UNLIT_SIDE_BRIGHTNESS = 0.2f;
+
     // ── Quality-preset trail samples (REDESIGN.md §9.4, Step 16b) ─────────────────────────────
 
     /**
