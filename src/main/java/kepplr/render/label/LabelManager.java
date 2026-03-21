@@ -136,6 +136,7 @@ public class LabelManager {
     private static boolean isOccludedByCloserBody(LabelCandidate label, List<ScreenDisc> discs) {
         for (ScreenDisc disc : discs) {
             if (disc.naifId == label.naifId) continue; // don't self-occlude
+            if (disc.distKm >= label.distKm) continue; // only closer bodies can occlude
             double dx = label.screenX - disc.screenX;
             double dy = label.screenY - disc.screenY;
             double distSq = dx * dx + dy * dy;
@@ -175,7 +176,7 @@ public class LabelManager {
             if (screen.x < 0 || screen.x > cam.getWidth() || screen.y < 0 || screen.y > cam.getHeight()) continue;
 
             String name = resolveName(naifId);
-            candidates.add(new LabelCandidate(naifId, name, screen.x, screen.y, radiusKm));
+            candidates.add(new LabelCandidate(naifId, name, screen.x, screen.y, radiusKm, distKm));
         }
     }
 
@@ -227,7 +228,7 @@ public class LabelManager {
     }
 
     /** Label candidate record used during the declutter pass. Package-private for tests. */
-    record LabelCandidate(int naifId, String name, double screenX, double screenY, double physicalRadiusKm) {}
+    record LabelCandidate(int naifId, String name, double screenX, double screenY, double physicalRadiusKm, double distKm) {}
 
     /** Screen-space body disc used for label occlusion checks. */
     private record ScreenDisc(int naifId, double screenX, double screenY, double distKm, double screenRadiusPx) {}
