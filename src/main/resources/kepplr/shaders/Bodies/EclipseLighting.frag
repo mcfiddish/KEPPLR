@@ -165,6 +165,8 @@ void main() {
     diffuse = texture(m_DiffuseMap, vTexCoord);
     // sRGB → linear: equirectangular maps are authored in sRGB; lighting math must be in linear space.
     diffuse.rgb = srgbToLinear(diffuse.rgb);
+    // Apply glTF baseColorFactor tint (linear). Default is vec4(1) so this is a no-op for plain textures.
+    diffuse.rgb *= m_DiffuseColor.rgb;
 #else
     diffuse = m_DiffuseColor;
     // DiffuseColor is assumed already linear (engine-set fallback colors are typically linear).
