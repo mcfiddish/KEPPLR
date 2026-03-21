@@ -431,7 +431,7 @@ class CameraTransitionTest {
     @Test
     @DisplayName("FOV is clamped to [FOV_MIN_DEG, FOV_MAX_DEG]")
     void fovIsClamped() {
-        controller.requestFov(0.1, 0);
+        controller.requestFov(1e-9, 0);
         controller.update(0.016f, cam, camPos);
         assertEquals((float) KepplrConstants.FOV_MIN_DEG, cam.getFov(), 0.01f, "FOV should be clamped to minimum");
 

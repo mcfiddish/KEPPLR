@@ -761,7 +761,35 @@ would cause a compilation error since `toScript()` has no default implementation
 
 ---
 
-*Last updated: Step 22 (instrument frustum overlays)*
+## D-034: Manual sRGB gamma in EclipseLighting shader
+**Status:** Accepted
+**Roadmap step:** 23
+
+**Context:** Body surface textures (equirectangular planet maps) are authored in sRGB, but JME's `setGammaCorrection(true)` only applies to its built-in Lighting/PBR pipeline. The custom `EclipseLighting` shader bypasses JME's lighting entirely — it computes N·L from a `SunPosition` uniform, not from scene lights. Enabling JME gamma correction would fix spacecraft PBR materials but leave the custom body shader unchanged, and could introduce inconsistencies between the two paths.
+
+**Decision:** The `EclipseLighting` fragment shader performs manual `pow(c, 2.2)` on texture samples (sRGB→linear) and `pow(c, 1/2.2)` on output (linear→sRGB). The `BODY_AMBIENT_FACTOR` constant was lowered from 0.05 to 0.001 (linear) because the linearToSrgb output conversion lifts dark values — linear 0.001 ≈ sRGB 0.03, preserving the original perceptual night-side darkness. Flat `DiffuseColor` fallback (no texture) skips gamma conversion since engine-set colors are already linear.
+
+**Alternatives considered:** `setGammaCorrection(true)` globally — rejected because it does not reach the custom shader and would require reworking the entire lighting pipeline. Tagging textures as sRGB and relying on hardware sRGB decode — considered but JME's GLSL 150 path does not reliably use `GL_SRGB` internal formats on all drivers.
+
+**Consequences:** Body surface colors now match Cosmographia's muted tones. Any future custom shader that samples sRGB textures must include the same manual conversion. The Saturn ring shader (`SaturnRings.frag`) does not need it — its brightness/transparency textures are 1-D luminance profiles authored in linear space.
+
+---
+
+## D-035: Ring forward scatter is brighter than backscatter
+**Status:** Accepted
+**Roadmap step:** 23
+
+**Context:** The original ring phase function (Step 16a) computed `halfPhase = 0.5 × (1 + dot(obsDir, sunDir))` and used it as brightness directly. This made backscatter (sun behind camera, `dot > 0`) bright and forward scatter (sun in front, `dot < 0`) dim — the opposite of physical reality. Saturn's rings are composed of ice particles that transmit and scatter light forward more strongly than they reflect it backward.
+
+**Decision:** The scattering model now branches on which side of the ring plane the camera and Sun occupy. Same side (backscatter): brightness = `0.5 × (1 + cosPhase)`, bright at opposition and dimming toward 90° phase. Opposite sides (forward scatter): brightness = `unlitSideBrightness × (1 + strength × pow(cosForward, exponent))`, producing a concentrated brightness boost when looking through the rings toward the Sun. Three tunable constants control the lobe shape and unlit-side floor.
+
+**Alternatives considered:** Single Henyey-Greenstein phase function — rejected as overly complex for the visual fidelity needed and harder to tune with named constants. Keeping the original polarity but boosting the dim side — rejected because the physical model is fundamentally inverted.
+
+**Consequences:** `RING_FORWARD_SCATTER_STRENGTH`, `RING_FORWARD_SCATTER_EXPONENT`, and `RING_UNLIT_SIDE_BRIGHTNESS` defined in `KepplrConstants` and passed as shader uniforms. Shadow system unchanged — `shadowFactor` multiplies `ringLightFactor` after scattering is computed.
+
+---
+
+*Last updated: Step 23 (rendering enhancements)*
 *Backfill note: Entries D-001 through D-009 were reconstructed retrospectively.
 D-010 onwards recorded in real time.*
 

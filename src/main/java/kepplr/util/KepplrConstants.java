@@ -195,7 +195,7 @@ public final class KepplrConstants {
      * diameter regardless of distance. Applied to spacecraft and small bodies drawn below the
      * {@link #DRAW_FULL_MIN_APPARENT_RADIUS_PX} threshold.
      */
-    public static final double SPACECRAFT_POINT_SPRITE_SIZE = 4.0;
+    public static final double SPACECRAFT_POINT_SPRITE_SIZE = 2.0;
 
     // ── Vector overlays (Step 13) ──
 
@@ -393,12 +393,32 @@ public final class KepplrConstants {
     public static final float SHADOW_TERMINATOR_WIDTH_RAD = 0.05f;
 
     /**
-     * Night-side ambient luminance factor for body surface shading.
+     * Night-side ambient luminance factor for body surface shading (linear space).
      *
-     * <p>The minimum base illumination applied to fragments where N·L ≤ 0 (full night side). Set to 5% of the diffuse
-     * color so night-side geometry remains faintly visible without appearing artificially bright.
+     * <p>The minimum base illumination applied to fragments where N·L ≤ 0 (full night side). In linear light space,
+     * 0.001 produces approximately 3% perceptual brightness after the linear→sRGB conversion in the shader
+     * ({@code pow(0.001, 1/2.2) ≈ 0.03}), keeping night-side geometry barely visible without appearing artificially
+     * bright.
      */
-    public static final float BODY_AMBIENT_FACTOR = 0.05f;
+    public static final float BODY_AMBIENT_FACTOR = 0.001f;
+
+    /**
+     * Wrap lighting factor for the day/night terminator (Step 23).
+     *
+     * <p>Controls how far illumination extends past the geometric terminator (N·L = 0). The wrap-lighting term is
+     * {@code (NdotL + wrap) / (1 + wrap)}, which shifts the terminator slightly onto the night side for a softer, more
+     * physically plausible transition. 0.0 = hard Lambertian cutoff; higher values = softer transition.
+     */
+    public static final float BODY_WRAP_FACTOR = 0.15f;
+
+    /**
+     * Minnaert limb darkening exponent for body surface shading (Step 23).
+     *
+     * <p>Controls the view-angle-dependent darkening near the limb of a body. The Minnaert reflectance model is
+     * {@code pow(NdotL, k) × pow(NdotV, k − 1)}. At {@code k = 1.0} this reduces to pure Lambertian; values above 1.0
+     * produce progressively darker limbs, appropriate for rough rocky/icy surfaces.
+     */
+    public static final float BODY_LIMB_DARKENING_K = 1.3f;
 
     /**
      * Saturn-shadow darkness on the ring surface (Step 16b).
@@ -425,6 +445,31 @@ public final class KepplrConstants {
      * {@code atten = exp(−TauScale × τ / μ₀)}. 1.0 = physically calibrated. Matches prototype {@code TAU_SCALE}.
      */
     public static final float RING_TAU_SCALE = 1.0f;
+
+    /**
+     * Forward-scatter intensity boost for Saturn's rings (Step 23).
+     *
+     * <p>When the camera and Sun are on opposite sides of the ring plane, ring particles scatter sunlight toward the
+     * camera. This constant scales the forward-scatter lobe intensity: {@code 1 + strength × pow(cosAngle, exponent)}.
+     * Higher values produce a brighter forward-scatter glow.
+     */
+    public static final float RING_FORWARD_SCATTER_STRENGTH = 0.8f;
+
+    /**
+     * Forward-scatter lobe sharpness exponent for Saturn's rings (Step 23).
+     *
+     * <p>Controls how narrow the forward-scatter peak is. Higher values concentrate the brightness boost into a smaller
+     * angular range around the exact forward-scatter direction. 2.0 = broad lobe, 8.0 = tight peak.
+     */
+    public static final float RING_FORWARD_SCATTER_EXPONENT = 3.0f;
+
+    /**
+     * Ambient brightness for the unlit (night) side of Saturn's rings (Step 23).
+     *
+     * <p>The side of the ring plane facing away from the Sun receives this fraction of the base ring brightness. Ring
+     * particles are not a solid surface, so some light passes through gaps. 0.0 = fully dark, 1.0 = same as lit.
+     */
+    public static final float RING_UNLIT_SIDE_BRIGHTNESS = 0.2f;
 
     // ── Quality-preset trail samples (REDESIGN.md §9.4, Step 16b) ─────────────────────────────
 
@@ -582,7 +627,7 @@ public final class KepplrConstants {
      * <p>Clamping floor for {@code setFov()} commands. Prevents the FOV from becoming so narrow that rendering
      * artifacts or numerical instability appear.
      */
-    public static final double FOV_MIN_DEG = 1.0;
+    public static final double FOV_MIN_DEG = 1e-6;
 
     /**
      * Maximum camera field of view in degrees.

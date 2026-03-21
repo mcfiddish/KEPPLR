@@ -23,6 +23,16 @@ MaterialDef Saturn Rings {
         // Default: IAU 2015 Saturn radii (a=60268, b=60268, c=54364 km)
         Vector3 SaturnRadii
 
+        // ── Ring scattering parameters (Step 23) ────────────────────────────────────────────────
+        // Forward-scatter intensity boost (= KepplrConstants.RING_FORWARD_SCATTER_STRENGTH)
+        Float ForwardScatterStrength : 0.8
+
+        // Forward-scatter lobe sharpness (= KepplrConstants.RING_FORWARD_SCATTER_EXPONENT)
+        Float ForwardScatterExponent : 3.0
+
+        // Unlit (night) side ambient brightness (= KepplrConstants.RING_UNLIT_SIDE_BRIGHTNESS)
+        Float UnlitSideBrightness : 0.2
+
         // ── Step 16b shadow parameters (set each frame by EclipseShadowManager) ───────────────
 
         // Shadow darkness when ring lies inside Saturn's shadow cone (0 = disabled, 0.9 = default)

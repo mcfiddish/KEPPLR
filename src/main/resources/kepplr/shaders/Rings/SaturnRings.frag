@@ -1,7 +1,7 @@
 // Saturn ring fragment shader (GLSL 150 -- version injected by JME)
 //
 // Computes ring color and opacity from the Bjorn Jonsson radial optical-depth profile,
-// applies an observer/sun phase function for forward/back scattering, and computes
+// applies angle-dependent scattering (forward/backscatter, Step 23), and computes
 // analytic eclipse shadows (Step 16b):
 //
 //   CASTER:   ring casts shadows onto Saturn's disk (handled by EclipseLighting.frag)
@@ -22,6 +22,11 @@ uniform float     m_OuterRadius;      // km - outer annulus boundary
 uniform vec3      m_SunDir;           // normalized sun direction in body-fixed space
 uniform vec3      m_ObserverPos;      // camera position in body-fixed space (km)
 uniform vec3      m_SaturnRadii;      // Saturn principal radii (km) — for Saturn-on-ring shadow
+
+// Ring scattering parameters (Step 23)
+uniform float m_ForwardScatterStrength;  // forward-scatter intensity boost
+uniform float m_ForwardScatterExponent;  // forward-scatter lobe sharpness
+uniform float m_UnlitSideBrightness;     // night-side ambient brightness
 
 // Step 16b shadow parameters (set by EclipseShadowManager; 0/disabled default in 16a)
 uniform float m_ShadowDarkness;        // Saturn shadow scale (0.9 default)
@@ -114,7 +119,9 @@ void main() {
     float alpha = clamp(1.0 - transparency, 0.0, 1.0);
     if (alpha < 0.01) discard;
 
-    // Phase function: rings scatter light differently forward vs. back.
+    // ── Angle-dependent ring scattering (Step 23) ────────────────────────────────────────────
+    // Ring particles forward-scatter when Sun and camera are on opposite sides of the ring plane,
+    // and backscatter when on the same side.
     float ringLightFactor = 1.0;
 
     float sunLen = length(m_SunDir);
@@ -124,20 +131,32 @@ void main() {
         vec3 toObserver = m_ObserverPos - vLocalPos;
         float obsLen = length(toObserver);
         if (obsLen > 0.0) {
-            vec3 obsDir = toObserver / obsLen;
-            float cosPhase = clamp(dot(obsDir, sunDir), -1.0, 1.0);
-            float halfPhase   = 0.5 * (1.0 + cosPhase);
-            float halfPhaseSq = halfPhase * halfPhase;
+            vec3 viewDir = toObserver / obsLen;
 
-            float sunSide = sign(sunDir.z);
-            float obsSide = sign(m_ObserverPos.z);
+            // Which side of the ring plane (body-fixed Z=0) is each on?
+            float sunSide = sunDir.z;
+            float obsSide = m_ObserverPos.z;
             bool sameSide = (abs(sunSide) < 0.001 || abs(obsSide) < 0.001)
-                           || (sunSide == obsSide);
+                           || (sign(sunSide) == sign(obsSide));
+
+            // Phase angle: cosPhase > 0 when sun is behind camera (backscatter/low phase),
+            // cosPhase < 0 when sun is in front of camera (forward scatter/high phase).
+            float cosPhase = dot(viewDir, sunDir);
 
             if (sameSide) {
-                ringLightFactor = max(halfPhaseSq, 0.05);
+                // Backscatter geometry: brightness driven by phase angle.
+                // At low phase (sun behind camera, cosPhase ≈ 1) rings are near full brightness.
+                // At high phase (cosPhase → 0) they dim but stay above a floor.
+                float backscatter = 0.5 * (1.0 + cosPhase); // [0, 1]: 1 at opposition, 0 at 90°
+                ringLightFactor = clamp(backscatter, 0.15, 1.0);
             } else {
-                ringLightFactor = max(halfPhaseSq * 0.5, 0.02);
+                // Forward-scatter geometry: boost brightness based on alignment with -sunDir.
+                // cosForward peaks when looking through rings toward Sun.
+                float cosForward = max(dot(viewDir, -sunDir), 0.0);
+                float forwardBoost = 1.0 + m_ForwardScatterStrength
+                        * pow(cosForward, m_ForwardScatterExponent);
+                // Base is the unlit-side brightness; forward scatter adds on top.
+                ringLightFactor = m_UnlitSideBrightness * forwardBoost;
             }
         }
 

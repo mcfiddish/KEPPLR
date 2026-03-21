@@ -148,6 +148,13 @@ public interface SimulationState {
      */
     ReadOnlyDoubleProperty transitionProgressProperty();
 
+    /**
+     * Current camera field of view in degrees.
+     *
+     * <p>Updated each frame from the JME camera on the JME render thread.
+     */
+    ReadOnlyDoubleProperty fovDegProperty();
+
     // ── Overlay state (REDESIGN.md §7.8, §7.9, §7.5, §7.6, Step 19b) ──
 
     /**

@@ -2,6 +2,9 @@ package kepplr.render.body;
 
 import com.jme3.asset.AssetManager;
 import com.jme3.asset.plugins.FileLocator;
+import com.jme3.bounding.BoundingBox;
+import com.jme3.bounding.BoundingSphere;
+import com.jme3.bounding.BoundingVolume;
 import com.jme3.material.MatParamTexture;
 import com.jme3.material.Material;
 import com.jme3.math.ColorRGBA;
@@ -66,7 +69,7 @@ import picante.surfaces.Ellipsoid;
  * ephemerisNode
  * ├── bodyFixedNode
  * │   └── glbModelRoot  (localRotation = modelToBodyFixedQuat; scale = 0.001 × block.scale())
- * │       └── [loaded GLB Spatial, PBR materials used as-is]
+ * │       └── [loaded GLB Spatial, EclipseLighting material applied]
  * └── spriteGeom  (hidden when glbModelRoot is present)
  * </pre>
  *
@@ -152,12 +155,21 @@ public final class BodyNodeFactory {
         if (glbModelRoot == null) {
             // No GLB (or load failed): use the standard ellipsoid branch.
             bodyFixedNode.attachChild(textureAlignNode);
+        } else {
+            // Apply EclipseLighting to the GLB geometries, sharing fullGeom's Material instance.
+            // Sharing the same instance means EclipseShadowManager's per-frame uniform updates
+            // (SunPosition, OccluderPositions, etc.) on fullGeom.getMaterial() automatically
+            // propagate to all GLB geometry nodes — no changes to EclipseShadowManager needed.
+            // If the GLB has an embedded BaseColorMap, it overrides the DiffuseMap on the shared
+            // material so the shape-model texture is used in preference to any external texture
+            // configured in the body block.
+            applyEclipseLightingToGlb(glbModelRoot, fullGeom.getMaterial());
         }
         // When glbModelRoot != null, textureAlignNode is intentionally NOT attached to
         // bodyFixedNode. fullGeom (the ellipsoid) is kept as an EclipseShadowManager proxy:
         // its CullHint is managed by BodySceneNode.apply() so the shadow manager can identify
         // this as a DRAW_FULL body. Because textureAlignNode is detached, fullGeom is never
-        // rendered. See REDESIGN.md §9.3 for the deferred shape-model shadow refinement.
+        // rendered.
 
         // Point-sprite: tiny unit sphere, hidden by default
         Geometry spriteGeom = buildSprite(bodyId.getName(), naifId, assetManager);
@@ -195,11 +207,14 @@ public final class BodyNodeFactory {
         String name = spacecraft.id().getName();
         int naifId = spacecraft.code();
 
-        // Dummy full geom (permanently hidden — spacecraft don't use the ellipsoid pipeline)
+        // fullGeom: permanently hidden ellipsoid; always CullHint.Always so it is never rendered.
+        // Uses Unshaded.White (no lighting needed — it's invisible). The "eclipseMaterial" tag
+        // tells EclipseShadowManager to run the per-geometry spacecraft GLB lighting pass below.
         Sphere dummyMesh = new Sphere(4, 4, 1f);
         Geometry fullGeom = new Geometry(name + "-shape", dummyMesh);
         fullGeom.setMaterial(unshadedMaterial(ColorRGBA.White, assetManager));
         fullGeom.setCullHint(Spatial.CullHint.Always);
+        fullGeom.setUserData("eclipseMaterial", true);
 
         Node textureAlignNode = new Node(name + "-tex-align");
         textureAlignNode.attachChild(fullGeom);
@@ -211,12 +226,34 @@ public final class BodyNodeFactory {
         // Attempt to load a GLB shape model if configured.
         Node glbModelRoot = tryLoadSpacecraftGlb(spacecraft, bodyFixedNode, assetManager);
 
+        // Compute the GLB bounding radius (in km) for label suppression: labels disappear
+        // when the shape model is large enough on screen, just like natural body labels.
+        // For sprite-only spacecraft (no GLB), bodyRadiusKm stays 0.0 so the label always shows.
+        double glbRadiusKm = 0.0;
+        if (glbModelRoot != null) {
+            // Apply per-geometry EclipseLighting materials so each mesh part of the spacecraft
+            // retains its own color from the glTF PBR material. EclipseShadowManager's spacecraft
+            // pass walks the GLB tree and updates each geometry's material directly.
+            applyEclipseLightingToSpacecraftGlb(glbModelRoot, naifId, assetManager);
+
+            // Force-compute world bounds for the bodyFixedNode subtree (glbModelRoot is attached).
+            // The GLB is in meters scaled by scaleFactor → km, so the bound radius is in km.
+            bodyFixedNode.updateGeometricState();
+            BoundingVolume bv = glbModelRoot.getWorldBound();
+            if (bv instanceof BoundingSphere bs) {
+                glbRadiusKm = bs.getCenter().length() + bs.getRadius();
+            } else if (bv instanceof BoundingBox bb) {
+                Vector3f ext = bb.getExtent(null);
+                glbRadiusKm = bb.getCenter().length() + Math.max(ext.x, Math.max(ext.y, ext.z));
+            }
+        }
+
         // Spacecraft sprite is visible by default; hidden if GLB was loaded.
         spriteGeom.setCullHint(glbModelRoot != null ? Spatial.CullHint.Always : Spatial.CullHint.Inherit);
 
         Node ephemerisNode = new Node(name + "-ephemeris");
         ephemerisNode.setUserData("naifId", naifId);
-        ephemerisNode.setUserData("bodyRadiusKm", 0.0);
+        ephemerisNode.setUserData("bodyRadiusKm", glbRadiusKm);
         ephemerisNode.attachChild(bodyFixedNode);
         ephemerisNode.attachChild(spriteGeom);
 
@@ -398,6 +435,100 @@ public final class BodyNodeFactory {
         }
     }
 
+    // ── EclipseLighting application for GLB bodies ────────────────────────────────────────────────
+
+    /**
+     * Replace the material on every {@link Geometry} in a body GLB tree with the provided {@code EclipseLighting}
+     * material instance.
+     *
+     * <p>Using the same {@link Material} instance as {@code fullGeom} means {@link EclipseShadowManager}'s per-frame
+     * uniform writes ({@code SunPosition}, {@code OccluderPositions}, etc.) automatically propagate to all GLB
+     * geometries without any changes to the shadow manager.
+     *
+     * <p>If a GLB {@link Geometry}'s original PBR material carries a {@code BaseColorMap} texture, it is extracted and
+     * set as {@code DiffuseMap} on the shared material (last write wins for multi-mesh models). If there is no texture
+     * but a flat {@code BaseColor} is present, it is set as {@code DiffuseColor} instead.
+     */
+    private static void applyEclipseLightingToGlb(Spatial spatial, Material eclipseMat) {
+        if (spatial instanceof Geometry geometry) {
+            Material oldMat = geometry.getMaterial();
+            if (oldMat != null) {
+                // Extract BaseColorMap texture (if any) → DiffuseMap.
+                MatParamTexture colorParam = oldMat.getTextureParam("BaseColorMap");
+                if (colorParam != null && colorParam.getTextureValue() != null) {
+                    Texture tex = colorParam.getTextureValue();
+                    // Preserve sampler settings from applySamplerPreset; ensure sRGB tag for
+                    // the linearisation step in EclipseLighting.frag.
+                    if (tex.getImage() != null && tex.getImage().getColorSpace() != ColorSpace.sRGB) {
+                        tex.getImage().setColorSpace(ColorSpace.sRGB);
+                    }
+                    eclipseMat.setTexture("DiffuseMap", tex);
+                }
+                // Extract BaseColor factor (if any) → DiffuseColor.
+                // In glTF, baseColorFactor is in linear space and multiplies the texture sample.
+                // Setting DiffuseColor here allows the shader to apply the tint even when a
+                // texture is also present (the shader multiplies DiffuseMap × DiffuseColor).
+                var colorVal = oldMat.getParam("BaseColor");
+                if (colorVal != null && colorVal.getValue() instanceof ColorRGBA c) {
+                    eclipseMat.setColor("DiffuseColor", c);
+                }
+            }
+            geometry.setMaterial(eclipseMat);
+            return;
+        }
+        if (spatial instanceof Node node) {
+            for (Spatial child : node.getChildren()) {
+                applyEclipseLightingToGlb(child, eclipseMat);
+            }
+        }
+    }
+
+    /**
+     * Apply per-geometry {@code EclipseLighting.j3md} materials to every {@link Geometry} in a spacecraft GLB tree.
+     *
+     * <p>Unlike {@link #applyEclipseLightingToGlb} (which shares one material instance across all GLB geometries), this
+     * method creates a fresh {@code EclipseLighting} material for each {@link Geometry} so that multi-part spacecraft
+     * models retain their per-mesh colors. Each geometry is also tagged with {@code "eclipseMaterial" = true} so
+     * {@link EclipseShadowManager} can locate and update them.
+     *
+     * <p>Color extraction follows the same glTF PBR→EclipseLighting mapping as {@link #applyEclipseLightingToGlb}:
+     *
+     * <ul>
+     *   <li>{@code BaseColorMap} → {@code DiffuseMap} (sRGB colour-space tag preserved)
+     *   <li>{@code BaseColor} factor → {@code DiffuseColor} (applied as a tint by the shader)
+     * </ul>
+     */
+    private static void applyEclipseLightingToSpacecraftGlb(Spatial spatial, int naifId, AssetManager assetManager) {
+        if (spatial instanceof Geometry geometry) {
+            Material oldMat = geometry.getMaterial();
+            Material geomMat = new Material(assetManager, "kepplr/shaders/Bodies/EclipseLighting.j3md");
+            geomMat.setFloat("WrapFactor", kepplr.util.KepplrConstants.BODY_WRAP_FACTOR);
+            geomMat.setFloat("LimbDarkeningK", kepplr.util.KepplrConstants.BODY_LIMB_DARKENING_K);
+            if (oldMat != null) {
+                MatParamTexture colorParam = oldMat.getTextureParam("BaseColorMap");
+                if (colorParam != null && colorParam.getTextureValue() != null) {
+                    Texture tex = colorParam.getTextureValue();
+                    if (tex.getImage() != null && tex.getImage().getColorSpace() != ColorSpace.sRGB) {
+                        tex.getImage().setColorSpace(ColorSpace.sRGB);
+                    }
+                    geomMat.setTexture("DiffuseMap", tex);
+                }
+                var colorVal = oldMat.getParam("BaseColor");
+                if (colorVal != null && colorVal.getValue() instanceof ColorRGBA c) {
+                    geomMat.setColor("DiffuseColor", c);
+                }
+            }
+            geometry.setMaterial(geomMat);
+            geometry.setUserData("eclipseMaterial", true);
+            return;
+        }
+        if (spatial instanceof Node node) {
+            for (Spatial child : node.getChildren()) {
+                applyEclipseLightingToSpacecraftGlb(child, naifId, assetManager);
+            }
+        }
+    }
+
     // ── private helpers ───────────────────────────────────────────────────────────────────────────
 
     private static float meanRadius(Ellipsoid shape, String name) {
@@ -447,6 +578,10 @@ public final class BodyNodeFactory {
                     Texture tex =
                             assetManager.loadTexture(resolved.getFileName().toString());
                     tex.setWrap(Texture.WrapMode.Repeat);
+                    // Tag as sRGB so the shader can convert to linear for correct lighting math.
+                    if (tex.getImage() != null && tex.getImage().getColorSpace() != ColorSpace.sRGB) {
+                        tex.getImage().setColorSpace(ColorSpace.sRGB);
+                    }
                     mat.setTexture("DiffuseMap", tex);
                 } catch (Exception e) {
                     logger.warn("Could not load texture for {}: {}", bodyName, e.getMessage());
@@ -462,6 +597,10 @@ public final class BodyNodeFactory {
         if (naifId == kepplr.util.KepplrConstants.SATURN_NAIF_ID) {
             mat.setBoolean("HasRings", true);
         }
+
+        // Surface shading parameters (Step 23): wrap lighting and Minnaert limb darkening.
+        mat.setFloat("WrapFactor", kepplr.util.KepplrConstants.BODY_WRAP_FACTOR);
+        mat.setFloat("LimbDarkeningK", kepplr.util.KepplrConstants.BODY_LIMB_DARKENING_K);
 
         return mat;
     }
@@ -497,7 +636,7 @@ public final class BodyNodeFactory {
     }
 
     private static Geometry buildSprite(String name, int naifId, AssetManager assetManager) {
-        Sphere spriteMesh = new Sphere(4, 4, 1f);
+        Sphere spriteMesh = new Sphere(6, 8, 1f);
         Geometry spriteGeom = new Geometry(name + "-sprite", spriteMesh);
         ColorRGBA color = spriteColorFor(name, naifId);
         spriteGeom.setMaterial(unshadedMaterial(color, assetManager));

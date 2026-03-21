@@ -42,18 +42,53 @@ public final class BodyLookupService {
     /**
      * Format a NAIF ID as a human-readable body name.
      *
+     * <p>Checks {@link kepplr.config.SpacecraftBlock#name()} / {@link kepplr.config.BodyBlock#name()} first; falls back
+     * to the SPICE object name (title-cased).
+     *
      * @param naifId NAIF body code, or -1 for "no body"
-     * @return the SPICE object name (title-cased), or {@code "—"} if {@code naifId == -1}, or {@code "NAIF <id>"} if
-     *     the name cannot be resolved
+     * @return the configured display name, or the SPICE object name (title-cased), or {@code "—"} if {@code naifId ==
+     *     -1}, or {@code "NAIF <id>"} if the name cannot be resolved
      */
     public static String formatName(int naifId) {
         if (naifId == -1) return "—";
         try {
-            SpiceBundle bundle =
-                    KEPPLRConfiguration.getInstance().getEphemeris().getSpiceBundle();
+            KEPPLRConfiguration cfg = KEPPLRConfiguration.getInstance();
+            KEPPLREphemeris eph = cfg.getEphemeris();
+            SpiceBundle bundle = eph.getSpiceBundle();
+
+            // Check spacecraft first (negative NAIF IDs)
+            for (var sc : eph.getSpacecraft()) {
+                if (sc.code() == naifId) {
+                    try {
+                        var block = cfg.spacecraftBlock(naifId);
+                        if (block != null
+                                && block.name() != null
+                                && !block.name().isBlank()) {
+                            return block.name();
+                        }
+                    } catch (Exception ignored) {
+                    }
+                    return titleCase(sc.id().getName());
+                }
+            }
+
+            // Natural body: look up SPICE name, then check BodyBlock for an explicitly
+            // configured display name. The auto-derived block name equals the SPICE name;
+            // only override when the configured name is different.
             EphemerisID id = bundle.getObject(naifId);
             if (id == null) return "NAIF " + naifId;
-            return bundle.getObjectName(id).map(BodyLookupService::titleCase).orElse("NAIF " + naifId);
+            String spiceName = bundle.getObjectName(id).orElse(id.getName());
+            try {
+                var block = cfg.bodyBlock(spiceName);
+                if (block != null
+                        && block.name() != null
+                        && !block.name().isBlank()
+                        && !block.name().equalsIgnoreCase(spiceName)) {
+                    return block.name();
+                }
+            } catch (Exception ignored) {
+            }
+            return titleCase(spiceName);
         } catch (Exception e) {
             return "NAIF " + naifId;
         }

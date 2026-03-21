@@ -48,6 +48,13 @@ MaterialDef Eclipse Lighting {
 
         // Ring transparency profile (1-D luminance; inner=1.0, outer=0.0)
         Texture2D RingTransparencyTex
+
+        // ── Surface shading parameters (Step 23) ────────────────────────────────────────────
+        // Wrap lighting factor for soft terminator (= KepplrConstants.BODY_WRAP_FACTOR)
+        Float WrapFactor : 0.15
+
+        // Minnaert limb darkening exponent (= KepplrConstants.BODY_LIMB_DARKENING_K)
+        Float LimbDarkeningK : 1.3
     }
 
     Technique {
@@ -58,6 +65,7 @@ MaterialDef Eclipse Lighting {
             WorldViewProjectionMatrix
             WorldMatrix
             WorldMatrixInverseTranspose
+            CameraPosition
         }
 
         Defines {

@@ -13,14 +13,8 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
-import kepplr.config.KEPPLRConfiguration;
-import kepplr.ephemeris.KEPPLREphemeris;
-import kepplr.ephemeris.spice.SpiceBundle;
+import kepplr.ephemeris.BodyLookupService;
 import kepplr.util.KepplrConstants;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
-import picante.mechanics.EphemerisID;
 
 /**
  * Manages body name labels rendered as screen-space text on the JME GUI node (REDESIGN.md §7.8).
@@ -32,8 +26,6 @@ import picante.mechanics.EphemerisID;
  * <p>All methods must be called on the JME render thread (CLAUDE.md Rule 4).
  */
 public class LabelManager {
-
-    private static final Logger logger = LogManager.getLogger();
 
     private static final float LABEL_SIZE_PX = 14f;
     private static final float LABEL_OFFSET_PX = 8f;
@@ -124,13 +116,11 @@ public class LabelManager {
             double radiusKm = radiusNum != null ? radiusNum.doubleValue() : 0.0;
             if (radiusKm <= 0) continue;
 
-            Vector3f worldPos = child.getWorldTranslation();
+            Vector3f worldPos = child.getWorldTranslation().clone();
             float distKm = worldPos.length();
             if (distKm < 1e-3) continue;
 
-            Vector3f camDir = cam.getDirection();
-            float dot = camDir.dot(worldPos.normalize());
-            if (dot < 0) continue;
+            if (cam.getDirection().dot(worldPos) < 0) continue;
 
             Vector3f screen = cam.getScreenCoordinates(worldPos);
             // Apparent angular radius → screen pixels (approximate)
@@ -146,6 +136,7 @@ public class LabelManager {
     private static boolean isOccludedByCloserBody(LabelCandidate label, List<ScreenDisc> discs) {
         for (ScreenDisc disc : discs) {
             if (disc.naifId == label.naifId) continue; // don't self-occlude
+            if (disc.distKm >= label.distKm) continue; // only closer bodies can occlude
             double dx = label.screenX - disc.screenX;
             double dy = label.screenY - disc.screenY;
             double distSq = dx * dx + dy * dy;
@@ -165,7 +156,7 @@ public class LabelManager {
             Number radiusNum = child.getUserData("bodyRadiusKm");
             double radiusKm = radiusNum != null ? radiusNum.doubleValue() : 0.0;
 
-            Vector3f worldPos = child.getWorldTranslation();
+            Vector3f worldPos = child.getWorldTranslation().clone();
             float distKm = worldPos.length();
             if (distKm < 1e-3) continue;
 
@@ -177,16 +168,15 @@ public class LabelManager {
                 if (apparentRadiusPx >= KepplrConstants.DRAW_FULL_MIN_APPARENT_RADIUS_PX) continue;
             }
 
-            // Check if behind camera
-            Vector3f camDir = cam.getDirection();
-            float dot = camDir.dot(worldPos.normalize());
-            if (dot < 0) continue;
+            // Check if behind camera (using dot-product sign; no normalize to avoid corrupting
+            // the world-translation cache via the returned-reference from getWorldTranslation)
+            if (cam.getDirection().dot(worldPos) < 0) continue;
 
             Vector3f screen = cam.getScreenCoordinates(worldPos);
             if (screen.x < 0 || screen.x > cam.getWidth() || screen.y < 0 || screen.y > cam.getHeight()) continue;
 
             String name = resolveName(naifId);
-            candidates.add(new LabelCandidate(naifId, name, screen.x, screen.y, radiusKm));
+            candidates.add(new LabelCandidate(naifId, name, screen.x, screen.y, radiusKm, distKm));
         }
     }
 
@@ -221,41 +211,25 @@ public class LabelManager {
     }
 
     private BitmapText getOrCreateLabel(int naifId, String name) {
-        return labels.computeIfAbsent(naifId, id -> {
-            BitmapText text = new BitmapText(font, false);
-            text.setSize(LABEL_SIZE_PX);
-            text.setColor(ColorRGBA.White);
-            text.setText(name);
-            text.setCullHint(Spatial.CullHint.Always);
-            guiNode.attachChild(text);
-            return text;
+        BitmapText text = labels.computeIfAbsent(naifId, id -> {
+            BitmapText t = new BitmapText(font, false);
+            t.setSize(LABEL_SIZE_PX);
+            t.setColor(ColorRGBA.White);
+            t.setCullHint(Spatial.CullHint.Always);
+            guiNode.attachChild(t);
+            return t;
         });
+        text.setText(name);
+        return text;
     }
 
     private static String resolveName(int naifId) {
-        try {
-            KEPPLREphemeris eph = KEPPLRConfiguration.getInstance().getEphemeris();
-            SpiceBundle bundle = eph.getSpiceBundle();
-            Set<EphemerisID> known = eph.getKnownBodies();
-            for (EphemerisID id : known) {
-                if (bundle.getObjectCode(id).orElse(-999) == naifId) {
-                    return bundle.getObjectName(id).orElse("NAIF " + naifId);
-                }
-            }
-            // Check spacecraft
-            for (var sc : eph.getSpacecraft()) {
-                if (sc.code() == naifId) {
-                    return sc.id().getName();
-                }
-            }
-        } catch (Exception e) {
-            logger.debug("Failed to resolve name for NAIF {}: {}", naifId, e.getMessage());
-        }
-        return "NAIF " + naifId;
+        return BodyLookupService.formatName(naifId);
     }
 
     /** Label candidate record used during the declutter pass. Package-private for tests. */
-    record LabelCandidate(int naifId, String name, double screenX, double screenY, double physicalRadiusKm) {}
+    record LabelCandidate(
+            int naifId, String name, double screenX, double screenY, double physicalRadiusKm, double distKm) {}
 
     /** Screen-space body disc used for label occlusion checks. */
     private record ScreenDisc(int naifId, double screenX, double screenY, double distKm, double screenRadiusPx) {}

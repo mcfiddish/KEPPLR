@@ -3,6 +3,7 @@ package kepplr.render.body;
 import com.jme3.math.Quaternion;
 import com.jme3.math.Vector3f;
 import com.jme3.scene.Geometry;
+import com.jme3.scene.Node;
 import com.jme3.scene.Spatial;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -175,6 +176,17 @@ class EclipseShadowManager {
             }
 
             setBodyShadowUniforms(receiver.fullGeom, sunScenePos, sunRadius, count, extendedSource, saturnBsn);
+        }
+
+        // ── Spacecraft GLB lighting update ────────────────────────────────────────────────────
+        // Spacecraft fullGeom is permanently hidden so it never enters fullNodes above.
+        // Each GLB geometry has its own EclipseLighting material (per-geometry, for color fidelity);
+        // walk the tree and push SunPosition to each. Full occluder computation is skipped
+        // (spacecraft are too small for eclipse shadows to be perceptible).
+        for (BodySceneNode bsn : bodyNodes) {
+            if (!bsn.glbReplacesSprite || bsn.glbModelRoot == null) continue;
+            if (!isEclipseMaterial(bsn.fullGeom)) continue;
+            updateSpacecraftGlbLighting(bsn.glbModelRoot, sunScenePos, sunRadius, extendedSource);
         }
 
         // ── Ring material shadow update (Saturn only) ─────────────────────────────────────────
@@ -384,5 +396,29 @@ class EclipseShadowManager {
     /** Returns true if the NAIF ID belongs to a Saturn moon (600–699, not 699 itself). */
     private static boolean isSaturnMoon(int naifId) {
         return naifId >= 600 && naifId <= 699 && naifId != KepplrConstants.SATURN_NAIF_ID;
+    }
+
+    /**
+     * Recursively walk a spacecraft GLB tree and push sun-lighting uniforms to every {@link Geometry} tagged with
+     * {@code "eclipseMaterial"}.
+     *
+     * <p>No occluder data is set (count = 0). Spacecraft are too small for eclipse shadows to be perceptible, so only
+     * the sun direction and day/night terminator matter.
+     */
+    private void updateSpacecraftGlbLighting(
+            Spatial spatial, Vector3f sunPos, float sunRadius, boolean extendedSource) {
+        if (spatial instanceof Geometry geom && Boolean.TRUE.equals(geom.getUserData("eclipseMaterial"))) {
+            var mat = geom.getMaterial();
+            mat.setVector3("SunPosition", sunPos);
+            mat.setFloat("SunRadius", sunRadius);
+            mat.setInt("OccluderCount", 0);
+            mat.setBoolean("ExtendedSource", extendedSource);
+            return;
+        }
+        if (spatial instanceof Node node) {
+            for (Spatial child : node.getChildren()) {
+                updateSpacecraftGlbLighting(child, sunPos, sunRadius, extendedSource);
+            }
+        }
     }
 }

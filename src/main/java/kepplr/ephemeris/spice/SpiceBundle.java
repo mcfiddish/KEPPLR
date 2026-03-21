@@ -39,6 +39,7 @@ import picante.time.TimeConversion;
 public class SpiceBundle {
 
     private static final Logger logger = LogManager.getLogger();
+    private Set<String> warnings;
 
     private SpiceEnvironment spiceEnv;
     private AberratedEphemerisProvider abProvider;
@@ -460,6 +461,8 @@ public class SpiceBundle {
             // initialize TimeSystems with this kernel pool
             bundle.timeConversion = new TimeConversion(env.getLSK());
 
+            bundle.warnings = new HashSet<>();
+
             return bundle;
         }
     }
@@ -659,7 +662,13 @@ public class SpiceBundle {
                     .filter(id -> id instanceof SpiceEphemerisID && ((SpiceEphemerisID) id).getIDCode() == idCode)
                     .findFirst();
             if (optional.isPresent()) object = optional.get();
-            else logger.warn("No object with id {} has been defined", idCode);
+            else {
+                String warning = String.format("No object with NAIF id %d has been defined", idCode);
+                if (!warnings.contains(warning)) {
+                    logger.warn(warning);
+                    warnings.add(warning);
+                }
+            }
         }
         return object;
     }
@@ -685,7 +694,13 @@ public class SpiceBundle {
                     object = getObject(Integer.parseInt(name));
                 } catch (NumberFormatException ignored) {
                 }
-                if (object == null) logger.warn("No object {} has been defined", name);
+                if (object == null) {
+                    String warning = String.format("No object %s has been defined", name);
+                    if (!warnings.contains(warning)) {
+                        logger.warn(warning);
+                        warnings.add(warning);
+                    }
+                }
             }
         }
 
@@ -714,7 +729,13 @@ public class SpiceBundle {
                     frame = getFrame(Integer.parseInt(name));
                 } catch (NumberFormatException ignored) {
                 }
-                if (frame == null) logger.warn("No frame {} has been defined", name);
+                if (frame == null) {
+                    String warning = String.format("No frame %s has been defined", name);
+                    if (!warnings.contains(warning)) {
+                        logger.warn(warning);
+                        warnings.add(warning);
+                    }
+                }
             }
         }
         return frame;
@@ -754,7 +775,11 @@ public class SpiceBundle {
                         .toList()
                         .getFirst();
             } catch (NoSuchElementException e) {
-                logger.warn("No frame with id {} has been defined", idCode);
+                String warning = String.format("No frame with id %d has been defined", idCode);
+                if (!warnings.contains(warning)) {
+                    logger.warn(warning);
+                    warnings.add(warning);
+                }
             }
         }
         return frame;

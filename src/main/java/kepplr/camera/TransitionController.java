@@ -7,6 +7,7 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 import kepplr.config.KEPPLRConfiguration;
 import kepplr.config.SpacecraftBlock;
 import kepplr.ephemeris.KEPPLREphemeris;
+import kepplr.render.body.BodySceneManager;
 import kepplr.state.DefaultSimulationState;
 import kepplr.util.KepplrConstants;
 import org.apache.logging.log4j.LogManager;
@@ -95,6 +96,13 @@ public final class TransitionController {
 
     private final DefaultSimulationState state;
 
+    /**
+     * Scene-graph radius provider; set by {@code KepplrApp} after the {@link BodySceneManager} is created. May be
+     * {@code null} if not yet wired (e.g., during unit tests). When non-null, effective body radii observed during
+     * rendering are preferred over config-derived estimates in {@link #getBodyMinDist} and {@link #startGoToNow}.
+     */
+    private BodySceneManager bodySceneManager;
+
     /** Active in-progress transition, or {@code null} if none. */
     private CameraTransition active = null;
 
@@ -109,6 +117,15 @@ public final class TransitionController {
     /** @param state mutable simulation state; updated by this controller each frame with transition active/progress */
     public TransitionController(DefaultSimulationState state) {
         this.state = state;
+    }
+
+    /**
+     * Wire the {@link BodySceneManager} so that effective rendered radii are used for goTo end-distance and zoom
+     * clamping. Must be called on the JME render thread after {@code BodySceneManager} is created (and again if it is
+     * recreated on config reload).
+     */
+    public void setBodySceneManager(BodySceneManager bsm) {
+        this.bodySceneManager = bsm;
     }
 
     // ── Thread-safe request methods (called from any thread) ──────────────────
@@ -668,9 +685,14 @@ public final class TransitionController {
         if (shape != null) {
             meanRadius = (shape.getA() + shape.getB() + shape.getC()) / 3.0;
         } else {
-            // Spacecraft: derive effective radius from SpacecraftBlock.scale() (GLB in meters → km).
-            SpacecraftBlock block = KEPPLRConfiguration.getInstance().spacecraftBlock(r.naifId());
-            meanRadius = block != null ? block.scale() * 0.001 : KepplrConstants.BODY_DEFAULT_RADIUS_KM;
+            // Spacecraft: prefer the GLB bounding-sphere radius observed during rendering (C2).
+            double sceneRadius = bodySceneManager != null ? bodySceneManager.getEffectiveBodyRadiusKm(r.naifId()) : 0.0;
+            if (sceneRadius > 0.0) {
+                meanRadius = sceneRadius;
+            } else {
+                SpacecraftBlock block = KEPPLRConfiguration.getInstance().spacecraftBlock(r.naifId());
+                meanRadius = block != null ? block.scale() * 0.001 : KepplrConstants.BODY_DEFAULT_RADIUS_KM;
+            }
         }
         // endDistance = bodyRadius / tan(apparentRadiusDeg) (REDESIGN.md §4.5)
         double endDistKm = meanRadius / Math.tan(Math.toRadians(r.apparentRadiusDeg()));
@@ -728,10 +750,14 @@ public final class TransitionController {
         if (shape != null) {
             meanRadius = (shape.getA() + shape.getB() + shape.getC()) / 3.0;
         } else {
-            // Spacecraft or shape-less body: derive effective radius from SpacecraftBlock.scale()
-            // (GLB is in meters; 0.001 converts to km). Falls back to BODY_DEFAULT_RADIUS_KM.
-            SpacecraftBlock block = KEPPLRConfiguration.getInstance().spacecraftBlock(focusId);
-            meanRadius = block != null ? block.scale() * 0.001 : KepplrConstants.BODY_DEFAULT_RADIUS_KM;
+            // Spacecraft or shape-less body: prefer the GLB bounding-sphere radius observed during rendering (C2).
+            double sceneRadius = bodySceneManager != null ? bodySceneManager.getEffectiveBodyRadiusKm(focusId) : 0.0;
+            if (sceneRadius > 0.0) {
+                meanRadius = sceneRadius;
+            } else {
+                SpacecraftBlock block = KEPPLRConfiguration.getInstance().spacecraftBlock(focusId);
+                meanRadius = block != null ? block.scale() * 0.001 : KepplrConstants.BODY_DEFAULT_RADIUS_KM;
+            }
         }
         return meanRadius * KepplrConstants.CAMERA_ZOOM_BODY_RADIUS_FACTOR;
     }
