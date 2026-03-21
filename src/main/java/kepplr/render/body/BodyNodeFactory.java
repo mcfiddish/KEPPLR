@@ -152,12 +152,21 @@ public final class BodyNodeFactory {
         if (glbModelRoot == null) {
             // No GLB (or load failed): use the standard ellipsoid branch.
             bodyFixedNode.attachChild(textureAlignNode);
+        } else {
+            // Apply EclipseLighting to the GLB geometries, sharing fullGeom's Material instance.
+            // Sharing the same instance means EclipseShadowManager's per-frame uniform updates
+            // (SunPosition, OccluderPositions, etc.) on fullGeom.getMaterial() automatically
+            // propagate to all GLB geometry nodes — no changes to EclipseShadowManager needed.
+            // If the GLB has an embedded BaseColorMap, it overrides the DiffuseMap on the shared
+            // material so the shape-model texture is used in preference to any external texture
+            // configured in the body block.
+            applyEclipseLightingToGlb(glbModelRoot, fullGeom.getMaterial());
         }
         // When glbModelRoot != null, textureAlignNode is intentionally NOT attached to
         // bodyFixedNode. fullGeom (the ellipsoid) is kept as an EclipseShadowManager proxy:
         // its CullHint is managed by BodySceneNode.apply() so the shadow manager can identify
         // this as a DRAW_FULL body. Because textureAlignNode is detached, fullGeom is never
-        // rendered. See REDESIGN.md §9.3 for the deferred shape-model shadow refinement.
+        // rendered.
 
         // Point-sprite: tiny unit sphere, hidden by default
         Geometry spriteGeom = buildSprite(bodyId.getName(), naifId, assetManager);
@@ -395,6 +404,46 @@ public final class BodyNodeFactory {
         texture.setAnisotropicFilter(preset.anisotropy);
         if (texture.getImage() != null && texture.getImage().getColorSpace() != ColorSpace.sRGB) {
             texture.getImage().setColorSpace(ColorSpace.sRGB);
+        }
+    }
+
+    // ── EclipseLighting application for GLB bodies ────────────────────────────────────────────────
+
+    /**
+     * Replace the material on every {@link Geometry} in a body GLB tree with the provided
+     * {@code EclipseLighting} material instance.
+     *
+     * <p>Using the same {@link Material} instance as {@code fullGeom} means
+     * {@link EclipseShadowManager}'s per-frame uniform writes ({@code SunPosition},
+     * {@code OccluderPositions}, etc.) automatically propagate to all GLB geometries without any
+     * changes to the shadow manager.
+     *
+     * <p>If a GLB {@link Geometry}'s original PBR material carries a {@code BaseColorMap}, it is
+     * extracted and set as {@code DiffuseMap} on the shared material (last write wins for
+     * multi-mesh models) so the shape-model's embedded texture is used for lighting.
+     */
+    private static void applyEclipseLightingToGlb(Spatial spatial, Material eclipseMat) {
+        if (spatial instanceof Geometry geometry) {
+            Material oldMat = geometry.getMaterial();
+            if (oldMat != null) {
+                MatParamTexture colorParam = oldMat.getTextureParam("BaseColorMap");
+                if (colorParam != null && colorParam.getTextureValue() != null) {
+                    Texture tex = colorParam.getTextureValue();
+                    // Preserve the sampler settings already applied by applySamplerPreset,
+                    // and ensure the image is tagged sRGB for correct linearisation in the shader.
+                    if (tex.getImage() != null && tex.getImage().getColorSpace() != ColorSpace.sRGB) {
+                        tex.getImage().setColorSpace(ColorSpace.sRGB);
+                    }
+                    eclipseMat.setTexture("DiffuseMap", tex);
+                }
+            }
+            geometry.setMaterial(eclipseMat);
+            return;
+        }
+        if (spatial instanceof Node node) {
+            for (Spatial child : node.getChildren()) {
+                applyEclipseLightingToGlb(child, eclipseMat);
+            }
         }
     }
 
