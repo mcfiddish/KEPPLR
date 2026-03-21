@@ -508,8 +508,7 @@ public final class CameraInputHandler implements ActionListener, AnalogListener,
         double bestApparentPx = -1;
 
         int viewportHeight = cam.getHeight();
-        float fovYDeg = KepplrConstants.CAMERA_FOV_Y_DEG;
-        double tanHalfFov = Math.tan(Math.toRadians(fovYDeg) / 2.0);
+        double tanHalfFov = Math.tan(Math.toRadians(cam.getFov()) / 2.0);
         double halfHeight = viewportHeight / 2.0;
 
         for (Node layerNode : pickNodes) {

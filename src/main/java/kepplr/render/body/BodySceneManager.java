@@ -133,7 +133,7 @@ public class BodySceneManager {
         initSpacecraftSet(eph);
 
         int viewportHeight = cam.getHeight();
-        float fovYDeg = KepplrConstants.CAMERA_FOV_Y_DEG;
+        float fovYDeg = cam.getFov();
 
         // ── Pass 1: collect body frames ────────────────────────────────────────────────────────
         List<BodyFrame> frames = new ArrayList<>();

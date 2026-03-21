@@ -607,10 +607,13 @@ public final class KepplrStatusWindow {
 
         Menu frameSubMenu = new Menu("Camera Frame", null, inertialItem, bodyFixedItem, synodicItem);
 
-        MenuItem stopTrackItem = new MenuItem("Stop Tracking");
-        stopTrackItem.setOnAction(e -> commands.setCameraFrame(CameraFrame.INERTIAL));
+        MenuItem setFovItem = new MenuItem("Set FOV…");
+        setFovItem.setOnAction(e -> {
+            double currentFov = bridge.fovDegProperty().get();
+            new SetFovDialog(commands, currentFov).showAndWait();
+        });
 
-        return new Menu("View", null, frameSubMenu, new SeparatorMenuItem(), stopTrackItem);
+        return new Menu("View", null, frameSubMenu, new SeparatorMenuItem(), setFovItem);
     }
 
     private Menu buildTimeMenu() {

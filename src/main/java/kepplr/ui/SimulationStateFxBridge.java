@@ -22,6 +22,7 @@ import kepplr.ephemeris.BodyLookupService;
 import kepplr.ephemeris.Instrument;
 import kepplr.state.BodyInView;
 import kepplr.state.SimulationState;
+import kepplr.util.KepplrConstants;
 
 /**
  * Sole location of {@link Platform#runLater(Runnable)} calls (CLAUDE.md Rule 2).
@@ -69,6 +70,7 @@ public final class SimulationStateFxBridge {
     private final SimpleStringProperty bodiesInViewText = new SimpleStringProperty("");
     private final SimpleBooleanProperty transitionActive = new SimpleBooleanProperty(false);
     private final SimpleDoubleProperty transitionProgress = new SimpleDoubleProperty(0.0);
+    private final SimpleDoubleProperty fovDeg = new SimpleDoubleProperty(KepplrConstants.CAMERA_FOV_Y_DEG);
 
     // ── Step 19 additions ────────────────────────────────────────────────────
     private final SimpleStringProperty selectedBodyName = new SimpleStringProperty("—");
@@ -131,6 +133,7 @@ public final class SimulationStateFxBridge {
         bodiesInViewText.set(formatBodiesInView(state.bodiesInViewProperty().get()));
         transitionActive.set(state.transitionActiveProperty().get());
         transitionProgress.set(state.transitionProgressProperty().get());
+        fovDeg.set(state.fovDegProperty().get());
         selectedBodyName.set(formatBodyName(state.selectedBodyIdProperty().get()));
         focusedBodyName.set(formatBodyName(state.focusedBodyIdProperty().get()));
         targetedBodyName.set(formatBodyName(state.targetedBodyIdProperty().get()));
@@ -186,7 +189,7 @@ public final class SimulationStateFxBridge {
             String s = currentCameraFrameText();
             dispatcher.accept(() -> cameraFrameText.set(s));
         });
-        state.targetedBodyIdProperty().addListener((obs, oldVal, newVal) -> {
+        state.selectedBodyIdProperty().addListener((obs, oldVal, newVal) -> {
             if (polling) return;
             if (state.cameraFrameProperty().get() != CameraFrame.SYNODIC) return;
             String s = currentCameraFrameText();
@@ -218,6 +221,10 @@ public final class SimulationStateFxBridge {
         state.transitionProgressProperty().addListener((obs, oldVal, newVal) -> {
             if (polling) return;
             dispatcher.accept(() -> transitionProgress.set(newVal.doubleValue()));
+        });
+        state.fovDegProperty().addListener((obs, oldVal, newVal) -> {
+            if (polling) return;
+            dispatcher.accept(() -> fovDeg.set(newVal.doubleValue()));
         });
         state.selectedBodyIdProperty().addListener((obs, oldVal, newVal) -> {
             if (polling) return;
@@ -318,6 +325,7 @@ public final class SimulationStateFxBridge {
         bodiesInViewText.set(formatBodiesInView(state.bodiesInViewProperty().get()));
         transitionActive.set(state.transitionActiveProperty().get());
         transitionProgress.set(state.transitionProgressProperty().get());
+        fovDeg.set(state.fovDegProperty().get());
         selectedBodyName.set(formatBodyName(state.selectedBodyIdProperty().get()));
         focusedBodyName.set(formatBodyName(state.focusedBodyIdProperty().get()));
         targetedBodyName.set(formatBodyName(state.targetedBodyIdProperty().get()));
@@ -397,6 +405,11 @@ public final class SimulationStateFxBridge {
     /** Progress of the active camera transition in {@code [0.0, 1.0]}, or {@code 0.0} if none (Step 18). */
     public ReadOnlyDoubleProperty transitionProgressProperty() {
         return transitionProgress;
+    }
+
+    /** Current camera field of view in degrees. */
+    public ReadOnlyDoubleProperty fovDegProperty() {
+        return fovDeg;
     }
 
     // ── Step 19 properties ───────────────────────────────────────────────────
@@ -551,9 +564,9 @@ public final class SimulationStateFxBridge {
         CameraFrame frame = state.cameraFrameProperty().get();
         if (frame == CameraFrame.SYNODIC) {
             int focusId = state.focusedBodyIdProperty().get();
-            int targetId = state.targetedBodyIdProperty().get();
+            int selectedId = state.selectedBodyIdProperty().get();
             String focusStr = focusId == -1 ? "—" : "NAIF " + focusId;
-            String targetStr = (targetId == -1 || targetId == focusId) ? "NAIF 10 (Sun)" : "NAIF " + targetId;
+            String targetStr = (selectedId == -1 || selectedId == focusId) ? "NAIF 10 (Sun)" : "NAIF " + selectedId;
             return "SYNODIC [" + focusStr + " → " + targetStr + "]";
         }
         return formatCameraFrame(frame);

@@ -70,6 +70,7 @@ public final class DefaultSimulationState implements SimulationState {
 
     private final SimpleBooleanProperty transitionActive = new SimpleBooleanProperty(false);
     private final SimpleDoubleProperty transitionProgress = new SimpleDoubleProperty(0.0);
+    private final SimpleDoubleProperty fovDeg = new SimpleDoubleProperty(KepplrConstants.CAMERA_FOV_Y_DEG);
 
     // ── Overlay state (Step 19b) ──
 
@@ -184,6 +185,11 @@ public final class DefaultSimulationState implements SimulationState {
     @Override
     public ReadOnlyDoubleProperty transitionProgressProperty() {
         return transitionProgress;
+    }
+
+    @Override
+    public ReadOnlyDoubleProperty fovDegProperty() {
+        return fovDeg;
     }
 
     // ── Setters (used by DefaultSimulationCommands and the simulation core) ──
@@ -306,6 +312,11 @@ public final class DefaultSimulationState implements SimulationState {
      */
     public void setTransitionProgress(double progress) {
         transitionProgress.set(progress);
+    }
+
+    /** Set the current camera field of view in degrees. Called each frame by KepplrApp on the JME render thread. */
+    public void setFovDeg(double degrees) {
+        fovDeg.set(degrees);
     }
 
     // ── Overlay property accessors (Step 19b) ──
