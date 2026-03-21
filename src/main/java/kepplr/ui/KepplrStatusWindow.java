@@ -352,12 +352,20 @@ public final class KepplrStatusWindow {
             SpiceBundle bundle = eph.getSpiceBundle();
             Set<EphemerisID> knownBodies = eph.getKnownBodies();
 
-            // Collect NAIF IDs and names
+            // Collect spacecraft codes first so we can skip them in the knownBodies loop
+            // (spacecraft appear in both getKnownBodies() and getSpacecraft(), causing duplicates).
+            Set<Integer> spacecraftCodes = new java.util.HashSet<>();
+            for (var sc : eph.getSpacecraft()) {
+                spacecraftCodes.add(sc.code());
+            }
+
+            // Collect NAIF IDs and names — skip spacecraft (handled separately below)
             Map<Integer, String> bodyNames = new TreeMap<>();
             for (EphemerisID id : knownBodies) {
                 Optional<Integer> codeOpt = bundle.getObjectCode(id);
                 if (codeOpt.isEmpty()) continue;
                 int code = codeOpt.get();
+                if (spacecraftCodes.contains(code)) continue;
                 String name = bundle.getObjectName(id)
                         .map(BodyLookupService::titleCase)
                         .orElse(id.getName());
@@ -385,10 +393,19 @@ public final class KepplrStatusWindow {
                 }
             }
 
-            // Add spacecraft
+            // Add spacecraft using SpacecraftBlock.name() for the display name.
+            // Fall back to titleCase of the SPICE internal name when the block name is blank.
             for (var sc : eph.getSpacecraft()) {
                 int code = sc.code();
-                String name = BodyLookupService.titleCase(sc.id().getName());
+                String name;
+                try {
+                    var block = KEPPLRConfiguration.getInstance().spacecraftBlock(code);
+                    name = (block != null && block.name() != null && !block.name().isBlank())
+                            ? block.name()
+                            : BodyLookupService.titleCase(sc.id().getName());
+                } catch (Exception ex) {
+                    name = BodyLookupService.titleCase(sc.id().getName());
+                }
                 bodyNames.put(code, name);
                 groups.computeIfAbsent(code, k -> new ArrayList<>()).add(new int[] {code});
             }
