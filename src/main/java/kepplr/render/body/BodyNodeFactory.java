@@ -505,7 +505,7 @@ public final class BodyNodeFactory {
     }
 
     private static Geometry buildSprite(String name, int naifId, AssetManager assetManager) {
-        Sphere spriteMesh = new Sphere(4, 4, 1f);
+        Sphere spriteMesh = new Sphere(6, 8, 1f);
         Geometry spriteGeom = new Geometry(name + "-sprite", spriteMesh);
         ColorRGBA color = spriteColorFor(name, naifId);
         spriteGeom.setMaterial(unshadedMaterial(color, assetManager));

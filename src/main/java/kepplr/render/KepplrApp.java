@@ -158,6 +158,13 @@ public class KepplrApp extends SimpleApplication {
         setDisplayStatView(false);
         flyCam.setEnabled(false);
 
+        // Ensure the native window has resize + maximize decorations. AppSettings.setResizable()
+        // may not propagate to the already-created GLFW window, so set the attribute directly.
+        long handle = getGlfwWindowHandle();
+        if (handle != 0) {
+            GLFW.glfwSetWindowAttrib(handle, GLFW.GLFW_RESIZABLE, GLFW.GLFW_TRUE);
+        }
+
         // Remove JME's default Escape→exit mapping (SimpleApplication binds KEY_ESCAPE to stop()).
         // Escape has no function in KEPPLR and must not close either window.
         inputManager.deleteMapping(INPUT_MAPPING_EXIT);
@@ -193,9 +200,9 @@ public class KepplrApp extends SimpleApplication {
             statusWindow = new KepplrStatusWindow(bridge, recorder);
             statusWindow.setJmeShutdown(appRef::stop);
             statusWindow.setJmeResizeCallback((w, h) -> appRef.enqueue(() -> {
-                long handle = getGlfwWindowHandle();
-                if (handle != 0) {
-                    GLFW.glfwSetWindowSize(handle, w, h);
+                long glfwWindowHandle = getGlfwWindowHandle();
+                if (glfwWindowHandle != 0) {
+                    GLFW.glfwSetWindowSize(glfwWindowHandle, w, h);
                 }
             }));
             statusWindow.setConfigReloadCallback(() -> appRef.enqueue(appRef::rebuildBodyScene));
@@ -367,7 +374,7 @@ public class KepplrApp extends SimpleApplication {
                     : simulationState.focusedBodyIdProperty().get();
             int targetId = (synodicTarget != -1)
                     ? synodicTarget
-                    : simulationState.targetedBodyIdProperty().get();
+                    : simulationState.selectedBodyIdProperty().get();
             double et = simulationState.currentEtProperty().get();
             SynodicFrameApplier.ApplyResult sr =
                     synodicFrameApplier.apply(cameraHelioJ2000, cam.getRotation(), focusId, targetId, et);
@@ -391,12 +398,20 @@ public class KepplrApp extends SimpleApplication {
                 simulationState.focusedBodyIdProperty().get(),
                 cameraHelioJ2000,
                 simulationState.currentEtProperty().get()));
+        simulationState.setFovDeg(cam.getFov());
 
-        // Sync slave cameras to master orientation (position is always ZERO in floating-origin)
+        // Sync slave cameras to master orientation, aspect ratio, and FOV (position is always ZERO
+        // in floating-origin). FOV sync is required because TransitionController calls cam.setFov()
+        // only on the master; midCam and nearCam retain their own near/far planes but must share
+        // the same vertical FOV so all three layers project bodies consistently.
         midCam.setLocation(cam.getLocation());
         midCam.setRotation(cam.getRotation());
         nearCam.setLocation(cam.getLocation());
         nearCam.setRotation(cam.getRotation());
+        float fov = cam.getFov();
+        float aspect = (float) cam.getWidth() / cam.getHeight();
+        midCam.setFrustumPerspective(fov, aspect, (float) FrustumLayer.MID.nearKm, (float) FrustumLayer.MID.farKm);
+        nearCam.setFrustumPerspective(fov, aspect, (float) FrustumLayer.NEAR.nearKm, (float) FrustumLayer.NEAR.farKm);
 
         // Update Sun light position in all three layers (Sun helio pos = origin; scene pos = −cam)
         Vector3f sunScenePos = sunScenePosition();
@@ -767,6 +782,7 @@ public class KepplrApp extends SimpleApplication {
         settings.setWidth(1280);
         settings.setHeight(720);
         settings.setRenderer(AppSettings.LWJGL_OPENGL33);
+        settings.setResizable(true);
         app.setSettings(settings);
         app.setShowSettings(false);
         app.start();

@@ -195,7 +195,7 @@ public final class KepplrConstants {
      * diameter regardless of distance. Applied to spacecraft and small bodies drawn below the
      * {@link #DRAW_FULL_MIN_APPARENT_RADIUS_PX} threshold.
      */
-    public static final double SPACECRAFT_POINT_SPRITE_SIZE = 4.0;
+    public static final double SPACECRAFT_POINT_SPRITE_SIZE = 2.0;
 
     // ── Vector overlays (Step 13) ──
 
@@ -627,7 +627,7 @@ public final class KepplrConstants {
      * <p>Clamping floor for {@code setFov()} commands. Prevents the FOV from becoming so narrow that rendering
      * artifacts or numerical instability appear.
      */
-    public static final double FOV_MIN_DEG = 1.0;
+    public static final double FOV_MIN_DEG = 1e-6;
 
     /**
      * Maximum camera field of view in degrees.

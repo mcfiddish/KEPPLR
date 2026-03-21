@@ -175,8 +175,7 @@ class VectorRenderer {
 
         // 3. Skip if projected screen length < threshold (avoids sub-pixel clutter).
         if (distKm > 0.0) {
-            double halfFovRad = Math.toRadians(KepplrConstants.CAMERA_FOV_Y_DEG / 2.0);
-            double screenLengthPx = (arrowLengthKm / distKm) * (cam.getHeight() / 2.0) / Math.tan(halfFovRad);
+            double screenLengthPx = (arrowLengthKm / distKm) * (cam.getHeight() / 2.0) / Math.tan(Math.toRadians(cam.getFov() / 2.0));
             if (screenLengthPx < KepplrConstants.VECTOR_MIN_VISIBLE_LENGTH_PX) {
                 return;
             }
