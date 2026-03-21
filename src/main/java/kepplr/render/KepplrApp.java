@@ -655,6 +655,10 @@ public class KepplrApp extends SimpleApplication {
         activeTrailIds.clear();
         activeVectorDefs.clear();
 
+        // Clear the asset cache so GLB shape models and textures are reloaded from disk
+        // rather than served from the stale cache left by the previous configuration.
+        assetManager.clearCache();
+
         // Re-register the new resources folder before any manager that loads assets
         assetManager.registerLocator(KEPPLRConfiguration.getInstance().resourcesFolder(), FileLocator.class);
 
