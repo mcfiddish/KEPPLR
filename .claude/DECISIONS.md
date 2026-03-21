@@ -371,13 +371,13 @@ reference but its workarounds are not applied. CC must not revisit this decision
 **Context:** The original design (REDESIGN.md §4.6) defined "tracked" as a fourth
 interaction mode with a screen-space anchor that locked a body to a fixed screen position.
 During step 19 implementation it became clear that this behavior is equivalent to the
-Synodic camera frame with the targeted body as the "other body" — which was already
+Synodic camera frame with the selected body as the "other body" — which was already
 implemented. Maintaining a separate tracking concept would have duplicated behavior and
 added dead state properties.
 
 **Decision:** Tracking is removed as a distinct mode. The F key toggles the camera frame
-between SYNODIC and INERTIAL. Stop Tracking in the View menu switches to INERTIAL. Both
-are kept in sync with the Camera Frame submenu radio items. `trackedBodyId`,
+between SYNODIC and INERTIAL. Stop Tracking has been removed from the View menu —
+selecting Inertial in the Camera Frame submenu is the equivalent action. `trackedBodyId`,
 `trackingAnchor`, `trackBody()`, and `stopTracking()` do not exist in the codebase.
 
 **Alternatives considered:** Implementing screen-position locking as a distinct behavior
@@ -551,10 +551,13 @@ All are non-blocking and use the existing TransitionController infrastructure
 from step 18. Fine-grained mouse drag navigation remains in CameraInputHandler
 and is intentionally unscriptable.
 
-setSynodicFrame(focusNaifId, targetNaifId, durationSeconds) changes only the
-camera frame — it does not update focused, targeted, or selected body state in
-SimulationState. setCameraFrame(SYNODIC) continues to derive focus and target
-from SimulationState for interactive use.
+setSynodicFrame(focusNaifId, targetNaifId) changes only the camera frame — it
+does not update focused, targeted, or selected body state in SimulationState.
+(Note: `targetNaifId` is the method parameter name referring to the synodic
+"other body" argument, not a reference to the targeted body interaction state.
+The interactive `setCameraFrame(SYNODIC)` uses the selected body as the "other
+body," not the targeted body.) setCameraFrame(SYNODIC) continues to derive
+focus and "other body" from SimulationState for interactive use.
 
 setCameraPosition defaults to the current focus body as origin. The explicit
 overload accepts an originNaifId for scripts that need to position the camera

@@ -170,18 +170,18 @@ At any time, the application maintains at most:
 ### 4.6 Tracking
 
 "Tracking" is not a distinct interaction mode — it is a shortcut for
-switching the camera frame to Synodic with the targeted body as the
+switching the camera frame to Synodic with the selected body as the
 "other body."
 
-* Pressing **F** while a targeted body is set switches the camera frame to
+* Pressing **F** while a selected body is set switches the camera frame to
   Synodic. If the camera frame is already Synodic, F switches back to
-  Inertial. If no targeted body is set and the frame is Inertial, F is a
+  Inertial. If no selected body is set and the frame is Inertial, F is a
   no-op.
-* **Stop Tracking** in the View menu switches the camera frame to Inertial.
-  It is equivalent to selecting Inertial in the Camera Frame submenu.
-* The Camera Frame submenu and F / Stop Tracking are always kept in sync.
+* Selecting **Inertial** in the Camera Frame submenu exits the Synodic frame
+  via the menu. Stop Tracking no longer exists as a separate menu item.
+* The Camera Frame submenu and F are always kept in sync.
 * There is no separate "tracked body" property. The synodic "other body"
-  is always the currently targeted body (see §5).
+  is always the currently selected body (see §5).
 
 ---
 

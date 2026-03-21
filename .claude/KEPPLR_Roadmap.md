@@ -46,7 +46,7 @@ to return the exact Groovy expression that recreates it. Without this,
 `setVectorVisible` calls in recorded scripts would emit an unrunnable placeholder.
 See D-026.
 
-**The synodic frame "other body" is the currently targeted body.** No separate command or property is needed for this. If no targeted body exists, fall back to the inertial frame and log a warning.
+**The synodic frame "other body" is the currently selected body.** No separate command or property is needed for this. If no selected body exists, fall back to the inertial frame and log a warning.
 
 **GLB shape models replace ellipsoids and sprites for configured bodies (Step 21).** Bodies with a `BodyBlock.shapeModel()` path use a GLB attached to `bodyFixedNode`; the ellipsoid is retained as a detached `EclipseShadowManager` proxy (never rendered). Spacecraft with `SpacecraftBlock.shapeModel()` replace the point sprite with a GLB scaled by `0.001 × SpacecraftBlock.scale()`. Fallback to ellipsoid/sprite on load failure. See D-027, D-028.
 
@@ -68,7 +68,7 @@ See D-026.
 
 **The JavaFX control panel is a separate OS window (two-window layout).** The transparent overlay (Option B) was prototyped and rejected — position-sync lag on macOS is unacceptable and the platform complexity is not justified for v0.1. The JavaFX stage is a normal, non-transparent, non-always-on-top window. No `WindowManager` class. No GLFW position/minimize/focus callbacks. Do not revisit this decision.
 
-**Tracking is not a separate camera behavior.** The F key and Stop Tracking are shortcuts for switching the camera frame to Synodic and Inertial respectively. `trackedBodyId`, `trackingAnchor`, `trackBody()`, and `stopTracking()` do not exist in the codebase. Pressing F with a targeted body set switches to the Synodic frame; pressing F in Synodic switches back to Inertial.
+**Tracking is not a separate camera behavior.** The F key is the shortcut for switching the camera frame between Synodic and Inertial. `trackedBodyId`, `trackingAnchor`, `trackBody()`, and `stopTracking()` do not exist in the codebase. Pressing F with a selected body set switches to the Synodic frame; pressing F in Synodic switches back to Inertial. Stop Tracking no longer exists as a menu item — selecting Inertial in the Camera Frame submenu is the equivalent action.
 
 **Mouse picking is screen-space only.** Body selection via click projects all visible bodies to screen space and finds candidates within `PICK_MIN_SCREEN_RADIUS_PX` of the click point. No 3D ray cast. When multiple candidates exist, the body with the largest actual screen-space radius wins. Click on empty space does nothing.
 
@@ -91,10 +91,10 @@ Earth rendered as a textured sphere at its correct heliocentric position at the 
 Concrete implementations of `SimulationState` (observable properties) and `SimulationCommands` (input interface). Selected, targeted, and focused interaction mode semantics per §4. Light-time correction per §6 applied to camera pointing.
 
 ### 5. Synodic Camera Frame (formerly Tracked Mode)
-Synodic frame definition and math per §5. The targeted body serves as the synodic "other body." `CameraFrame` enum (`INERTIAL`, `BODY_FIXED`, `SYNODIC`) and `setCameraFrame()` added to `SimulationCommands`. `BODY_FIXED` deferred. Degenerate case threshold (1e-3 radians) in `KepplrConstants`. Note: the original step 5 implemented a separate "tracked mode" with a tracking anchor; this was replaced during step 19 — tracking is now equivalent to switching to the Synodic frame.
+Synodic frame definition and math per §5. The selected body serves as the synodic "other body." `CameraFrame` enum (`INERTIAL`, `BODY_FIXED`, `SYNODIC`) and `setCameraFrame()` added to `SimulationCommands`. `BODY_FIXED` deferred. Degenerate case threshold (1e-3 radians) in `KepplrConstants`. Note: the original step 5 implemented a separate "tracked mode" with a tracking anchor; this was replaced during step 19 — tracking is now equivalent to switching to the Synodic frame.
 
 ### 6. Synodic Camera Frame
-Synodic frame definition and math per §5. The targeted body serves as the synodic "other body." `CameraFrame` enum (`INERTIAL`, `BODY_FIXED`, `SYNODIC`) and `setCameraFrame()` added to `SimulationCommands`. `BODY_FIXED` deferred. Degenerate case threshold (1e-3 radians) in `KepplrConstants`.
+Synodic frame definition and math per §5. The selected body serves as the synodic "other body." `CameraFrame` enum (`INERTIAL`, `BODY_FIXED`, `SYNODIC`) and `setCameraFrame()` added to `SimulationCommands`. `BODY_FIXED` deferred. Degenerate case threshold (1e-3 radians) in `KepplrConstants`.
 
 ### 7. Time Control
 Anchor-based ET advancement in `simpleUpdate()`. Pause/resume, time rate, `setET()`, `setUTC()`. Simulation starts at current wall clock time at 1x real time. Negative time rates supported. `deltaSimSecondsProperty()` exposed via `SimulationState` for downstream consumers.
@@ -191,11 +191,9 @@ the control panel must update immediately. Double-click →
   reported in status panel. File picker defaults to properties files filter
   but also offers an "All Files" filter option.
 - View — Camera Frame submenu (Inertial / Body-Fixed / Synodic radio items
-  bound to `activeCameraFrameProperty()`), Stop Tracking, Field of View
-  control, camera frame fallback indicator. Stop Tracking calls
-  `SimulationCommands.setCameraFrame(INERTIAL)` and is kept in sync with the
-  Camera Frame submenu radio items — selecting Inertial via the submenu and
-  pressing Stop Tracking are equivalent operations.
+  bound to `activeCameraFrameProperty()`), Field of View control, camera frame
+  fallback indicator. Selecting Inertial in the Camera Frame submenu is the
+  way to exit the Synodic frame via the menu.
 - Time — unchanged from step 9.
 - Window — preset sizes: 1280×720, 1280×1024, 1920×1080, 2560×1440; resizes
   the JME window only. JavaFX window is not resized programmatically.
@@ -204,9 +202,9 @@ the control panel must update immediately. Double-click →
 call `SimulationCommands`:
 - G — `goTo` focused body
 - F — toggles camera frame between SYNODIC and INERTIAL. If camera frame is
-  currently INERTIAL and a targeted body is set, switches to SYNODIC. If
+  currently INERTIAL and a selected body is set, switches to SYNODIC. If
   camera frame is currently SYNODIC, switches to INERTIAL. No-op if frame is
-  INERTIAL and no targeted body is set.
+  INERTIAL and no selected body is set.
 - T — target selected body
 - Space — pause/resume
 - `[` / `]` — decrease / increase time rate
@@ -215,11 +213,11 @@ Escape has no keyboard binding. JavaFX default Escape-closes-stage behavior
 must be suppressed on the control window. Escape must not close either window
 under any circumstance.
 
-**Tracking is not a separate camera behavior.** F and Stop Tracking are
-shortcuts for switching the camera frame to Synodic and Inertial respectively.
-`trackedBodyId`, `trackingAnchor`, `trackBody()`, and `stopTracking()` do not
-exist in the codebase. Any legacy call sites are replaced with
-`setCameraFrame()` calls.
+**Tracking is not a separate camera behavior.** F is the keyboard shortcut
+for toggling between the Synodic and Inertial camera frames. The Camera Frame
+submenu is the menu equivalent. `trackedBodyId`, `trackingAnchor`,
+`trackBody()`, and `stopTracking()` do not exist in the codebase. Any legacy
+call sites are replaced with `setCameraFrame()` calls.
 
 **Mouse picking in the JME window:**
 
