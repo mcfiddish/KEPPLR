@@ -504,7 +504,6 @@ public final class KepplrStatusWindow {
         loadConfig.setOnAction(e -> {
             FileChooser chooser = new FileChooser();
             chooser.setTitle("Load KEPPLR Configuration");
-            chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("Properties files", "*.properties"));
             chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("All Files", "*.*"));
             File file = chooser.showOpenDialog(stage);
             if (file != null) {

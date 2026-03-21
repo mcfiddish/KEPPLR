@@ -15,15 +15,15 @@ import kepplr.util.KepplrConstants;
 /**
  * Modal dialog for setting the camera field of view in degrees.
  *
- * <p>Contains no simulation logic (CLAUDE.md Rule 1). Delegates to
- * {@link SimulationCommands#setFov(double, double)} with an instant transition (duration = 0).
+ * <p>Contains no simulation logic (CLAUDE.md Rule 1). Delegates to {@link SimulationCommands#setFov(double, double)}
+ * with an instant transition (duration = 0).
  *
  * <p>Must be created and shown on the JavaFX application thread.
  */
 final class SetFovDialog extends Dialog<ButtonType> {
 
     /**
-     * @param commands    the simulation commands interface; must not be null
+     * @param commands the simulation commands interface; must not be null
      * @param currentFovDeg the current camera FOV in degrees, used to pre-populate the field
      */
     SetFovDialog(SimulationCommands commands, double currentFovDeg) {

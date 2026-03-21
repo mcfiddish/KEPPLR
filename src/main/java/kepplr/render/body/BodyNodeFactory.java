@@ -410,17 +410,16 @@ public final class BodyNodeFactory {
     // ── EclipseLighting application for GLB bodies ────────────────────────────────────────────────
 
     /**
-     * Replace the material on every {@link Geometry} in a body GLB tree with the provided
-     * {@code EclipseLighting} material instance.
+     * Replace the material on every {@link Geometry} in a body GLB tree with the provided {@code EclipseLighting}
+     * material instance.
      *
-     * <p>Using the same {@link Material} instance as {@code fullGeom} means
-     * {@link EclipseShadowManager}'s per-frame uniform writes ({@code SunPosition},
-     * {@code OccluderPositions}, etc.) automatically propagate to all GLB geometries without any
-     * changes to the shadow manager.
+     * <p>Using the same {@link Material} instance as {@code fullGeom} means {@link EclipseShadowManager}'s per-frame
+     * uniform writes ({@code SunPosition}, {@code OccluderPositions}, etc.) automatically propagate to all GLB
+     * geometries without any changes to the shadow manager.
      *
-     * <p>If a GLB {@link Geometry}'s original PBR material carries a {@code BaseColorMap}, it is
-     * extracted and set as {@code DiffuseMap} on the shared material (last write wins for
-     * multi-mesh models) so the shape-model's embedded texture is used for lighting.
+     * <p>If a GLB {@link Geometry}'s original PBR material carries a {@code BaseColorMap}, it is extracted and set as
+     * {@code DiffuseMap} on the shared material (last write wins for multi-mesh models) so the shape-model's embedded
+     * texture is used for lighting.
      */
     private static void applyEclipseLightingToGlb(Spatial spatial, Material eclipseMat) {
         if (spatial instanceof Geometry geometry) {
