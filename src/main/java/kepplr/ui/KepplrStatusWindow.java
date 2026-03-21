@@ -577,7 +577,14 @@ public final class KepplrStatusWindow {
             }
         });
 
-        return new Menu("File", null, loadConfig, new SeparatorMenuItem(), runScript, recordToggle);
+        // ── Quit ─────────────────────────────────────────────────────────
+        MenuItem quit = new MenuItem("Quit");
+        quit.setOnAction(e -> {
+            if (jmeShutdown != null) jmeShutdown.run();
+        });
+
+        return new Menu("File", null, loadConfig, new SeparatorMenuItem(), runScript, recordToggle,
+                new SeparatorMenuItem(), quit);
     }
 
     private Menu buildViewMenu() {
