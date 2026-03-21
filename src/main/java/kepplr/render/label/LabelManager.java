@@ -228,7 +228,8 @@ public class LabelManager {
     }
 
     /** Label candidate record used during the declutter pass. Package-private for tests. */
-    record LabelCandidate(int naifId, String name, double screenX, double screenY, double physicalRadiusKm, double distKm) {}
+    record LabelCandidate(
+            int naifId, String name, double screenX, double screenY, double physicalRadiusKm, double distKm) {}
 
     /** Screen-space body disc used for label occlusion checks. */
     private record ScreenDisc(int naifId, double screenX, double screenY, double distKm, double screenRadiusPx) {}

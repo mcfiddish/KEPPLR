@@ -402,7 +402,9 @@ public final class KepplrStatusWindow {
                 String name;
                 try {
                     var block = KEPPLRConfiguration.getInstance().spacecraftBlock(code);
-                    name = (block != null && block.name() != null && !block.name().isBlank())
+                    name = (block != null
+                                    && block.name() != null
+                                    && !block.name().isBlank())
                             ? block.name()
                             : BodyLookupService.titleCase(sc.id().getName());
                 } catch (Exception ex) {
@@ -625,8 +627,15 @@ public final class KepplrStatusWindow {
             if (jmeShutdown != null) jmeShutdown.run();
         });
 
-        return new Menu("File", null, loadConfig, new SeparatorMenuItem(), runScript, recordToggle,
-                new SeparatorMenuItem(), quit);
+        return new Menu(
+                "File",
+                null,
+                loadConfig,
+                new SeparatorMenuItem(),
+                runScript,
+                recordToggle,
+                new SeparatorMenuItem(),
+                quit);
     }
 
     private Menu buildViewMenu() {

@@ -42,12 +42,12 @@ public final class BodyLookupService {
     /**
      * Format a NAIF ID as a human-readable body name.
      *
-     * <p>Checks {@link kepplr.config.SpacecraftBlock#name()} / {@link kepplr.config.BodyBlock#name()} first;
-     * falls back to the SPICE object name (title-cased).
+     * <p>Checks {@link kepplr.config.SpacecraftBlock#name()} / {@link kepplr.config.BodyBlock#name()} first; falls back
+     * to the SPICE object name (title-cased).
      *
      * @param naifId NAIF body code, or -1 for "no body"
-     * @return the configured display name, or the SPICE object name (title-cased), or {@code "—"} if
-     *     {@code naifId == -1}, or {@code "NAIF <id>"} if the name cannot be resolved
+     * @return the configured display name, or the SPICE object name (title-cased), or {@code "—"} if {@code naifId ==
+     *     -1}, or {@code "NAIF <id>"} if the name cannot be resolved
      */
     public static String formatName(int naifId) {
         if (naifId == -1) return "—";
@@ -61,10 +61,13 @@ public final class BodyLookupService {
                 if (sc.code() == naifId) {
                     try {
                         var block = cfg.spacecraftBlock(naifId);
-                        if (block != null && block.name() != null && !block.name().isBlank()) {
+                        if (block != null
+                                && block.name() != null
+                                && !block.name().isBlank()) {
                             return block.name();
                         }
-                    } catch (Exception ignored) {}
+                    } catch (Exception ignored) {
+                    }
                     return titleCase(sc.id().getName());
                 }
             }
@@ -77,11 +80,14 @@ public final class BodyLookupService {
             String spiceName = bundle.getObjectName(id).orElse(id.getName());
             try {
                 var block = cfg.bodyBlock(spiceName);
-                if (block != null && block.name() != null && !block.name().isBlank()
+                if (block != null
+                        && block.name() != null
+                        && !block.name().isBlank()
                         && !block.name().equalsIgnoreCase(spiceName)) {
                     return block.name();
                 }
-            } catch (Exception ignored) {}
+            } catch (Exception ignored) {
+            }
             return titleCase(spiceName);
         } catch (Exception e) {
             return "NAIF " + naifId;

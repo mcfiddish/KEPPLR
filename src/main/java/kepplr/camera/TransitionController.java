@@ -97,10 +97,9 @@ public final class TransitionController {
     private final DefaultSimulationState state;
 
     /**
-     * Scene-graph radius provider; set by {@code KepplrApp} after the {@link BodySceneManager} is created.
-     * May be {@code null} if not yet wired (e.g., during unit tests). When non-null, effective body radii
-     * observed during rendering are preferred over config-derived estimates in {@link #getBodyMinDist} and
-     * {@link #startGoToNow}.
+     * Scene-graph radius provider; set by {@code KepplrApp} after the {@link BodySceneManager} is created. May be
+     * {@code null} if not yet wired (e.g., during unit tests). When non-null, effective body radii observed during
+     * rendering are preferred over config-derived estimates in {@link #getBodyMinDist} and {@link #startGoToNow}.
      */
     private BodySceneManager bodySceneManager;
 
@@ -121,9 +120,9 @@ public final class TransitionController {
     }
 
     /**
-     * Wire the {@link BodySceneManager} so that effective rendered radii are used for goTo end-distance
-     * and zoom clamping. Must be called on the JME render thread after {@code BodySceneManager} is created
-     * (and again if it is recreated on config reload).
+     * Wire the {@link BodySceneManager} so that effective rendered radii are used for goTo end-distance and zoom
+     * clamping. Must be called on the JME render thread after {@code BodySceneManager} is created (and again if it is
+     * recreated on config reload).
      */
     public void setBodySceneManager(BodySceneManager bsm) {
         this.bodySceneManager = bsm;

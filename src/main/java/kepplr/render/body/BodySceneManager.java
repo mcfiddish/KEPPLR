@@ -65,9 +65,9 @@ public class BodySceneManager {
     private final Map<EphemerisID, BodySceneNode> bodyNodes = new HashMap<>();
 
     /**
-     * Per-frame cache of effective rendered radius (km) keyed by NAIF ID. For natural bodies this is the mean
-     * ellipsoid radius; for spacecraft it is the GLB bounding-sphere radius set by {@link BodyNodeFactory}. Updated
-     * each frame during {@link #update}; cleared in {@link #dispose}.
+     * Per-frame cache of effective rendered radius (km) keyed by NAIF ID. For natural bodies this is the mean ellipsoid
+     * radius; for spacecraft it is the GLB bounding-sphere radius set by {@link BodyNodeFactory}. Updated each frame
+     * during {@link #update}; cleared in {@link #dispose}.
      */
     private final Map<Integer, Double> sceneBodyRadiiKm = new HashMap<>();
 
@@ -273,8 +273,8 @@ public class BodySceneManager {
     /**
      * Returns the effective rendered radius (km) for the given NAIF ID as last observed during {@link #update}.
      *
-     * <p>For natural bodies this is the mean ellipsoid radius; for spacecraft it is the GLB bounding-sphere radius
-     * (or 0.0 if the spacecraft has no GLB model, or if the body has not yet been rendered).
+     * <p>For natural bodies this is the mean ellipsoid radius; for spacecraft it is the GLB bounding-sphere radius (or
+     * 0.0 if the spacecraft has no GLB model, or if the body has not yet been rendered).
      */
     public double getEffectiveBodyRadiusKm(int naifId) {
         return sceneBodyRadiiKm.getOrDefault(naifId, 0.0);
