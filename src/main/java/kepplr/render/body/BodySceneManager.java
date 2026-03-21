@@ -140,7 +140,6 @@ public class BodySceneManager {
 
         for (EphemerisID bodyId : eph.getKnownBodies()) {
             if (spacecraftIdSet.contains(bodyId)) continue;
-            if (!eph.hasBodyFixedFrame(bodyId)) continue;
 
             VectorIJK helioPos = eph.getHeliocentricPositionJ2000(bodyId, et);
             if (helioPos == null) continue;
