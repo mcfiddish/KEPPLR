@@ -85,6 +85,7 @@ public final class KepplrStatusWindow {
     private CommandRecorder commandRecorder;
     private Stage stage;
     private TreeView<BodyTreeEntry> bodyTree;
+    private TreeItem<BodyTreeEntry> masterRoot;
     private Menu instrumentsMenu;
     private CheckBox labelsCheckBox;
 
@@ -297,11 +298,23 @@ public final class KepplrStatusWindow {
     // ── Body List TreeView ───────────────────────────────────────────────────
 
     private VBox buildBodyListSection() {
-        Label header = boldLabel("Bodies");
+        Label header = boldLabel("Select Body");
         header.setPadding(new Insets(4, 10, 2, 10));
 
         TextField searchField = new TextField();
-        searchField.setPromptText("Search body name or NAIF ID...");
+        searchField.setPromptText("Filter...");
+
+        // Live filtering: rebuild visible tree on each keystroke
+        searchField.textProperty().addListener((obs, oldText, newText) -> {
+            String filter = newText == null ? "" : newText.trim().toLowerCase();
+            if (filter.isEmpty()) {
+                bodyTree.setRoot(masterRoot);
+            } else {
+                bodyTree.setRoot(buildFilteredRoot(filter));
+            }
+        });
+
+        // Enter still resolves and selects (useful for exact NAIF ID entry)
         searchField.setOnAction(e -> {
             String text = searchField.getText().trim();
             if (text.isEmpty()) return;
@@ -337,6 +350,47 @@ public final class KepplrStatusWindow {
         VBox section = new VBox(4, header, searchBox, bodyTree);
         VBox.setVgrow(section, Priority.ALWAYS);
         return section;
+    }
+
+    /**
+     * Build a filtered copy of the master tree, keeping only items whose display name or NAIF ID matches the filter.
+     * Parent groups are included (expanded) if any child matches.
+     */
+    private TreeItem<BodyTreeEntry> buildFilteredRoot(String filter) {
+        TreeItem<BodyTreeEntry> filteredRoot = new TreeItem<>(masterRoot.getValue());
+        filteredRoot.setExpanded(true);
+
+        for (TreeItem<BodyTreeEntry> topItem : masterRoot.getChildren()) {
+            if (topItem.getChildren().isEmpty()) {
+                // Leaf (Sun, spacecraft, etc.)
+                if (matchesFilter(topItem.getValue(), filter)) {
+                    filteredRoot.getChildren().add(new TreeItem<>(topItem.getValue()));
+                }
+            } else {
+                // Group node — include if group name matches or any child matches
+                boolean groupMatches = matchesFilter(topItem.getValue(), filter);
+                List<TreeItem<BodyTreeEntry>> matchingChildren = new ArrayList<>();
+                for (TreeItem<BodyTreeEntry> child : topItem.getChildren()) {
+                    if (groupMatches || matchesFilter(child.getValue(), filter)) {
+                        matchingChildren.add(new TreeItem<>(child.getValue()));
+                    }
+                }
+                if (!matchingChildren.isEmpty()) {
+                    TreeItem<BodyTreeEntry> groupCopy = new TreeItem<>(topItem.getValue());
+                    groupCopy.setExpanded(true);
+                    groupCopy.getChildren().addAll(matchingChildren);
+                    filteredRoot.getChildren().add(groupCopy);
+                }
+            }
+        }
+        return filteredRoot;
+    }
+
+    private static boolean matchesFilter(BodyTreeEntry entry, String filter) {
+        if (entry == null) return false;
+        if (entry.displayName().toLowerCase().contains(filter)) return true;
+        if (entry.naifId() != -1 && String.valueOf(entry.naifId()).contains(filter)) return true;
+        return false;
     }
 
     /** Populate the body tree from the current ephemeris. */
@@ -471,7 +525,8 @@ public final class KepplrStatusWindow {
             logger.warn("Failed to populate body tree: {}", e.getMessage());
         }
 
-        bodyTree.setRoot(root);
+        masterRoot = root;
+        bodyTree.setRoot(masterRoot);
     }
 
     /**
