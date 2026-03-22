@@ -644,6 +644,33 @@ body (T)"). JavaFX `MenuItem` supports tooltips indirectly via a custom
 graphic node or by setting a tooltip on the internal label. This is a polish
 pass with no architectural impact.
 
+**Status window layout improvements.** Several usability changes to
+`KepplrStatusWindow`:
+
+- **Body readout:** Each row now shows "Name (NAIF_ID)" with camera-to-body
+  distance right-aligned on the same line. Distance auto-switches units: metres
+  (< 1 km), km (< 0.01 AU), AU (≥ 0.01 AU). Row order changed to Focused →
+  Targeted → Selected (focused is the camera anchor, displayed first). Clear
+  button removed; only Focus and Target buttons remain on the Selected row.
+  (See D-036.)
+
+- **Window:** Width increased from 380px to 440px. Always-on-top enabled
+  (`stage.setAlwaysOnTop(true)`). JavaFX `Separator` lines added between body
+  readout, status section, and body list sections.
+
+- **Live body filtering:** The search field filters the body tree as the user
+  types (case-insensitive match on display name or NAIF ID). Parent groups are
+  shown expanded when any child matches. Enter still resolves exact NAIF IDs
+  and selects the body. Section header renamed to "Select Body".
+
+- **Transition bar removed.** Camera transitions are fast enough that the
+  progress bar was not useful.
+
+- **KEPPLRConfiguration.reload() race fix.** `load(PropertiesConfiguration)`
+  now builds into a local variable and assigns `instance` atomically at the
+  end, eliminating the window where `getInstance()` would throw
+  `IllegalStateException` during config reload. (See D-036, D-037.)
+
 ---
 
 ## Backlog (unsequenced, post-v0.2)

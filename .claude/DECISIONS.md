@@ -792,7 +792,35 @@ would cause a compilation error since `toScript()` has no default implementation
 
 ---
 
-*Last updated: Step 23 (rendering enhancements)*
+## D-036: Status window body readout shows NAIF ID and camera-to-body distance
+**Status:** Accepted
+**Roadmap step:** 27 (status window layout improvements)
+
+**Context:** The body readout (Selected/Focused/Targeted) showed only the human-readable name (e.g., "Earth"). Users had no way to see the NAIF ID or how far the camera was from each body without mental calculation.
+
+**Decision:** `SimulationStateFxBridge.formatBodyNameWithId()` formats bodies as "Name (ID)" (e.g., "Earth (399)"). `computeCameraToBodyDistanceKm()` computes the Euclidean distance from the camera heliocentric J2000 position to the body's heliocentric position via `KEPPLREphemeris.getHeliocentricPositionJ2000()`. `formatDistance()` auto-switches units: metres for < 1 km, km for < 0.01 AU, AU otherwise. Three distance thresholds defined in `KepplrConstants`: `KM_PER_AU`, `DISTANCE_DISPLAY_M_THRESHOLD_KM`, `DISTANCE_DISPLAY_AU_THRESHOLD_AU`. Distance properties are updated in both reactive listeners and `refreshAll()` polling.
+
+**Alternatives considered:** Showing heliocentric distance instead of camera distance — rejected because camera distance is more actionable for navigation. Separate distance row per body — rejected in favour of inline distance (same row, right-aligned) to keep the readout compact.
+
+**Consequences:** Three new `ReadOnlyStringProperty` fields on `SimulationStateFxBridge`. Body readout rows reordered to Focused → Targeted → Selected (focused is the camera anchor, most important).
+
+---
+
+## D-037: Status window layout: wider, always-on-top, section separators, live body filter
+**Status:** Accepted
+**Roadmap step:** 27 (status window layout improvements)
+
+**Context:** The status window at 380px was too narrow for name + distance on one row. The body tree search field only resolved on Enter, requiring exact names. No visual separation existed between the body readout and status section. The transition progress bar was rarely noticed.
+
+**Decision:** Window width increased to 440px. `stage.setAlwaysOnTop(true)` — user can minimise if needed. JavaFX `Separator` nodes inserted between body readout, status section, and body list. Transition progress bar removed. Body tree search field replaced with live filtering: on each keystroke, a filtered copy of the master tree is built, keeping items whose display name or NAIF ID contains the filter text (case-insensitive). Parent groups are included (expanded) if any child matches, or if the group name itself matches. Enter still resolves exact NAIF IDs via `BodyLookupService.resolve()`. The Clear button on the Selected row was removed; only Focus and Target buttons remain.
+
+**Alternatives considered:** CSS stylesheet instead of inline styles — deferred to a future polish pass. Collapsible status section — rejected as over-engineering for the current use case.
+
+**Consequences:** `masterRoot` field added to `KepplrStatusWindow` to preserve the unfiltered tree. `buildFilteredRoot()` and `matchesFilter()` helper methods added. `ProgressBar` import removed. Section header renamed from "Bodies" to "Select Body" for clarity.
+
+---
+
+*Last updated: Step 27 (status window layout improvements)*
 *Backfill note: Entries D-001 through D-009 were reconstructed retrospectively.
 D-010 onwards recorded in real time.*
 
