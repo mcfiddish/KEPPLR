@@ -58,7 +58,7 @@ import picante.time.UTCEpoch;
 public class KEPPLRConfiguration implements KEPPLRConfigBlock {
 
     private static final Logger logger = LogManager.getLogger();
-    private static KEPPLRConfiguration instance = null;
+    private static volatile KEPPLRConfiguration instance = null;
     private KEPPLRConfigBlock config = null;
     private ThreadLocal<KEPPLREphemeris> ephemeris;
     private final Map<String, BodyBlock> bodyBlocks = new LinkedHashMap<>();
