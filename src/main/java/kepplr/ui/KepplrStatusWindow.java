@@ -10,14 +10,18 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.function.BiConsumer;
+import javafx.animation.AnimationTimer;
 import javafx.beans.binding.Bindings;
 import javafx.geometry.Insets;
+import javafx.geometry.Orientation;
 import javafx.scene.Scene;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
 import javafx.scene.control.ButtonType;
 import javafx.scene.control.CheckBox;
+import javafx.scene.control.ContextMenu;
 import javafx.scene.control.CustomMenuItem;
 import javafx.scene.control.Label;
 import javafx.scene.control.Menu;
@@ -26,6 +30,8 @@ import javafx.scene.control.MenuItem;
 import javafx.scene.control.RadioButton;
 import javafx.scene.control.Separator;
 import javafx.scene.control.SeparatorMenuItem;
+import javafx.scene.control.SplitPane;
+import javafx.scene.control.TextArea;
 import javafx.scene.control.TextField;
 import javafx.scene.control.ToggleGroup;
 import javafx.scene.control.Tooltip;
@@ -83,11 +89,16 @@ public final class KepplrStatusWindow {
     private Runnable configReloadCallback;
     private ScriptRunner scriptRunner;
     private CommandRecorder commandRecorder;
+    private static final int SCRIPT_OUTPUT_MAX_LINES = 200;
+
     private Stage stage;
     private TreeView<BodyTreeEntry> bodyTree;
     private TreeItem<BodyTreeEntry> masterRoot;
     private Menu instrumentsMenu;
     private CheckBox labelsCheckBox;
+    private TextArea scriptOutputArea;
+    private final ConcurrentLinkedQueue<String> scriptOutputQueue = new ConcurrentLinkedQueue<>();
+    private int scriptOutputLineCount;
 
     /**
      * @param bridge the bridge exposing FX-thread-safe display properties; must not be null
@@ -132,6 +143,7 @@ public final class KepplrStatusWindow {
      */
     public void setScriptRunner(ScriptRunner runner) {
         this.scriptRunner = runner;
+        runner.setOutputListener(line -> scriptOutputQueue.add(line));
     }
 
     /**
@@ -164,9 +176,14 @@ public final class KepplrStatusWindow {
         VBox bodyReadout = buildBodyReadout();
         VBox statusSection = buildStatusSection();
         VBox bodyListSection = buildBodyListSection();
+        VBox scriptPanel = buildScriptOutputPanel();
 
-        VBox root = new VBox(6, menuBar, bodyReadout, new Separator(), statusSection, new Separator(), bodyListSection);
-        VBox.setVgrow(bodyListSection, Priority.ALWAYS);
+        SplitPane splitPane = new SplitPane(bodyListSection, scriptPanel);
+        splitPane.setOrientation(Orientation.VERTICAL);
+        splitPane.setDividerPositions(0.75);
+        VBox.setVgrow(splitPane, Priority.ALWAYS);
+
+        VBox root = new VBox(6, menuBar, bodyReadout, new Separator(), statusSection, new Separator(), splitPane);
 
         Scene scene = new Scene(root, WINDOW_WIDTH, WINDOW_HEIGHT);
 
@@ -185,6 +202,14 @@ public final class KepplrStatusWindow {
         stage.show();
         stage.toFront();
         bridge.startPolling();
+
+        // Drain script output queue on each FX frame (avoids Platform.runLater per CLAUDE.md Rule 2)
+        new AnimationTimer() {
+            @Override
+            public void handle(long now) {
+                drainScriptOutput();
+            }
+        }.start();
     }
 
     /** Close the window programmatically (called from JME destroy() hook). */
@@ -344,12 +369,70 @@ public final class KepplrStatusWindow {
             }
         });
 
+        // Right-click context menu — rebuilt on each show to reflect current toggle state
+        ContextMenu contextMenu = new ContextMenu();
+        bodyTree.setContextMenu(contextMenu);
+        bodyTree.setOnContextMenuRequested(evt -> {
+            TreeItem<BodyTreeEntry> item = bodyTree.getSelectionModel().getSelectedItem();
+            if (item == null || item.getValue() == null || item.getValue().naifId == -1) {
+                contextMenu.hide();
+                evt.consume();
+            } else {
+                populateBodyTreeContextMenu(contextMenu, item.getValue().naifId());
+            }
+        });
+
         VBox searchBox = new VBox(searchField);
         searchBox.setPadding(new Insets(0, 10, 4, 10));
 
         VBox section = new VBox(4, header, searchBox, bodyTree);
         VBox.setVgrow(section, Priority.ALWAYS);
         return section;
+    }
+
+    private void populateBodyTreeContextMenu(ContextMenu menu, int naifId) {
+        menu.getItems().clear();
+
+        MenuItem focusItem = new MenuItem("Focus");
+        focusItem.setOnAction(e -> commands.focusBody(naifId));
+
+        MenuItem targetItem = new MenuItem("Target");
+        targetItem.setOnAction(e -> commands.targetBody(naifId));
+
+        boolean trailOn = bridge.getState().trailVisibleProperty(naifId).get();
+        MenuItem trailItem = new MenuItem(trailOn ? "Hide Trail" : "Show Trail");
+        trailItem.setOnAction(e -> commands.setTrailVisible(naifId, !trailOn));
+
+        boolean labelOn = bridge.getState().labelVisibleProperty(naifId).get();
+        MenuItem labelItem = new MenuItem(labelOn ? "Hide Label" : "Show Label");
+        labelItem.setOnAction(e -> commands.setLabelVisible(naifId, !labelOn));
+
+        boolean axesOn = bridge.getState()
+                .vectorVisibleProperty(naifId, VectorTypes.bodyAxisX())
+                .get();
+        MenuItem axesItem = new MenuItem(axesOn ? "Hide Axes" : "Show Axes");
+        axesItem.setOnAction(e -> {
+            boolean show = !axesOn;
+            commands.setVectorVisible(naifId, VectorTypes.bodyAxisX(), show);
+            commands.setVectorVisible(naifId, VectorTypes.bodyAxisY(), show);
+            commands.setVectorVisible(naifId, VectorTypes.bodyAxisZ(), show);
+        });
+
+        menu.getItems()
+                .addAll(
+                        focusItem,
+                        targetItem,
+                        new SeparatorMenuItem(),
+                        trailItem,
+                        labelItem,
+                        new SeparatorMenuItem(),
+                        axesItem);
+    }
+
+    private int getSelectedTreeNaifId() {
+        TreeItem<BodyTreeEntry> item = bodyTree.getSelectionModel().getSelectedItem();
+        if (item == null || item.getValue() == null) return -1;
+        return item.getValue().naifId();
     }
 
     /**
@@ -574,6 +657,48 @@ public final class KepplrStatusWindow {
 
             item.setOnAction(e -> commands.setFrustumVisible(code, checkBox.isSelected()));
             instrumentsMenu.getItems().add(item);
+        }
+    }
+
+    // ── Script Output Panel ────────────────────────────────────────────────
+
+    private VBox buildScriptOutputPanel() {
+        Label header = boldLabel("Script Output");
+        header.setPadding(new Insets(4, 10, 2, 10));
+
+        scriptOutputArea = new TextArea();
+        scriptOutputArea.setEditable(false);
+        scriptOutputArea.setWrapText(true);
+        scriptOutputArea.setStyle("-fx-font-family: monospace; -fx-font-size: 10px;");
+        VBox.setVgrow(scriptOutputArea, Priority.ALWAYS);
+
+        VBox box = new VBox(4, header, scriptOutputArea);
+        return box;
+    }
+
+    private void drainScriptOutput() {
+        String line;
+        boolean changed = false;
+        while ((line = scriptOutputQueue.poll()) != null) {
+            if (scriptOutputLineCount > 0) {
+                scriptOutputArea.appendText("\n");
+            }
+            scriptOutputArea.appendText(line);
+            scriptOutputLineCount++;
+            changed = true;
+
+            // Trim old lines when the buffer grows too large
+            if (scriptOutputLineCount > SCRIPT_OUTPUT_MAX_LINES) {
+                String text = scriptOutputArea.getText();
+                int firstNewline = text.indexOf('\n');
+                if (firstNewline >= 0) {
+                    scriptOutputArea.setText(text.substring(firstNewline + 1));
+                    scriptOutputLineCount--;
+                }
+            }
+        }
+        if (changed) {
+            scriptOutputArea.positionCaret(scriptOutputArea.getLength());
         }
     }
 
@@ -890,8 +1015,21 @@ public final class KepplrStatusWindow {
             }
         });
 
-        // Reset all Current Focus checkmarks when focus body changes
+        // When focus body changes, hide overlays on the old body and reset checkmarks
         bridge.focusedBodyIdProperty().addListener((obs, oldVal, newVal) -> {
+            int oldId = oldVal.intValue();
+            if (oldId != -1) {
+                if (sunDirCheckBox.isSelected())
+                    commands.setVectorVisible(oldId, VectorTypes.towardBody(KepplrConstants.SUN_NAIF_ID), false);
+                if (earthDirCheckBox.isSelected()) commands.setVectorVisible(oldId, VectorTypes.towardBody(399), false);
+                if (velocityCheckBox.isSelected()) commands.setVectorVisible(oldId, VectorTypes.velocity(), false);
+                if (targetTrailCheckBox.isSelected()) commands.setTrailVisible(oldId, false);
+                if (axesCheckBox.isSelected()) {
+                    commands.setVectorVisible(oldId, VectorTypes.bodyAxisX(), false);
+                    commands.setVectorVisible(oldId, VectorTypes.bodyAxisY(), false);
+                    commands.setVectorVisible(oldId, VectorTypes.bodyAxisZ(), false);
+                }
+            }
             sunDirCheckBox.setSelected(false);
             earthDirCheckBox.setSelected(false);
             velocityCheckBox.setSelected(false);
@@ -899,8 +1037,15 @@ public final class KepplrStatusWindow {
             axesCheckBox.setSelected(false);
         });
 
-        Menu currentFocus =
-                new Menu("Current Focus", null, sunDirItem, earthDirItem, velocityItem, targetTrailItem, axesItem);
+        Menu currentFocus = new Menu("Current Focus");
+        currentFocus.getItems().addAll(sunDirItem, earthDirItem, velocityItem, targetTrailItem, axesItem);
+        bridge.focusedBodyNameProperty().addListener((obs, old, val) -> {
+            currentFocus.setText("—".equals(val) ? "Current Focus" : "Current Focus: " + val);
+        });
+        String initFocName = bridge.focusedBodyNameProperty().get();
+        if (!"—".equals(initFocName)) {
+            currentFocus.setText("Current Focus: " + initFocName);
+        }
 
         return new Menu(
                 "Overlays",

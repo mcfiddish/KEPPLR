@@ -385,6 +385,14 @@ public final class SimulationStateFxBridge {
                 (code, fxProp) -> fxProp.set(state.frustumVisibleProperty(code).get()));
     }
 
+    /**
+     * Package-private access to the underlying simulation state for reading per-body visibility properties (e.g.,
+     * trail, label, vector visibility) from the context menu.
+     */
+    SimulationState getState() {
+        return state;
+    }
+
     // ── Exposed read-only properties ──────────────────────────────────────────
 
     /** NAIF ID of the selected body, formatted for display. */
