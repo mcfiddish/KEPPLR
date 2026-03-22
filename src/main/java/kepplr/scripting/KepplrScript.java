@@ -584,6 +584,22 @@ public final class KepplrScript {
         commands.setFrustumVisible(resolve(instrumentName), visible);
     }
 
+    // ── Configuration reload (Step 27) ──────────────────────────────────────────
+
+    /**
+     * Reload the KEPPLR configuration from the given file path and rebuild the scene.
+     *
+     * <p>Blocks the script thread until the JME scene rebuild completes (or the timeout elapses), so any command issued
+     * after this call sees the new configuration.
+     *
+     * <p>Example: {@code kepplr.loadConfiguration("/path/to/config.properties")}
+     *
+     * @param path file system path to the {@code .properties} configuration file
+     */
+    public void loadConfiguration(String path) {
+        commands.loadConfiguration(path);
+    }
+
     // ── Transition control ──────────────────────────────────────────────────────
 
     /**

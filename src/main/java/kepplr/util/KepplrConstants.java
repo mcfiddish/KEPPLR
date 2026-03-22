@@ -695,6 +695,12 @@ public final class KepplrConstants {
     public static final long SCRIPT_WAIT_POLL_INTERVAL_MS = 50L;
 
     /**
+     * Maximum seconds the script thread waits for the JME scene rebuild to complete after {@code loadConfiguration()}.
+     * If the latch does not count down within this window a warning is logged and the script continues.
+     */
+    public static final long CONFIG_RELOAD_TIMEOUT_SEC = 30L;
+
+    /**
      * Coalescing window in milliseconds for the {@code CommandRecorder}: instant camera commands within this window are
      * merged into a single recorded command.
      */

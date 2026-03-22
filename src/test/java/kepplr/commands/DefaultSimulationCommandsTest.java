@@ -394,4 +394,33 @@ class DefaultSimulationCommandsTest {
             assertFalse(state.frustumVisibleProperty(-98300).get());
         }
     }
+
+    // ─────────────────────────────────────────────────────────────────
+    // loadConfiguration (Step 27)
+    // ─────────────────────────────────────────────────────────────────
+
+    @Nested
+    @DisplayName("loadConfiguration (Step 27)")
+    class LoadConfigurationTests {
+
+        @Test
+        @DisplayName("invalid path does not throw from the caller thread")
+        void invalidPathDoesNotThrow() {
+            // No sceneRebuildCallback set — commands has none in this test harness.
+            // The call must return normally even if KEPPLRConfiguration.reload() fails.
+            assertDoesNotThrow(() -> commands.loadConfiguration("/nonexistent/path/config.properties"));
+        }
+
+        @Test
+        @DisplayName("invalid path leaves sceneRebuildCallback uncalled")
+        void invalidPathSkipsRebuild() {
+            boolean[] called = {false};
+            commands.setSceneRebuildCallback(latch -> {
+                called[0] = true;
+                latch.countDown();
+            });
+            commands.loadConfiguration("/nonexistent/path/config.properties");
+            assertFalse(called[0], "sceneRebuildCallback must not be called after a failed reload");
+        }
+    }
 }

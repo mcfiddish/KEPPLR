@@ -1,13 +1,21 @@
 package kepplr.commands;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
 import kepplr.camera.CameraFrame;
 import kepplr.camera.TransitionController;
+import kepplr.config.KEPPLRConfiguration;
 import kepplr.core.SimulationClock;
 import kepplr.ephemeris.BodyLookupService;
 import kepplr.render.RenderQuality;
 import kepplr.render.vector.VectorType;
 import kepplr.state.DefaultSimulationState;
 import kepplr.util.KepplrConstants;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 /**
  * Concrete implementation of {@link SimulationCommands} that applies state-transition rules directly to a
@@ -31,9 +39,17 @@ import kepplr.util.KepplrConstants;
  */
 public final class DefaultSimulationCommands implements SimulationCommands {
 
+    private static final Logger logger = LogManager.getLogger();
+
     private final DefaultSimulationState state;
     private final SimulationClock clock;
     private final TransitionController transitionController;
+
+    /**
+     * Accepts a {@link CountDownLatch} and enqueues a JME-thread scene rebuild, counting the latch down when the
+     * rebuild finishes. Set by {@code KepplrApp} after construction; {@code null} in unit tests.
+     */
+    private Consumer<CountDownLatch> sceneRebuildCallback;
 
     /**
      * @param state mutable state object this instance will write to for interaction commands
@@ -250,5 +266,60 @@ public final class DefaultSimulationCommands implements SimulationCommands {
     @Override
     public void setFrustumVisible(String instrumentName, boolean visible) {
         setFrustumVisible(BodyLookupService.resolve(instrumentName), visible);
+    }
+
+    // ── Configuration reload (Step 27) ───────────────────────────────────────
+
+    /**
+     * Set the callback that enqueues a JME-thread scene rebuild for use by {@link #loadConfiguration}.
+     *
+     * <p>The callback receives a {@link CountDownLatch} that it must count down to zero once the rebuild completes.
+     * Called by {@code KepplrApp} after construction; may be left {@code null} in unit tests (in which case
+     * {@code loadConfiguration} reloads the config but does not wait for any scene rebuild).
+     *
+     * @param callback consumer that enqueues the rebuild and counts down the latch; may be null
+     */
+    public void setSceneRebuildCallback(Consumer<CountDownLatch> callback) {
+        this.sceneRebuildCallback = callback;
+    }
+
+    /**
+     * Reload the configuration from {@code path} and block until the JME scene rebuild completes (Step 27).
+     *
+     * <p>If {@link KEPPLRConfiguration#reload} throws for any reason (file not found, parse error, etc.) the error is
+     * logged and this method returns immediately — no rebuild is enqueued and the previous configuration remains
+     * active.
+     */
+    @Override
+    public void loadConfiguration(String path) {
+        Path filePath = Path.of(path);
+        if (!Files.exists(filePath)) {
+            logger.error("Cannot load configuration: file not found: {}", path);
+            return;
+        }
+        try {
+            KEPPLRConfiguration.reload(filePath);
+        } catch (Exception e) {
+            logger.error("Failed to load configuration '{}': {}", path, e.getMessage());
+            return;
+        }
+
+        if (sceneRebuildCallback == null) {
+            return;
+        }
+
+        CountDownLatch latch = new CountDownLatch(1);
+        sceneRebuildCallback.accept(latch);
+        try {
+            boolean done = latch.await(KepplrConstants.CONFIG_RELOAD_TIMEOUT_SEC, TimeUnit.SECONDS);
+            if (!done) {
+                logger.warn(
+                        "loadConfiguration: scene rebuild did not complete within {} s; continuing",
+                        KepplrConstants.CONFIG_RELOAD_TIMEOUT_SEC);
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            logger.warn("loadConfiguration: interrupted while waiting for scene rebuild");
+        }
     }
 }

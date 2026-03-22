@@ -488,4 +488,12 @@ public final class CommandRecorder implements SimulationCommands {
         recordCommand("kepplr.setFrustumVisible(\"" + instrumentName + "\", " + fmtBool(visible) + ")");
         delegate.setFrustumVisible(instrumentName, visible);
     }
+
+    // ── Configuration reload (Step 27) ──
+
+    @Override
+    public void loadConfiguration(String path) {
+        recordCommand("kepplr.loadConfiguration(\"" + path + "\")");
+        delegate.loadConfiguration(path);
+    }
 }
