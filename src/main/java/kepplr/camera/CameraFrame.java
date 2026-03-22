@@ -21,10 +21,10 @@ public enum CameraFrame {
     BODY_FIXED,
 
     /**
-     * Synodic frame defined by the focus body and the currently targeted body (§5).
+     * Synodic frame defined by the focus body and the currently selected body (§5).
      *
      * <ul>
-     *   <li>+X = normalized vector from focus body center → targeted body center
+     *   <li>+X = normalized vector from focus body center → selected body center
      *   <li>+Z = J2000 +Z (or Ecliptic J2000 +Z if degenerate, §5.2)
      *   <li>+Y = Z × X (right-handed)
      * </ul>
