@@ -608,5 +608,10 @@ class CommandRecorderTest {
         public void loadConfiguration(String path) {
             lastMethod = "loadConfiguration";
         }
+
+        @Override
+        public void saveScreenshot(String outputPath) {
+            lastMethod = "saveScreenshot";
+        }
     }
 }

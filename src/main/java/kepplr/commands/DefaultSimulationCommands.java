@@ -52,6 +52,13 @@ public final class DefaultSimulationCommands implements SimulationCommands {
     private Consumer<CountDownLatch> sceneRebuildCallback;
 
     /**
+     * Accepts an output path and a {@link CountDownLatch}, enqueues a JME-thread framebuffer capture, and counts the
+     * latch down when the PNG file has been written. Set by {@code KepplrApp} after construction; {@code null} in unit
+     * tests.
+     */
+    private ScreenshotCallback screenshotCallback;
+
+    /**
      * @param state mutable state object this instance will write to for interaction commands
      * @param clock simulation clock this instance will delegate time commands to
      * @param transitionController camera transition controller; receives {@code pointAt}/{@code goTo} requests
@@ -283,6 +290,58 @@ public final class DefaultSimulationCommands implements SimulationCommands {
     @Override
     public void setFrustumVisible(String instrumentName, boolean visible) {
         setFrustumVisible(BodyLookupService.resolve(instrumentName), visible);
+    }
+
+    // ── Screenshot capture (Step 25) ──────────────────────────────────────────
+
+    /**
+     * Callback interface for JME-thread screenshot capture.
+     *
+     * <p>Accepts an output path and a {@link CountDownLatch}. The implementation enqueues a framebuffer capture on the
+     * JME render thread and counts the latch down once the PNG file has been written.
+     */
+    @FunctionalInterface
+    public interface ScreenshotCallback {
+        void capture(String outputPath, CountDownLatch latch);
+    }
+
+    /**
+     * Set the callback that enqueues a JME-thread framebuffer capture for use by {@link #saveScreenshot}.
+     *
+     * <p>Called by {@code KepplrApp} after construction; may be left {@code null} in unit tests.
+     *
+     * @param callback the screenshot callback; may be null
+     */
+    public void setScreenshotCallback(ScreenshotCallback callback) {
+        this.screenshotCallback = callback;
+    }
+
+    /**
+     * Capture the current JME framebuffer to a PNG file (Step 25).
+     *
+     * <p>Blocks the calling thread until the screenshot is written. If the callback is null (unit tests), this method
+     * is a no-op.
+     */
+    @Override
+    public void saveScreenshot(String outputPath) {
+        if (screenshotCallback == null) {
+            logger.warn("saveScreenshot: no screenshot callback set (unit test mode)");
+            return;
+        }
+
+        CountDownLatch latch = new CountDownLatch(1);
+        screenshotCallback.capture(outputPath, latch);
+        try {
+            boolean done = latch.await(KepplrConstants.CONFIG_RELOAD_TIMEOUT_SEC, TimeUnit.SECONDS);
+            if (!done) {
+                logger.warn(
+                        "saveScreenshot: capture did not complete within {} s",
+                        KepplrConstants.CONFIG_RELOAD_TIMEOUT_SEC);
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            logger.warn("saveScreenshot: interrupted while waiting for capture");
+        }
     }
 
     // ── Configuration reload (Step 27) ───────────────────────────────────────

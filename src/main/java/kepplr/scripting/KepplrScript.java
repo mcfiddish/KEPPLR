@@ -650,6 +650,59 @@ public final class KepplrScript {
         commands.setFrustumVisible(resolve(instrumentName), visible);
     }
 
+    // ── Screenshot and capture (Step 25) ────────────────────────────────────────
+
+    /**
+     * Capture the current JME framebuffer to a PNG file.
+     *
+     * <p>Blocks the script thread until the screenshot is written.
+     *
+     * <p>Example: {@code kepplr.saveScreenshot("/tmp/screenshot.png")}
+     *
+     * @param outputPath file system path for the output PNG file
+     */
+    public void saveScreenshot(String outputPath) {
+        commands.saveScreenshot(outputPath);
+    }
+
+    /**
+     * Capture a sequence of frames as PNG files (Step 25).
+     *
+     * <p>Sets ET to {@code startET}, pauses the simulation, then loops {@code frameCount} times: captures a screenshot,
+     * advances ET by {@code etStep}. After the sequence completes, the simulation remains paused at the final ET.
+     *
+     * <p>This is a compound operation — it is NOT on {@code SimulationCommands} and is NOT loggable by
+     * {@code CommandRecorder}.
+     *
+     * <p>Example: {@code kepplr.captureSequence("/tmp/frames", 4.895e8, 60, 2.0)}
+     *
+     * @param outputDir directory for output PNG files (created if it doesn't exist)
+     * @param startET starting ET (TDB seconds past J2000)
+     * @param frameCount number of frames to capture; must be positive
+     * @param etStep ET advance per frame in seconds
+     */
+    public void captureSequence(String outputDir, double startET, int frameCount, double etStep) {
+        kepplr.core.CaptureService.captureSequence(outputDir, startET, frameCount, etStep, commands, state);
+    }
+
+    /**
+     * Capture a sequence of frames as PNG files, starting from a UTC string (Step 25).
+     *
+     * <p>Converts {@code startUTC} to ET via ephemeris, then delegates to {@link #captureSequence(String, double, int,
+     * double)}.
+     *
+     * <p>Example: {@code kepplr.captureSequence("/tmp/frames", "2015 Jul 14 07:59:00", 60, 2.0)}
+     *
+     * @param outputDir directory for output PNG files (created if it doesn't exist)
+     * @param startUTC UTC time string in Picante format
+     * @param frameCount number of frames to capture; must be positive
+     * @param etStep ET advance per frame in seconds
+     */
+    public void captureSequence(String outputDir, String startUTC, int frameCount, double etStep) {
+        double startET = KEPPLRConfiguration.getInstance().getTimeConversion().utcStringToTDB(startUTC);
+        captureSequence(outputDir, startET, frameCount, etStep);
+    }
+
     // ── Configuration reload (Step 27) ──────────────────────────────────────────
 
     /**

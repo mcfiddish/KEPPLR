@@ -46,11 +46,13 @@ import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
+import javafx.stage.DirectoryChooser;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
 import kepplr.camera.CameraFrame;
 import kepplr.commands.SimulationCommands;
 import kepplr.config.KEPPLRConfiguration;
+import kepplr.core.CaptureService;
 import kepplr.ephemeris.BodyLookupService;
 import kepplr.ephemeris.Instrument;
 import kepplr.ephemeris.KEPPLREphemeris;
@@ -102,6 +104,9 @@ public final class KepplrStatusWindow {
     private TextArea scriptOutputArea;
     private final ConcurrentLinkedQueue<String> scriptOutputQueue = new ConcurrentLinkedQueue<>();
     private int scriptOutputLineCount;
+    private CustomMenuItem captureSeqItem;
+    private CustomMenuItem saveScreenshotItem;
+    private volatile Thread captureSequenceThread;
 
     /**
      * @param bridge the bridge exposing FX-thread-safe display properties; must not be null
@@ -206,11 +211,13 @@ public final class KepplrStatusWindow {
         stage.toFront();
         bridge.startPolling();
 
-        // Drain script output queue on each FX frame (avoids Platform.runLater per CLAUDE.md Rule 2)
+        // Drain script output queue and check capture thread status on each FX frame
+        // (avoids Platform.runLater per CLAUDE.md Rule 2)
         new AnimationTimer() {
             @Override
             public void handle(long now) {
                 drainScriptOutput();
+                checkCaptureThreadDone();
             }
         }.start();
     }
@@ -702,6 +709,19 @@ public final class KepplrStatusWindow {
         }
     }
 
+    /**
+     * Re-enable capture-related menu items when the capture thread finishes. Called on the FX thread by the
+     * AnimationTimer, avoiding Platform.runLater() per CLAUDE.md Rule 2.
+     */
+    private void checkCaptureThreadDone() {
+        Thread ct = captureSequenceThread;
+        if (ct != null && !ct.isAlive()) {
+            captureSequenceThread = null;
+            if (captureSeqItem != null) captureSeqItem.setDisable(false);
+            if (saveScreenshotItem != null) saveScreenshotItem.setDisable(false);
+        }
+    }
+
     // ── Menu Bar ─────────────────────────────────────────────────────────────
 
     private MenuBar buildMenuBar() {
@@ -741,6 +761,19 @@ public final class KepplrStatusWindow {
         CustomMenuItem runScript = tipItem("Run Script...", "Execute a Groovy script file");
         runScript.setOnAction(e -> {
             if (scriptRunner == null) return;
+
+            // Block if a capture sequence is running
+            Thread ct = captureSequenceThread;
+            if (ct != null && ct.isAlive()) {
+                Alert warn = new Alert(
+                        Alert.AlertType.WARNING,
+                        "A capture sequence is in progress. Wait for it to complete before running a script.",
+                        ButtonType.OK);
+                warn.setTitle("Capture Running");
+                warn.setHeaderText(null);
+                warn.showAndWait();
+                return;
+            }
 
             // If a script is already running, confirm before interrupting
             if (scriptRunner.isRunning()) {
@@ -799,11 +832,37 @@ public final class KepplrStatusWindow {
             }
         });
 
+        // ── Save Screenshot ──────────────────────────────────────────────
+        CustomMenuItem saveScreenshot =
+                tipItem("Save Screenshot...", "Capture the current JME framebuffer to a PNG file");
+        saveScreenshot.setOnAction(e -> {
+            FileChooser chooser = new FileChooser();
+            chooser.setTitle("Save Screenshot");
+            chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("PNG images", "*.png"));
+            chooser.setInitialFileName("screenshot.png");
+            File file = chooser.showSaveDialog(stage);
+            if (file != null) {
+                String path = file.getAbsolutePath();
+                if (!path.toLowerCase().endsWith(".png")) {
+                    path = path + ".png";
+                }
+                commands.saveScreenshot(path);
+            }
+        });
+
+        // ── Capture Sequence... ─────────────────────────────────────────
+        CustomMenuItem captureSeq = tipItem("Capture Sequence...", "Capture a sequence of frames as PNG files");
+        captureSeq.setOnAction(e -> showCaptureSequenceDialog(captureSeq, saveScreenshot));
+
         // ── Quit ─────────────────────────────────────────────────────────
         CustomMenuItem quit = tipItem("Quit", "Exit KEPPLR");
         quit.setOnAction(e -> {
             if (jmeShutdown != null) jmeShutdown.run();
         });
+
+        // Store references for mutual exclusion
+        this.captureSeqItem = captureSeq;
+        this.saveScreenshotItem = saveScreenshot;
 
         return new Menu(
                 "File",
@@ -813,7 +872,128 @@ public final class KepplrStatusWindow {
                 runScript,
                 recordToggle,
                 new SeparatorMenuItem(),
+                saveScreenshot,
+                captureSeq,
+                new SeparatorMenuItem(),
                 quit);
+    }
+
+    /**
+     * Show the Capture Sequence dialog. Validates inputs, opens a directory chooser, and launches the capture on a
+     * dedicated daemon thread.
+     */
+    private void showCaptureSequenceDialog(CustomMenuItem captureItem, CustomMenuItem screenshotItem) {
+        // Block if a script is running
+        if (scriptRunner != null && scriptRunner.isRunning()) {
+            Alert warn = new Alert(
+                    Alert.AlertType.WARNING,
+                    "A script is currently running. Stop it before starting a capture sequence.",
+                    ButtonType.OK);
+            warn.setTitle("Script Running");
+            warn.setHeaderText(null);
+            warn.showAndWait();
+            return;
+        }
+
+        // Block if a capture is already running
+        Thread ct = captureSequenceThread;
+        if (ct != null && ct.isAlive()) {
+            Alert warn =
+                    new Alert(Alert.AlertType.WARNING, "A capture sequence is already in progress.", ButtonType.OK);
+            warn.setTitle("Capture Running");
+            warn.setHeaderText(null);
+            warn.showAndWait();
+            return;
+        }
+
+        // Build dialog
+        GridPane grid = new GridPane();
+        grid.setHgap(10);
+        grid.setVgap(10);
+        grid.setPadding(new Insets(10));
+
+        TextField utcField = new TextField(bridge.utcTimeTextProperty().get());
+        TextField stepField = new TextField();
+        stepField.setPromptText("ET step (seconds)");
+        TextField countField = new TextField();
+        countField.setPromptText("Number of frames");
+
+        grid.add(new Label("Start UTC:"), 0, 0);
+        grid.add(utcField, 1, 0);
+        grid.add(new Label("Time step (s):"), 0, 1);
+        grid.add(stepField, 1, 1);
+        grid.add(new Label("Frame count:"), 0, 2);
+        grid.add(countField, 1, 2);
+
+        Alert dialog = new Alert(Alert.AlertType.NONE);
+        dialog.setTitle("Capture Sequence");
+        dialog.setHeaderText("Configure the capture sequence");
+        dialog.getDialogPane().setContent(grid);
+        dialog.getButtonTypes().addAll(ButtonType.OK, ButtonType.CANCEL);
+
+        Optional<ButtonType> result = dialog.showAndWait();
+        if (result.isEmpty() || result.get() != ButtonType.OK) return;
+
+        // Validate inputs
+        double startET;
+        try {
+            startET = KEPPLRConfiguration.getInstance()
+                    .getTimeConversion()
+                    .utcStringToTDB(utcField.getText().trim());
+        } catch (Exception ex) {
+            scriptOutputQueue.add("✗ Invalid Start UTC: " + ex.getMessage());
+            return;
+        }
+
+        double etStep;
+        try {
+            etStep = Double.parseDouble(stepField.getText().trim());
+            if (etStep == 0) throw new NumberFormatException("must be non-zero");
+        } catch (NumberFormatException ex) {
+            scriptOutputQueue.add("✗ Invalid time step: " + ex.getMessage());
+            return;
+        }
+
+        int frameCount;
+        try {
+            frameCount = Integer.parseInt(countField.getText().trim());
+            if (frameCount <= 0) throw new NumberFormatException("must be positive");
+        } catch (NumberFormatException ex) {
+            scriptOutputQueue.add("✗ Invalid frame count: " + ex.getMessage());
+            return;
+        }
+
+        // Directory chooser
+        DirectoryChooser dirChooser = new DirectoryChooser();
+        dirChooser.setTitle("Select Output Directory");
+        File dir = dirChooser.showDialog(stage);
+        if (dir == null) return;
+
+        String outputDir = dir.getAbsolutePath();
+        int fc = frameCount;
+        double step = etStep;
+        double start = startET;
+
+        // Disable menu items during capture
+        captureItem.setDisable(true);
+        screenshotItem.setDisable(true);
+
+        scriptOutputQueue.add("▶ Capture sequence: " + fc + " frames to " + outputDir);
+
+        Thread thread = new Thread(
+                () -> {
+                    try {
+                        CaptureService.captureSequence(outputDir, start, fc, step, commands, bridge.getState());
+                        scriptOutputQueue.add("✓ Captured " + fc + " frames to " + outputDir);
+                    } catch (Exception ex) {
+                        scriptOutputQueue.add("✗ Capture error: " + ex.getMessage());
+                    }
+                    // Menu items are re-enabled by checkCaptureThreadDone() on the FX thread
+                },
+                "kepplr-capture-sequence");
+        thread.setDaemon(true);
+        captureSequenceThread = thread;
+        thread.start();
     }
 
     private Menu buildViewMenu() {
