@@ -371,13 +371,13 @@ reference but its workarounds are not applied. CC must not revisit this decision
 **Context:** The original design (REDESIGN.md §4.6) defined "tracked" as a fourth
 interaction mode with a screen-space anchor that locked a body to a fixed screen position.
 During step 19 implementation it became clear that this behavior is equivalent to the
-Synodic camera frame with the targeted body as the "other body" — which was already
+Synodic camera frame with the selected body as the "other body" — which was already
 implemented. Maintaining a separate tracking concept would have duplicated behavior and
 added dead state properties.
 
 **Decision:** Tracking is removed as a distinct mode. The F key toggles the camera frame
-between SYNODIC and INERTIAL. Stop Tracking in the View menu switches to INERTIAL. Both
-are kept in sync with the Camera Frame submenu radio items. `trackedBodyId`,
+between SYNODIC and INERTIAL. Stop Tracking has been removed from the View menu —
+selecting Inertial in the Camera Frame submenu is the equivalent action. `trackedBodyId`,
 `trackingAnchor`, `trackBody()`, and `stopTracking()` do not exist in the codebase.
 
 **Alternatives considered:** Implementing screen-position locking as a distinct behavior
@@ -551,10 +551,13 @@ All are non-blocking and use the existing TransitionController infrastructure
 from step 18. Fine-grained mouse drag navigation remains in CameraInputHandler
 and is intentionally unscriptable.
 
-setSynodicFrame(focusNaifId, targetNaifId, durationSeconds) changes only the
-camera frame — it does not update focused, targeted, or selected body state in
-SimulationState. setCameraFrame(SYNODIC) continues to derive focus and target
-from SimulationState for interactive use.
+setSynodicFrame(focusNaifId, targetNaifId) changes only the camera frame — it
+does not update focused, targeted, or selected body state in SimulationState.
+(Note: `targetNaifId` is the method parameter name referring to the synodic
+"other body" argument, not a reference to the targeted body interaction state.
+The interactive `setCameraFrame(SYNODIC)` uses the selected body as the "other
+body," not the targeted body.) setCameraFrame(SYNODIC) continues to derive
+focus and "other body" from SimulationState for interactive use.
 
 setCameraPosition defaults to the current focus body as origin. The explicit
 overload accepts an originNaifId for scripts that need to position the camera
@@ -789,7 +792,77 @@ would cause a compilation error since `toScript()` has no default implementation
 
 ---
 
-*Last updated: Step 23 (rendering enhancements)*
+## D-036: Status window body readout shows NAIF ID and camera-to-body distance
+**Status:** Accepted
+**Roadmap step:** 27 (status window layout improvements)
+
+**Context:** The body readout (Selected/Focused/Targeted) showed only the human-readable name (e.g., "Earth"). Users had no way to see the NAIF ID or how far the camera was from each body without mental calculation.
+
+**Decision:** `SimulationStateFxBridge.formatBodyNameWithId()` formats bodies as "Name (ID)" (e.g., "Earth (399)"). `computeCameraToBodyDistanceKm()` computes the Euclidean distance from the camera heliocentric J2000 position to the body's heliocentric position via `KEPPLREphemeris.getHeliocentricPositionJ2000()`. `formatDistance()` auto-switches units: metres for < 1 km, km for < 0.01 AU, AU otherwise. Three distance thresholds defined in `KepplrConstants`: `KM_PER_AU`, `DISTANCE_DISPLAY_M_THRESHOLD_KM`, `DISTANCE_DISPLAY_AU_THRESHOLD_AU`. Distance properties are updated in both reactive listeners and `refreshAll()` polling.
+
+**Alternatives considered:** Showing heliocentric distance instead of camera distance — rejected because camera distance is more actionable for navigation. Separate distance row per body — rejected in favour of inline distance (same row, right-aligned) to keep the readout compact.
+
+**Consequences:** Three new `ReadOnlyStringProperty` fields on `SimulationStateFxBridge`. Body readout rows reordered to Focused → Targeted → Selected (focused is the camera anchor, most important).
+
+---
+
+## D-037: Status window layout: wider, always-on-top, section separators, live body filter
+**Status:** Accepted
+**Roadmap step:** 27 (status window layout improvements)
+
+**Context:** The status window at 380px was too narrow for name + distance on one row. The body tree search field only resolved on Enter, requiring exact names. No visual separation existed between the body readout and status section. The transition progress bar was rarely noticed.
+
+**Decision:** Window width increased to 440px. `stage.setAlwaysOnTop(true)` — user can minimise if needed. JavaFX `Separator` nodes inserted between body readout, status section, and body list. Transition progress bar removed. Body tree search field replaced with live filtering: on each keystroke, a filtered copy of the master tree is built, keeping items whose display name or NAIF ID contains the filter text (case-insensitive). Parent groups are included (expanded) if any child matches, or if the group name itself matches. Enter still resolves exact NAIF IDs via `BodyLookupService.resolve()`. The Clear button on the Selected row was removed; only Focus and Target buttons remain.
+
+**Alternatives considered:** CSS stylesheet instead of inline styles — deferred to a future polish pass. Collapsible status section — rejected as over-engineering for the current use case.
+
+**Consequences:** `masterRoot` field added to `KepplrStatusWindow` to preserve the unfiltered tree. `buildFilteredRoot()` and `matchesFilter()` helper methods added. `ProgressBar` import removed. Section header renamed from "Bodies" to "Select Body" for clarity.
+
+---
+
+## D-038: Overlays menu bidirectionally synced to SimulationState visibility properties
+**Status:** Accepted
+**Roadmap step:** 27
+
+**Context:** The "Current Focus" submenu in the Overlays menu maintained its own checked state. When a user toggled a trail or axes via the body tree context menu (or a script), the overlays menu checkmarks became stale. The two menus were visually inconsistent.
+
+**Decision:** Each `CheckMenuItem` in the "Current Focus" submenu is bound to the corresponding `SimulationState` visibility property (`trailVisibleProperty`, `vectorVisibleProperty`) for the currently focused body. `ChangeListener` instances are added when focus is set and removed (unbound) when focus changes. Initial state is synced immediately on bind. A `Runnable[] unbindPrev` array-of-one pattern stores the cleanup action.
+
+**Alternatives considered:** Rebuilding the menu items on each show event — rejected because it would lose the menu's position/state mid-interaction. Polling via AnimationTimer — rejected as wasteful when property listeners are available.
+
+**Consequences:** Any source of visibility changes (context menu, scripts, keyboard shortcuts) is automatically reflected in the overlays menu. No additional wiring needed when new visibility sources are added.
+
+---
+
+## D-039: Body tree context menu uses CheckMenuItem with dynamic state
+**Status:** Accepted
+**Roadmap step:** 27
+
+**Context:** The context menu initially used "Show/Hide" text toggling (e.g., "Show Trail" / "Hide Trail"). The status window menus used `CheckBox` inside `CustomMenuItem`. This was visually inconsistent.
+
+**Decision:** All toggle items across the application use `CheckMenuItem`. The context menu's `populateBodyTreeContextMenu()` reads current visibility state from `SimulationState` at show time and sets `CheckMenuItem.setSelected()` accordingly. The overlays menu, instruments menu, and File > Record Session also use `CheckMenuItem`. The `menuCheckBox` helper and `CheckBox` import were removed.
+
+**Alternatives considered:** Using `CheckBox` + `CustomMenuItem` everywhere (allows tooltips) — rejected because `CheckMenuItem` is the standard JavaFX pattern and tooltips on toggle items are low-value.
+
+**Consequences:** Consistent checkmark-style toggles everywhere. `CustomMenuItem` is still used for non-toggle items that need tooltips (e.g., `tipItem` helper for action items, radio buttons for camera frame).
+
+---
+
+## D-040: Body-fixed axes scale to origin body radius, not focused body radius
+**Status:** Accepted
+**Roadmap step:** 27
+
+**Context:** All vector overlays scaled their arrow length relative to the focused body's mean radius. When viewing a spacecraft's body-fixed axes while focused on a planet, the axes were enormous (planet-radius scale). Conversely, if the spacecraft was focused but had no PCK shape data, axes used the 1.0 km fallback — ignoring the GLB bounding radius.
+
+**Decision:** Added `VectorType.usesOriginBodyRadius()` default method (returns `false`). `BodyAxisVectorType` overrides it to return `true`. `VectorRenderer.update()` now accepts an `IntToDoubleFunction sceneRadiusLookup` parameter (supplied as `bodySceneManager::getEffectiveBodyRadiusKm`). When `usesOriginBodyRadius()` is true, the arrow length is computed from the origin body's effective rendered radius (scene-derived, including GLB bounding radius and spacecraft `scale()` factor), with ephemeris shape fallback, then `BODY_DEFAULT_RADIUS_KM` fallback. Other vector types (velocity, towardBody) continue to use the focused body's radius.
+
+**Alternatives considered:** Adding a per-VectorDefinition radius override — rejected as over-engineering; the VectorType already knows whether it's body-intrinsic. Querying ephemeris only — rejected because spacecraft have no PCK shape entry; the scene-derived radius from `BodySceneManager` is the only source that accounts for GLB bounding radius and configured scale.
+
+**Consequences:** `VectorManager.update()` and `VectorRenderer.update()` signatures gain an `IntToDoubleFunction` parameter. `KepplrApp` passes `bodySceneManager::getEffectiveBodyRadiusKm`. Six new tests cover `usesOriginBodyRadius()` for all built-in types plus a custom default.
+
+---
+
+*Last updated: Step 27 (complete)*
 *Backfill note: Entries D-001 through D-009 were reconstructed retrospectively.
 D-010 onwards recorded in real time.*
 

@@ -34,6 +34,20 @@ public interface VectorType {
     VectorIJK computeDirection(int originNaifId, double et);
 
     /**
+     * Whether this vector type's length should scale relative to the <em>origin</em> body's radius rather than the
+     * focused body's radius.
+     *
+     * <p>Body-fixed axes return {@code true} — their length should be proportional to the body they are drawn on,
+     * regardless of which body is focused. All other built-in types return {@code false} (default), meaning they scale
+     * to the focused body's radius.
+     *
+     * @return {@code true} if arrow length should use the origin body's radius
+     */
+    default boolean usesOriginBodyRadius() {
+        return false;
+    }
+
+    /**
      * Return a Groovy expression that recreates this {@code VectorType} instance via the {@link VectorTypes} factory.
      *
      * <p>Used by {@link kepplr.scripting.CommandRecorder} to serialize {@code setVectorVisible} calls into runnable

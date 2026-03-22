@@ -463,5 +463,10 @@ class KepplrScriptTest {
         public void setFrustumVisible(String name, boolean v) {
             lastMethod = "setFrustumVisible";
         }
+
+        @Override
+        public void loadConfiguration(String path) {
+            lastMethod = "loadConfiguration";
+        }
     }
 }

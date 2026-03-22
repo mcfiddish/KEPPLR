@@ -151,6 +151,19 @@ class CommandRecorderTest {
             String script = recorder.getScript();
             assertTrue(script.contains("kepplr.cancelTransition()"), "Should contain cancelTransition: " + script);
         }
+
+        @Test
+        @DisplayName("loadConfiguration is recorded verbatim with quoted path")
+        void loadConfigurationRecorded() {
+            recorder.startRecording();
+            recorder.loadConfiguration("/some/path/config.properties");
+            recorder.stopRecording();
+
+            String script = recorder.getScript();
+            assertTrue(
+                    script.contains("kepplr.loadConfiguration(\"/some/path/config.properties\")"),
+                    "Should contain loadConfiguration with quoted path: " + script);
+        }
     }
 
     // ── Coalescing ──────────────────────────────────────────────────────────────
@@ -493,6 +506,11 @@ class CommandRecorderTest {
         @Override
         public void setFrustumVisible(String name, boolean v) {
             lastMethod = "setFrustumVisible";
+        }
+
+        @Override
+        public void loadConfiguration(String path) {
+            lastMethod = "loadConfiguration";
         }
     }
 }

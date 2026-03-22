@@ -3,7 +3,6 @@ package kepplr.ui;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -11,23 +10,33 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.function.BiConsumer;
+import javafx.animation.AnimationTimer;
 import javafx.beans.binding.Bindings;
+import javafx.beans.property.ReadOnlyBooleanProperty;
+import javafx.beans.value.ChangeListener;
 import javafx.geometry.Insets;
+import javafx.geometry.Orientation;
 import javafx.scene.Scene;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
 import javafx.scene.control.ButtonType;
 import javafx.scene.control.CheckMenuItem;
+import javafx.scene.control.ContextMenu;
+import javafx.scene.control.CustomMenuItem;
 import javafx.scene.control.Label;
 import javafx.scene.control.Menu;
 import javafx.scene.control.MenuBar;
 import javafx.scene.control.MenuItem;
-import javafx.scene.control.ProgressBar;
-import javafx.scene.control.RadioMenuItem;
+import javafx.scene.control.RadioButton;
+import javafx.scene.control.Separator;
 import javafx.scene.control.SeparatorMenuItem;
+import javafx.scene.control.SplitPane;
+import javafx.scene.control.TextArea;
 import javafx.scene.control.TextField;
 import javafx.scene.control.ToggleGroup;
+import javafx.scene.control.Tooltip;
 import javafx.scene.control.TreeItem;
 import javafx.scene.control.TreeView;
 import javafx.scene.input.KeyCode;
@@ -49,6 +58,7 @@ import kepplr.ephemeris.spice.SpiceBundle;
 import kepplr.render.vector.VectorTypes;
 import kepplr.scripting.CommandRecorder;
 import kepplr.scripting.ScriptRunner;
+import kepplr.state.SimulationState;
 import kepplr.util.KepplrConstants;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -72,7 +82,7 @@ public final class KepplrStatusWindow {
 
     private static final Logger logger = LogManager.getLogger();
 
-    private static final double WINDOW_WIDTH = 380.0;
+    private static final double WINDOW_WIDTH = 440.0;
     private static final double WINDOW_HEIGHT = 720.0;
 
     private final SimulationStateFxBridge bridge;
@@ -82,10 +92,16 @@ public final class KepplrStatusWindow {
     private Runnable configReloadCallback;
     private ScriptRunner scriptRunner;
     private CommandRecorder commandRecorder;
+    private static final int SCRIPT_OUTPUT_MAX_LINES = 200;
+
     private Stage stage;
     private TreeView<BodyTreeEntry> bodyTree;
+    private TreeItem<BodyTreeEntry> masterRoot;
     private Menu instrumentsMenu;
-    private CheckMenuItem labelsItem;
+    private CheckMenuItem labelsCheckItem;
+    private TextArea scriptOutputArea;
+    private final ConcurrentLinkedQueue<String> scriptOutputQueue = new ConcurrentLinkedQueue<>();
+    private int scriptOutputLineCount;
 
     /**
      * @param bridge the bridge exposing FX-thread-safe display properties; must not be null
@@ -130,6 +146,7 @@ public final class KepplrStatusWindow {
      */
     public void setScriptRunner(ScriptRunner runner) {
         this.scriptRunner = runner;
+        runner.setOutputListener(line -> scriptOutputQueue.add(line));
     }
 
     /**
@@ -156,15 +173,20 @@ public final class KepplrStatusWindow {
 
         stage = new Stage();
         stage.setTitle("KEPPLR");
+        stage.setAlwaysOnTop(true);
 
         MenuBar menuBar = buildMenuBar();
         VBox bodyReadout = buildBodyReadout();
         VBox statusSection = buildStatusSection();
-        VBox transitionBar = buildTransitionBar();
         VBox bodyListSection = buildBodyListSection();
+        VBox scriptPanel = buildScriptOutputPanel();
 
-        VBox root = new VBox(6, menuBar, bodyReadout, statusSection, transitionBar, bodyListSection);
-        VBox.setVgrow(bodyListSection, Priority.ALWAYS);
+        SplitPane splitPane = new SplitPane(bodyListSection, scriptPanel);
+        splitPane.setOrientation(Orientation.VERTICAL);
+        splitPane.setDividerPositions(0.75);
+        VBox.setVgrow(splitPane, Priority.ALWAYS);
+
+        VBox root = new VBox(6, menuBar, bodyReadout, new Separator(), statusSection, new Separator(), splitPane);
 
         Scene scene = new Scene(root, WINDOW_WIDTH, WINDOW_HEIGHT);
 
@@ -183,6 +205,14 @@ public final class KepplrStatusWindow {
         stage.show();
         stage.toFront();
         bridge.startPolling();
+
+        // Drain script output queue on each FX frame (avoids Platform.runLater per CLAUDE.md Rule 2)
+        new AnimationTimer() {
+            @Override
+            public void handle(long now) {
+                drainScriptOutput();
+            }
+        }.start();
     }
 
     /** Close the window programmatically (called from JME destroy() hook). */
@@ -205,7 +235,7 @@ public final class KepplrStatusWindow {
         }
     }
 
-    // ── Body Readout (Selected, Focused, Targeted with action buttons) ────────
+    // ── Body Readout (Focused, Targeted, Selected with action buttons) ────────
 
     private VBox buildBodyReadout() {
         GridPane grid = new GridPane();
@@ -214,15 +244,42 @@ public final class KepplrStatusWindow {
         grid.setVgap(4);
 
         ColumnConstraints labelCol = new ColumnConstraints(70);
-        ColumnConstraints valueCol = new ColumnConstraints();
-        valueCol.setHgrow(Priority.ALWAYS);
+        ColumnConstraints nameCol = new ColumnConstraints();
+        nameCol.setHgrow(Priority.ALWAYS);
+        ColumnConstraints distCol = new ColumnConstraints();
         ColumnConstraints buttonCol = new ColumnConstraints();
-        grid.getColumnConstraints().addAll(labelCol, valueCol, buttonCol);
+        grid.getColumnConstraints().addAll(labelCol, nameCol, distCol, buttonCol);
 
-        // Row 0: Selected — with Focus, Target, Clear buttons
-        Label selLabel = boldLabel("Selected:");
+        int row = 0;
+
+        // Row 0: Focused
+        grid.add(boldLabel("Focused:"), 0, row);
+        Label focValue = monoLabel();
+        focValue.textProperty().bind(bridge.focusedBodyNameProperty());
+        grid.add(focValue, 1, row);
+        Label focDist = dimLabel();
+        focDist.textProperty().bind(bridge.focusedBodyDistanceProperty());
+        grid.add(focDist, 2, row);
+        row++;
+
+        // Row 1: Targeted
+        grid.add(boldLabel("Targeted:"), 0, row);
+        Label tgtValue = monoLabel();
+        tgtValue.textProperty().bind(bridge.targetedBodyNameProperty());
+        grid.add(tgtValue, 1, row);
+        Label tgtDist = dimLabel();
+        tgtDist.textProperty().bind(bridge.targetedBodyDistanceProperty());
+        grid.add(tgtDist, 2, row);
+        row++;
+
+        // Row 2: Selected — with Focus, Target buttons
+        grid.add(boldLabel("Selected:"), 0, row);
         Label selValue = monoLabel();
         selValue.textProperty().bind(bridge.selectedBodyNameProperty());
+        grid.add(selValue, 1, row);
+        Label selDist = dimLabel();
+        selDist.textProperty().bind(bridge.selectedBodyDistanceProperty());
+        grid.add(selDist, 2, row);
 
         Button focusBtn = smallButton("Focus");
         focusBtn.setOnAction(e -> {
@@ -234,29 +291,10 @@ public final class KepplrStatusWindow {
             int id = bridge.selectedBodyIdProperty().get();
             if (id != -1) commands.targetBody(id);
         });
-        Button clearSelBtn = smallButton("Clear");
-        clearSelBtn.setOnAction(e -> commands.selectBody(-1));
-        HBox selButtons = new HBox(4, focusBtn, targetBtn, clearSelBtn);
+        HBox selButtons = new HBox(4, focusBtn, targetBtn);
         selButtons.visibleProperty().bind(bridge.selectedBodyActiveProperty());
         selButtons.managedProperty().bind(bridge.selectedBodyActiveProperty());
-
-        grid.add(selLabel, 0, 0);
-        grid.add(selValue, 1, 0);
-        grid.add(selButtons, 2, 0);
-
-        // Row 1: Focused
-        Label focLabel = boldLabel("Focused:");
-        Label focValue = monoLabel();
-        focValue.textProperty().bind(bridge.focusedBodyNameProperty());
-        grid.add(focLabel, 0, 1);
-        grid.add(focValue, 1, 1);
-
-        // Row 2: Targeted
-        Label tgtLabel = boldLabel("Targeted:");
-        Label tgtValue = monoLabel();
-        tgtValue.textProperty().bind(bridge.targetedBodyNameProperty());
-        grid.add(tgtLabel, 0, 2);
-        grid.add(tgtValue, 1, 2);
+        grid.add(selButtons, 3, row);
 
         return new VBox(grid);
     }
@@ -285,28 +323,26 @@ public final class KepplrStatusWindow {
         return new VBox(grid);
     }
 
-    // ── Transition Progress Bar ──────────────────────────────────────────────
-
-    private VBox buildTransitionBar() {
-        ProgressBar progressBar = new ProgressBar();
-        progressBar.setMaxWidth(Double.MAX_VALUE);
-        progressBar.progressProperty().bind(bridge.transitionProgressProperty());
-
-        VBox box = new VBox(progressBar);
-        box.setPadding(new Insets(0, 10, 0, 10));
-        box.visibleProperty().bind(bridge.transitionActiveProperty());
-        box.managedProperty().bind(bridge.transitionActiveProperty());
-        return box;
-    }
-
     // ── Body List TreeView ───────────────────────────────────────────────────
 
     private VBox buildBodyListSection() {
-        Label header = boldLabel("Bodies");
+        Label header = boldLabel("Select Body");
         header.setPadding(new Insets(4, 10, 2, 10));
 
         TextField searchField = new TextField();
-        searchField.setPromptText("Search body name or NAIF ID...");
+        searchField.setPromptText("Filter...");
+
+        // Live filtering: rebuild visible tree on each keystroke
+        searchField.textProperty().addListener((obs, oldText, newText) -> {
+            String filter = newText == null ? "" : newText.trim().toLowerCase();
+            if (filter.isEmpty()) {
+                bodyTree.setRoot(masterRoot);
+            } else {
+                bodyTree.setRoot(buildFilteredRoot(filter));
+            }
+        });
+
+        // Enter still resolves and selects (useful for exact NAIF ID entry)
         searchField.setOnAction(e -> {
             String text = searchField.getText().trim();
             if (text.isEmpty()) return;
@@ -336,12 +372,111 @@ public final class KepplrStatusWindow {
             }
         });
 
+        // Right-click context menu — rebuilt on each show to reflect current toggle state
+        ContextMenu contextMenu = new ContextMenu();
+        bodyTree.setContextMenu(contextMenu);
+        bodyTree.setOnContextMenuRequested(evt -> {
+            TreeItem<BodyTreeEntry> item = bodyTree.getSelectionModel().getSelectedItem();
+            if (item == null || item.getValue() == null || item.getValue().naifId == -1) {
+                contextMenu.hide();
+                evt.consume();
+            } else {
+                populateBodyTreeContextMenu(contextMenu, item.getValue().naifId());
+            }
+        });
+
         VBox searchBox = new VBox(searchField);
         searchBox.setPadding(new Insets(0, 10, 4, 10));
 
         VBox section = new VBox(4, header, searchBox, bodyTree);
         VBox.setVgrow(section, Priority.ALWAYS);
         return section;
+    }
+
+    private void populateBodyTreeContextMenu(ContextMenu menu, int naifId) {
+        menu.getItems().clear();
+
+        MenuItem focusItem = new MenuItem("Focus");
+        focusItem.setOnAction(e -> commands.focusBody(naifId));
+
+        MenuItem targetItem = new MenuItem("Target");
+        targetItem.setOnAction(e -> commands.targetBody(naifId));
+
+        CheckMenuItem trailItem = new CheckMenuItem("Trail");
+        trailItem.setSelected(bridge.getState().trailVisibleProperty(naifId).get());
+        trailItem.setOnAction(e -> commands.setTrailVisible(naifId, trailItem.isSelected()));
+
+        CheckMenuItem labelItem = new CheckMenuItem("Label");
+        labelItem.setSelected(bridge.getState().labelVisibleProperty(naifId).get());
+        labelItem.setOnAction(e -> commands.setLabelVisible(naifId, labelItem.isSelected()));
+
+        CheckMenuItem axesItem = new CheckMenuItem("Axes");
+        axesItem.setSelected(bridge.getState()
+                .vectorVisibleProperty(naifId, VectorTypes.bodyAxisX())
+                .get());
+        axesItem.setOnAction(e -> {
+            boolean show = axesItem.isSelected();
+            commands.setVectorVisible(naifId, VectorTypes.bodyAxisX(), show);
+            commands.setVectorVisible(naifId, VectorTypes.bodyAxisY(), show);
+            commands.setVectorVisible(naifId, VectorTypes.bodyAxisZ(), show);
+        });
+
+        menu.getItems()
+                .addAll(
+                        focusItem,
+                        targetItem,
+                        new SeparatorMenuItem(),
+                        trailItem,
+                        labelItem,
+                        new SeparatorMenuItem(),
+                        axesItem);
+    }
+
+    private int getSelectedTreeNaifId() {
+        TreeItem<BodyTreeEntry> item = bodyTree.getSelectionModel().getSelectedItem();
+        if (item == null || item.getValue() == null) return -1;
+        return item.getValue().naifId();
+    }
+
+    /**
+     * Build a filtered copy of the master tree, keeping only items whose display name or NAIF ID matches the filter.
+     * Parent groups are included (expanded) if any child matches.
+     */
+    private TreeItem<BodyTreeEntry> buildFilteredRoot(String filter) {
+        TreeItem<BodyTreeEntry> filteredRoot = new TreeItem<>(masterRoot.getValue());
+        filteredRoot.setExpanded(true);
+
+        for (TreeItem<BodyTreeEntry> topItem : masterRoot.getChildren()) {
+            if (topItem.getChildren().isEmpty()) {
+                // Leaf (Sun, spacecraft, etc.)
+                if (matchesFilter(topItem.getValue(), filter)) {
+                    filteredRoot.getChildren().add(new TreeItem<>(topItem.getValue()));
+                }
+            } else {
+                // Group node — include if group name matches or any child matches
+                boolean groupMatches = matchesFilter(topItem.getValue(), filter);
+                List<TreeItem<BodyTreeEntry>> matchingChildren = new ArrayList<>();
+                for (TreeItem<BodyTreeEntry> child : topItem.getChildren()) {
+                    if (groupMatches || matchesFilter(child.getValue(), filter)) {
+                        matchingChildren.add(new TreeItem<>(child.getValue()));
+                    }
+                }
+                if (!matchingChildren.isEmpty()) {
+                    TreeItem<BodyTreeEntry> groupCopy = new TreeItem<>(topItem.getValue());
+                    groupCopy.setExpanded(true);
+                    groupCopy.getChildren().addAll(matchingChildren);
+                    filteredRoot.getChildren().add(groupCopy);
+                }
+            }
+        }
+        return filteredRoot;
+    }
+
+    private static boolean matchesFilter(BodyTreeEntry entry, String filter) {
+        if (entry == null) return false;
+        if (entry.displayName().toLowerCase().contains(filter)) return true;
+        if (entry.naifId() != -1 && String.valueOf(entry.naifId()).contains(filter)) return true;
+        return false;
     }
 
     /** Populate the body tree from the current ephemeris. */
@@ -476,7 +611,8 @@ public final class KepplrStatusWindow {
             logger.warn("Failed to populate body tree: {}", e.getMessage());
         }
 
-        bodyTree.setRoot(root);
+        masterRoot = root;
+        bodyTree.setRoot(masterRoot);
     }
 
     /**
@@ -524,6 +660,48 @@ public final class KepplrStatusWindow {
         }
     }
 
+    // ── Script Output Panel ────────────────────────────────────────────────
+
+    private VBox buildScriptOutputPanel() {
+        Label header = boldLabel("Script Output");
+        header.setPadding(new Insets(4, 10, 2, 10));
+
+        scriptOutputArea = new TextArea();
+        scriptOutputArea.setEditable(false);
+        scriptOutputArea.setWrapText(true);
+        scriptOutputArea.setStyle("-fx-font-family: monospace; -fx-font-size: 10px;");
+        VBox.setVgrow(scriptOutputArea, Priority.ALWAYS);
+
+        VBox box = new VBox(4, header, scriptOutputArea);
+        return box;
+    }
+
+    private void drainScriptOutput() {
+        String line;
+        boolean changed = false;
+        while ((line = scriptOutputQueue.poll()) != null) {
+            if (scriptOutputLineCount > 0) {
+                scriptOutputArea.appendText("\n");
+            }
+            scriptOutputArea.appendText(line);
+            scriptOutputLineCount++;
+            changed = true;
+
+            // Trim old lines when the buffer grows too large
+            if (scriptOutputLineCount > SCRIPT_OUTPUT_MAX_LINES) {
+                String text = scriptOutputArea.getText();
+                int firstNewline = text.indexOf('\n');
+                if (firstNewline >= 0) {
+                    scriptOutputArea.setText(text.substring(firstNewline + 1));
+                    scriptOutputLineCount--;
+                }
+            }
+        }
+        if (changed) {
+            scriptOutputArea.positionCaret(scriptOutputArea.getLength());
+        }
+    }
+
     // ── Menu Bar ─────────────────────────────────────────────────────────────
 
     private MenuBar buildMenuBar() {
@@ -540,32 +718,27 @@ public final class KepplrStatusWindow {
     }
 
     private Menu buildFileMenu() {
-        MenuItem loadConfig = new MenuItem("Load Configuration...");
+        CustomMenuItem loadConfig = tipItem("Load Configuration...", "Load a KEPPLR configuration properties file");
         loadConfig.setOnAction(e -> {
             FileChooser chooser = new FileChooser();
             chooser.setTitle("Load KEPPLR Configuration");
             chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("All Files", "*.*"));
             File file = chooser.showOpenDialog(stage);
             if (file != null) {
-                try {
-                    KEPPLRConfiguration.getInstance().reload(Path.of(file.getAbsolutePath()));
-                    populateBodyTree();
-                    populateInstrumentsMenu();
-                    if (configReloadCallback != null) {
-                        configReloadCallback.run();
-                    }
-                    // Re-apply current label state for any newly loaded spacecraft/bodies.
-                    if (labelsItem != null) {
-                        applyLabelVisibility(labelsItem.isSelected());
-                    }
-                } catch (Exception ex) {
-                    logger.error("Failed to load configuration: {}", ex.getMessage());
+                // Route through commands so CommandRecorder can capture the call when recording.
+                // DefaultSimulationCommands.loadConfiguration() handles the JME scene rebuild;
+                // we then refresh the UI tree on the FX thread after it returns.
+                commands.loadConfiguration(file.getAbsolutePath());
+                populateBodyTree();
+                populateInstrumentsMenu();
+                if (labelsCheckItem != null) {
+                    applyLabelVisibility(labelsCheckItem.isSelected());
                 }
             }
         });
 
         // ── Run Script... ────────────────────────────────────────────────
-        MenuItem runScript = new MenuItem("Run Script...");
+        CustomMenuItem runScript = tipItem("Run Script...", "Execute a Groovy script file");
         runScript.setOnAction(e -> {
             if (scriptRunner == null) return;
 
@@ -608,9 +781,14 @@ public final class KepplrStatusWindow {
                 FileChooser chooser = new FileChooser();
                 chooser.setTitle("Save Recorded Script");
                 chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("Groovy scripts", "*.groovy"));
-                chooser.setInitialFileName("recorded.groovy");
+                // Use no extension in the initial name; the OS may auto-append from the filter,
+                // and we add it ourselves below only when absent — avoids "recorded.groovy.groovy".
+                chooser.setInitialFileName("recorded");
                 File file = chooser.showSaveDialog(stage);
                 if (file != null) {
+                    if (!file.getName().endsWith(".groovy")) {
+                        file = new File(file.getParentFile(), file.getName() + ".groovy");
+                    }
                     try {
                         Files.writeString(file.toPath(), script);
                         logger.info("Recorded script saved to {}", file.getAbsolutePath());
@@ -622,7 +800,7 @@ public final class KepplrStatusWindow {
         });
 
         // ── Quit ─────────────────────────────────────────────────────────
-        MenuItem quit = new MenuItem("Quit");
+        CustomMenuItem quit = tipItem("Quit", "Exit KEPPLR");
         quit.setOnAction(e -> {
             if (jmeShutdown != null) jmeShutdown.run();
         });
@@ -639,32 +817,43 @@ public final class KepplrStatusWindow {
     }
 
     private Menu buildViewMenu() {
-        // Camera Frame submenu
+        // Camera Frame submenu — RadioButtons inside CustomMenuItems to support tooltips
         ToggleGroup frameGroup = new ToggleGroup();
-        RadioMenuItem inertialItem = new RadioMenuItem("Inertial");
-        RadioMenuItem bodyFixedItem = new RadioMenuItem("Body-Fixed");
-        RadioMenuItem synodicItem = new RadioMenuItem("Synodic");
-        inertialItem.setToggleGroup(frameGroup);
-        bodyFixedItem.setToggleGroup(frameGroup);
-        synodicItem.setToggleGroup(frameGroup);
 
+        RadioButton inertialBtn = menuRadioButton("Inertial");
+        inertialBtn.setToggleGroup(frameGroup);
+        Tooltip.install(inertialBtn, new Tooltip("Camera orientation fixed in J2000 inertial frame"));
+        CustomMenuItem inertialItem = new CustomMenuItem(inertialBtn);
+        inertialItem.setHideOnClick(false);
         inertialItem.setOnAction(e -> commands.setCameraFrame(CameraFrame.INERTIAL));
+
+        RadioButton bodyFixedBtn = menuRadioButton("Body-Fixed");
+        bodyFixedBtn.setToggleGroup(frameGroup);
+        Tooltip.install(bodyFixedBtn, new Tooltip("Camera co-rotates with the focused body"));
+        CustomMenuItem bodyFixedItem = new CustomMenuItem(bodyFixedBtn);
+        bodyFixedItem.setHideOnClick(false);
         bodyFixedItem.setOnAction(e -> commands.setCameraFrame(CameraFrame.BODY_FIXED));
+
+        RadioButton synodicBtn = menuRadioButton("Synodic");
+        synodicBtn.setToggleGroup(frameGroup);
+        Tooltip.install(synodicBtn, new Tooltip("Camera maintains focus-to-selected body geometry"));
+        CustomMenuItem synodicItem = new CustomMenuItem(synodicBtn);
+        synodicItem.setHideOnClick(false);
         synodicItem.setOnAction(e -> commands.setCameraFrame(CameraFrame.SYNODIC));
 
         bridge.activeCameraFrameObjectProperty().addListener((obs, old, val) -> {
-            inertialItem.setSelected(val == CameraFrame.INERTIAL);
-            bodyFixedItem.setSelected(val == CameraFrame.BODY_FIXED);
-            synodicItem.setSelected(val == CameraFrame.SYNODIC);
+            inertialBtn.setSelected(val == CameraFrame.INERTIAL);
+            bodyFixedBtn.setSelected(val == CameraFrame.BODY_FIXED);
+            synodicBtn.setSelected(val == CameraFrame.SYNODIC);
         });
         CameraFrame initial = bridge.activeCameraFrameObjectProperty().get();
-        inertialItem.setSelected(initial == CameraFrame.INERTIAL);
-        bodyFixedItem.setSelected(initial == CameraFrame.BODY_FIXED);
-        synodicItem.setSelected(initial == CameraFrame.SYNODIC);
+        inertialBtn.setSelected(initial == CameraFrame.INERTIAL);
+        bodyFixedBtn.setSelected(initial == CameraFrame.BODY_FIXED);
+        synodicBtn.setSelected(initial == CameraFrame.SYNODIC);
 
         Menu frameSubMenu = new Menu("Camera Frame", null, inertialItem, bodyFixedItem, synodicItem);
 
-        MenuItem setFovItem = new MenuItem("Set FOV…");
+        CustomMenuItem setFovItem = tipItem("Set FOV…", "Set the camera field of view in degrees");
         setFovItem.setOnAction(e -> {
             double currentFov = bridge.fovDegProperty().get();
             new SetFovDialog(commands, currentFov).showAndWait();
@@ -674,20 +863,26 @@ public final class KepplrStatusWindow {
     }
 
     private Menu buildTimeMenu() {
-        MenuItem pauseItem = new MenuItem();
-        pauseItem
+        // Pause/Resume — label text is bound so the display updates live
+        Label pauseLabel = new Label();
+        pauseLabel
                 .textProperty()
                 .bind(Bindings.when(bridge.pausedTextProperty().isEqualTo("Paused"))
                         .then("Resume")
                         .otherwise("Pause"));
+        pauseLabel.setMaxWidth(Double.MAX_VALUE);
+        Tooltip.install(pauseLabel, new Tooltip("Pause or resume simulation time"));
+        CustomMenuItem pauseItem = new CustomMenuItem(pauseLabel);
+        pauseItem.setHideOnClick(true);
         pauseItem.setOnAction(
                 e -> commands.setPaused(bridge.pausedTextProperty().get().equals("Running")));
 
-        MenuItem setTimeItem = new MenuItem("Set Time...");
+        CustomMenuItem setTimeItem = tipItem("Set Time...", "Set the simulation time to a specific UTC date/time");
         setTimeItem.setOnAction(
                 e -> new SetTimeDialog(commands, bridge.utcTimeTextProperty().get()).showAndWait());
 
-        MenuItem setRateItem = new MenuItem("Set Time Rate...");
+        CustomMenuItem setRateItem =
+                tipItem("Set Time Rate...", "Set the simulation time rate in seconds per wall second");
         setRateItem.setOnAction(e ->
                 new SetTimeRateDialog(commands, bridge.timeRateTextProperty().get()).showAndWait());
 
@@ -711,9 +906,9 @@ public final class KepplrStatusWindow {
 
     private Menu buildOverlaysMenu() {
         // ── Labels ────────────────────────────────────────────────────────────
-        labelsItem = new CheckMenuItem("Show Labels");
-        labelsItem.setSelected(false);
-        labelsItem.setOnAction(e -> applyLabelVisibility(labelsItem.isSelected()));
+        labelsCheckItem = new CheckMenuItem("Labels");
+        labelsCheckItem.setSelected(false);
+        labelsCheckItem.setOnAction(e -> applyLabelVisibility(labelsCheckItem.isSelected()));
 
         // ── HUD toggles ──────────────────────────────────────────────────────
         CheckMenuItem hudInfoItem = new CheckMenuItem("HUD / Info");
@@ -727,7 +922,7 @@ public final class KepplrStatusWindow {
         showTimeItem.setOnAction(e -> commands.setHudTimeVisible(showTimeItem.isSelected()));
 
         // ── Trajectories (global toggle) ─────────────────────────────────────
-        CheckMenuItem trajItem = new CheckMenuItem("Show Trajectories");
+        CheckMenuItem trajItem = new CheckMenuItem("Trajectories");
         trajItem.setSelected(false);
         trajItem.setOnAction(e -> {
             boolean show = trajItem.isSelected();
@@ -786,22 +981,90 @@ public final class KepplrStatusWindow {
             }
         });
 
-        // Reset all Current Focus checkmarks when focus body changes
+        // Track state-property listeners so we can unbind them when focus changes
+        Runnable[] unbindPrev = {() -> {}};
+
+        // Bind menu checkmarks to the state properties of the given body so that
+        // changes made from other sources (e.g. context menu) are reflected here.
+        Runnable bindToFocused = () -> {
+            unbindPrev[0].run();
+            int id = bridge.focusedBodyIdProperty().get();
+            if (id == -1) {
+                unbindPrev[0] = () -> {};
+                return;
+            }
+            SimulationState st = bridge.getState();
+
+            ChangeListener<Boolean> sunL = (o, ov, nv) -> sunDirItem.setSelected(nv);
+            ChangeListener<Boolean> earthL = (o, ov, nv) -> earthDirItem.setSelected(nv);
+            ChangeListener<Boolean> velL = (o, ov, nv) -> velocityItem.setSelected(nv);
+            ChangeListener<Boolean> trailL = (o, ov, nv) -> targetTrailItem.setSelected(nv);
+            ChangeListener<Boolean> axesL = (o, ov, nv) -> axesItem.setSelected(nv);
+
+            ReadOnlyBooleanProperty sunP =
+                    st.vectorVisibleProperty(id, VectorTypes.towardBody(KepplrConstants.SUN_NAIF_ID));
+            ReadOnlyBooleanProperty earthP = st.vectorVisibleProperty(id, VectorTypes.towardBody(399));
+            ReadOnlyBooleanProperty velP = st.vectorVisibleProperty(id, VectorTypes.velocity());
+            ReadOnlyBooleanProperty trailP = st.trailVisibleProperty(id);
+            ReadOnlyBooleanProperty axesP = st.vectorVisibleProperty(id, VectorTypes.bodyAxisX());
+
+            sunP.addListener(sunL);
+            earthP.addListener(earthL);
+            velP.addListener(velL);
+            trailP.addListener(trailL);
+            axesP.addListener(axesL);
+
+            // Sync initial state
+            sunDirItem.setSelected(sunP.get());
+            earthDirItem.setSelected(earthP.get());
+            velocityItem.setSelected(velP.get());
+            targetTrailItem.setSelected(trailP.get());
+            axesItem.setSelected(axesP.get());
+
+            unbindPrev[0] = () -> {
+                sunP.removeListener(sunL);
+                earthP.removeListener(earthL);
+                velP.removeListener(velL);
+                trailP.removeListener(trailL);
+                axesP.removeListener(axesL);
+            };
+        };
+
+        // Bind for the initial focus body (if any)
+        bindToFocused.run();
+
+        // When focus body changes, hide overlays on the old body and rebind to the new one
         bridge.focusedBodyIdProperty().addListener((obs, oldVal, newVal) -> {
-            sunDirItem.setSelected(false);
-            earthDirItem.setSelected(false);
-            velocityItem.setSelected(false);
-            targetTrailItem.setSelected(false);
-            axesItem.setSelected(false);
+            int oldId = oldVal.intValue();
+            if (oldId != -1) {
+                if (sunDirItem.isSelected())
+                    commands.setVectorVisible(oldId, VectorTypes.towardBody(KepplrConstants.SUN_NAIF_ID), false);
+                if (earthDirItem.isSelected()) commands.setVectorVisible(oldId, VectorTypes.towardBody(399), false);
+                if (velocityItem.isSelected()) commands.setVectorVisible(oldId, VectorTypes.velocity(), false);
+                if (targetTrailItem.isSelected()) commands.setTrailVisible(oldId, false);
+                if (axesItem.isSelected()) {
+                    commands.setVectorVisible(oldId, VectorTypes.bodyAxisX(), false);
+                    commands.setVectorVisible(oldId, VectorTypes.bodyAxisY(), false);
+                    commands.setVectorVisible(oldId, VectorTypes.bodyAxisZ(), false);
+                }
+            }
+            bindToFocused.run();
         });
 
-        Menu currentFocus =
-                new Menu("Current Focus", null, sunDirItem, earthDirItem, velocityItem, targetTrailItem, axesItem);
+        Menu currentFocus = new Menu("Current Focus");
+        currentFocus.getItems().addAll(sunDirItem, earthDirItem, velocityItem, targetTrailItem, axesItem);
+        bridge.focusedBodyNameProperty().addListener((obs, old, val) -> {
+            currentFocus.setText("—".equals(val) ? "Current Focus" : "Current Focus: " + val);
+        });
+        String initFocName = bridge.focusedBodyNameProperty().get();
+        if (!"—".equals(initFocName)) {
+            currentFocus.setText("Current Focus: " + initFocName);
+        }
 
         return new Menu(
                 "Overlays",
                 null,
-                labelsItem,
+                labelsCheckItem,
                 hudInfoItem,
                 showTimeItem,
                 new SeparatorMenuItem(),
@@ -849,16 +1112,16 @@ public final class KepplrStatusWindow {
     }
 
     private Menu buildWindowMenu() {
-        MenuItem size720 = new MenuItem("1280 \u00d7 720");
+        CustomMenuItem size720 = tipItem("1280 \u00d7 720", "Resize the render window to 1280\u00d7720 (HD)");
         size720.setOnAction(e -> resizeJmeWindow(1280, 720));
 
-        MenuItem size1024 = new MenuItem("1280 \u00d7 1024");
+        CustomMenuItem size1024 = tipItem("1280 \u00d7 1024", "Resize the render window to 1280\u00d71024");
         size1024.setOnAction(e -> resizeJmeWindow(1280, 1024));
 
-        MenuItem size1080 = new MenuItem("1920 \u00d7 1080");
+        CustomMenuItem size1080 = tipItem("1920 \u00d7 1080", "Resize the render window to 1920\u00d71080 (Full HD)");
         size1080.setOnAction(e -> resizeJmeWindow(1920, 1080));
 
-        MenuItem size1440 = new MenuItem("2560 \u00d7 1440");
+        CustomMenuItem size1440 = tipItem("2560 \u00d7 1440", "Resize the render window to 2560\u00d71440 (QHD)");
         size1440.setOnAction(e -> resizeJmeWindow(2560, 1440));
 
         return new Menu("Window", null, size720, size1024, size1080, size1440);
@@ -871,6 +1134,29 @@ public final class KepplrStatusWindow {
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────
+
+    /**
+     * Create a {@link CustomMenuItem} wrapping a {@link Label} with a tooltip.
+     *
+     * <p>Standard {@link MenuItem} has no {@code setTooltip()} — wrapping a {@code Label} inside a
+     * {@code CustomMenuItem} is the JavaFX workaround that enables tooltip support on menu items.
+     */
+    private static CustomMenuItem tipItem(String text, String tooltip) {
+        Label label = new Label(text);
+        label.setMaxWidth(Double.MAX_VALUE);
+        Tooltip.install(label, new Tooltip(tooltip));
+        CustomMenuItem item = new CustomMenuItem(label);
+        item.setHideOnClick(true);
+        return item;
+    }
+
+    /** Create a styled {@link RadioButton} suitable for use inside a {@link CustomMenuItem}. */
+    private static RadioButton menuRadioButton(String text) {
+        RadioButton rb = new RadioButton(text);
+        rb.setMaxWidth(Double.MAX_VALUE);
+        rb.setStyle("-fx-text-fill: -fx-text-base-color;");
+        return rb;
+    }
 
     private static int addStatusRow(
             GridPane grid, int row, String labelText, javafx.beans.property.ReadOnlyStringProperty valueProp) {
@@ -891,6 +1177,12 @@ public final class KepplrStatusWindow {
     private static Label monoLabel() {
         Label label = new Label("—");
         label.setStyle("-fx-font-family: monospace; -fx-font-size: 11px;");
+        return label;
+    }
+
+    private static Label dimLabel() {
+        Label label = new Label("—");
+        label.setStyle("-fx-font-family: monospace; -fx-font-size: 10px; -fx-text-fill: #888888;");
         return label;
     }
 

@@ -1,6 +1,7 @@
 package kepplr.scripting;
 
 import java.io.BufferedReader;
+import java.io.Writer;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import javax.script.Bindings;
@@ -44,6 +45,7 @@ public final class ScriptRunner {
 
     private final Object lock = new Object();
     private volatile Thread scriptThread;
+    private volatile ScriptOutputListener outputListener;
 
     /**
      * @param commands simulation commands for the script API; must not be null
@@ -52,6 +54,17 @@ public final class ScriptRunner {
     public ScriptRunner(SimulationCommands commands, SimulationState state) {
         this.commands = commands;
         this.state = state;
+    }
+
+    /**
+     * Set a listener to receive script output and status events.
+     *
+     * <p>The listener is called on the script thread — implementations must marshal to the UI thread if needed.
+     *
+     * @param listener the listener, or null to disable output capture
+     */
+    public void setOutputListener(ScriptOutputListener listener) {
+        this.outputListener = listener;
     }
 
     /**
@@ -118,13 +131,20 @@ public final class ScriptRunner {
 
     private void executeScript(Path scriptFile) {
         KepplrScript api = new KepplrScript(commands, state);
+        emit("▶ Running: " + scriptFile.getFileName());
         try {
             ScriptEngineManager manager = new ScriptEngineManager();
             ScriptEngine engine = manager.getEngineByName("groovy");
             if (engine == null) {
                 logger.error("Groovy script engine not available — check groovy-jsr223 dependency");
+                emit("ERROR: Groovy engine not available");
                 return;
             }
+
+            // Redirect script stdout/stderr to the output listener
+            Writer outputWriter = new LineForwardingWriter(outputListener);
+            engine.getContext().setWriter(outputWriter);
+            engine.getContext().setErrorWriter(outputWriter);
 
             Bindings bindings = engine.createBindings();
             bindings.put("kepplr", api);
@@ -136,15 +156,36 @@ public final class ScriptRunner {
                 engine.eval(reader, bindings);
             }
             logger.info("Script completed: {}", scriptFile);
+            emit("✓ Completed: " + scriptFile.getFileName());
         } catch (ScriptException e) {
             if (isInterruptCause(e)) {
                 logger.info("Script interrupted: {}", scriptFile);
+                emit("— Interrupted: " + scriptFile.getFileName());
             } else {
                 logger.error("Script failed: {}", scriptFile, e);
+                emit("✗ Error: " + extractMessage(e));
             }
         } catch (Exception e) {
             logger.error("Script failed: {}", scriptFile, e);
+            emit("✗ Error: " + extractMessage(e));
         }
+    }
+
+    private void emit(String line) {
+        ScriptOutputListener listener = outputListener;
+        if (listener != null) {
+            listener.onOutput(line);
+        }
+    }
+
+    private static String extractMessage(Throwable t) {
+        // ScriptException wraps the real cause — dig to the most useful message
+        Throwable cause = t;
+        while (cause.getCause() != null && cause.getCause() != cause) {
+            cause = cause.getCause();
+        }
+        String msg = cause.getMessage();
+        return msg != null ? msg : cause.getClass().getSimpleName();
     }
 
     private static boolean isInterruptCause(Throwable t) {

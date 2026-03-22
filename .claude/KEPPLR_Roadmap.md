@@ -46,7 +46,7 @@ to return the exact Groovy expression that recreates it. Without this,
 `setVectorVisible` calls in recorded scripts would emit an unrunnable placeholder.
 See D-026.
 
-**The synodic frame "other body" is the currently targeted body.** No separate command or property is needed for this. If no targeted body exists, fall back to the inertial frame and log a warning.
+**The synodic frame "other body" is the currently selected body.** No separate command or property is needed for this. If no selected body exists, fall back to the inertial frame and log a warning.
 
 **GLB shape models replace ellipsoids and sprites for configured bodies (Step 21).** Bodies with a `BodyBlock.shapeModel()` path use a GLB attached to `bodyFixedNode`; the ellipsoid is retained as a detached `EclipseShadowManager` proxy (never rendered). Spacecraft with `SpacecraftBlock.shapeModel()` replace the point sprite with a GLB scaled by `0.001 × SpacecraftBlock.scale()`. Fallback to ellipsoid/sprite on load failure. See D-027, D-028.
 
@@ -68,7 +68,7 @@ See D-026.
 
 **The JavaFX control panel is a separate OS window (two-window layout).** The transparent overlay (Option B) was prototyped and rejected — position-sync lag on macOS is unacceptable and the platform complexity is not justified for v0.1. The JavaFX stage is a normal, non-transparent, non-always-on-top window. No `WindowManager` class. No GLFW position/minimize/focus callbacks. Do not revisit this decision.
 
-**Tracking is not a separate camera behavior.** The F key and Stop Tracking are shortcuts for switching the camera frame to Synodic and Inertial respectively. `trackedBodyId`, `trackingAnchor`, `trackBody()`, and `stopTracking()` do not exist in the codebase. Pressing F with a targeted body set switches to the Synodic frame; pressing F in Synodic switches back to Inertial.
+**Tracking is not a separate camera behavior.** The F key is the shortcut for switching the camera frame between Synodic and Inertial. `trackedBodyId`, `trackingAnchor`, `trackBody()`, and `stopTracking()` do not exist in the codebase. Pressing F with a selected body set switches to the Synodic frame; pressing F in Synodic switches back to Inertial. Stop Tracking no longer exists as a menu item — selecting Inertial in the Camera Frame submenu is the equivalent action.
 
 **Mouse picking is screen-space only.** Body selection via click projects all visible bodies to screen space and finds candidates within `PICK_MIN_SCREEN_RADIUS_PX` of the click point. No 3D ray cast. When multiple candidates exist, the body with the largest actual screen-space radius wins. Click on empty space does nothing.
 
@@ -91,10 +91,10 @@ Earth rendered as a textured sphere at its correct heliocentric position at the 
 Concrete implementations of `SimulationState` (observable properties) and `SimulationCommands` (input interface). Selected, targeted, and focused interaction mode semantics per §4. Light-time correction per §6 applied to camera pointing.
 
 ### 5. Synodic Camera Frame (formerly Tracked Mode)
-Synodic frame definition and math per §5. The targeted body serves as the synodic "other body." `CameraFrame` enum (`INERTIAL`, `BODY_FIXED`, `SYNODIC`) and `setCameraFrame()` added to `SimulationCommands`. `BODY_FIXED` deferred. Degenerate case threshold (1e-3 radians) in `KepplrConstants`. Note: the original step 5 implemented a separate "tracked mode" with a tracking anchor; this was replaced during step 19 — tracking is now equivalent to switching to the Synodic frame.
+Synodic frame definition and math per §5. The selected body serves as the synodic "other body." `CameraFrame` enum (`INERTIAL`, `BODY_FIXED`, `SYNODIC`) and `setCameraFrame()` added to `SimulationCommands`. `BODY_FIXED` deferred. Degenerate case threshold (1e-3 radians) in `KepplrConstants`. Note: the original step 5 implemented a separate "tracked mode" with a tracking anchor; this was replaced during step 19 — tracking is now equivalent to switching to the Synodic frame.
 
 ### 6. Synodic Camera Frame
-Synodic frame definition and math per §5. The targeted body serves as the synodic "other body." `CameraFrame` enum (`INERTIAL`, `BODY_FIXED`, `SYNODIC`) and `setCameraFrame()` added to `SimulationCommands`. `BODY_FIXED` deferred. Degenerate case threshold (1e-3 radians) in `KepplrConstants`.
+Synodic frame definition and math per §5. The selected body serves as the synodic "other body." `CameraFrame` enum (`INERTIAL`, `BODY_FIXED`, `SYNODIC`) and `setCameraFrame()` added to `SimulationCommands`. `BODY_FIXED` deferred. Degenerate case threshold (1e-3 radians) in `KepplrConstants`.
 
 ### 7. Time Control
 Anchor-based ET advancement in `simpleUpdate()`. Pause/resume, time rate, `setET()`, `setUTC()`. Simulation starts at current wall clock time at 1x real time. Negative time rates supported. `deltaSimSecondsProperty()` exposed via `SimulationState` for downstream consumers.
@@ -191,11 +191,9 @@ the control panel must update immediately. Double-click →
   reported in status panel. File picker defaults to properties files filter
   but also offers an "All Files" filter option.
 - View — Camera Frame submenu (Inertial / Body-Fixed / Synodic radio items
-  bound to `activeCameraFrameProperty()`), Stop Tracking, Field of View
-  control, camera frame fallback indicator. Stop Tracking calls
-  `SimulationCommands.setCameraFrame(INERTIAL)` and is kept in sync with the
-  Camera Frame submenu radio items — selecting Inertial via the submenu and
-  pressing Stop Tracking are equivalent operations.
+  bound to `activeCameraFrameProperty()`), Field of View control, camera frame
+  fallback indicator. Selecting Inertial in the Camera Frame submenu is the
+  way to exit the Synodic frame via the menu.
 - Time — unchanged from step 9.
 - Window — preset sizes: 1280×720, 1280×1024, 1920×1080, 2560×1440; resizes
   the JME window only. JavaFX window is not resized programmatically.
@@ -204,9 +202,9 @@ the control panel must update immediately. Double-click →
 call `SimulationCommands`:
 - G — `goTo` focused body
 - F — toggles camera frame between SYNODIC and INERTIAL. If camera frame is
-  currently INERTIAL and a targeted body is set, switches to SYNODIC. If
+  currently INERTIAL and a selected body is set, switches to SYNODIC. If
   camera frame is currently SYNODIC, switches to INERTIAL. No-op if frame is
-  INERTIAL and no targeted body is set.
+  INERTIAL and no selected body is set.
 - T — target selected body
 - Space — pause/resume
 - `[` / `]` — decrease / increase time rate
@@ -215,11 +213,11 @@ Escape has no keyboard binding. JavaFX default Escape-closes-stage behavior
 must be suppressed on the control window. Escape must not close either window
 under any circumstance.
 
-**Tracking is not a separate camera behavior.** F and Stop Tracking are
-shortcuts for switching the camera frame to Synodic and Inertial respectively.
-`trackedBodyId`, `trackingAnchor`, `trackBody()`, and `stopTracking()` do not
-exist in the codebase. Any legacy call sites are replaced with
-`setCameraFrame()` calls.
+**Tracking is not a separate camera behavior.** F is the keyboard shortcut
+for toggling between the Synodic and Inertial camera frames. The Camera Frame
+submenu is the menu equivalent. `trackedBodyId`, `trackingAnchor`,
+`trackBody()`, and `stopTracking()` do not exist in the codebase. Any legacy
+call sites are replaced with `setCameraFrame()` calls.
 
 **Mouse picking in the JME window:**
 
@@ -645,6 +643,69 @@ keyboard shortcut if one exists (e.g., "Point the camera at the selected
 body (T)"). JavaFX `MenuItem` supports tooltips indirectly via a custom
 graphic node or by setting a tooltip on the internal label. This is a polish
 pass with no architectural impact.
+
+**Status window layout improvements.** Several usability changes to
+`KepplrStatusWindow`:
+
+- **Body readout:** Each row now shows "Name (NAIF_ID)" with camera-to-body
+  distance right-aligned on the same line. Distance auto-switches units: metres
+  (< 1 km), km (< 0.01 AU), AU (≥ 0.01 AU). Row order changed to Focused →
+  Targeted → Selected (focused is the camera anchor, displayed first). Clear
+  button removed; only Focus and Target buttons remain on the Selected row.
+  (See D-036.)
+
+- **Window:** Width increased from 380px to 440px. Always-on-top enabled
+  (`stage.setAlwaysOnTop(true)`). JavaFX `Separator` lines added between body
+  readout, status section, and body list sections.
+
+- **Live body filtering:** The search field filters the body tree as the user
+  types (case-insensitive match on display name or NAIF ID). Parent groups are
+  shown expanded when any child matches. Enter still resolves exact NAIF IDs
+  and selects the body. Section header renamed to "Select Body".
+
+- **Transition bar removed.** Camera transitions are fast enough that the
+  progress bar was not useful.
+
+- **KEPPLRConfiguration.reload() race fix.** `load(PropertiesConfiguration)`
+  now builds into a local variable and assigns `instance` atomically at the
+  end, eliminating the window where `getInstance()` would throw
+  `IllegalStateException` during config reload. (See D-036, D-037.)
+
+- **Script output panel.** Groovy script stdout/stderr captured via
+  `ScriptOutputListener` and `LineForwardingWriter`; output displayed in a
+  `TextArea` below the body tree. `ConcurrentLinkedQueue` + `AnimationTimer`
+  drain pattern avoids `Platform.runLater()` from the script thread. Capped at
+  200 lines.
+
+- **Draggable SplitPane.** Body tree and script output panel wrapped in a
+  vertical `SplitPane` (default 75/25 split) so the user can resize the script
+  output area.
+
+- **Consistent CheckMenuItem toggles.** All menu toggles (Overlays, Instruments,
+  File > Record Session, body tree context menu) use `CheckMenuItem` instead
+  of a mix of `CheckBox` + `CustomMenuItem` and `CheckMenuItem`. Removed
+  `menuCheckBox` helper and `CheckBox` import.
+
+- **Bidirectional overlay / context menu sync.** The "Current Focus" submenu
+  items now bind to `SimulationState` visibility properties for the focused
+  body. Changes from any source (context menu, scripts, etc.) update the
+  overlays menu checkmarks automatically. Listeners rebind on focus change.
+  (See D-038.)
+
+- **Dynamic context menu.** Right-click on a body tree item opens a context menu
+  with Focus, Target, and toggle items (Trail, Label, Axes) reflecting current
+  state. (See D-039.)
+
+- **Vector arrowheads.** Vectors render as arrows: line shaft + 8-segment cone
+  arrowhead (12% of shaft length). Shaft line width increased to 2px.
+
+- **Body-fixed axes scale to origin body.** `VectorType.usesOriginBodyRadius()`
+  (default `false`, `true` for body axes) tells `VectorRenderer` to use the
+  origin body's rendered radius (via `BodySceneManager.getEffectiveBodyRadiusKm`)
+  instead of the focused body's. Spacecraft axes now scale proportionally to the
+  GLB bounding radius including the configured `scale()` factor. (See D-040.)
+
+**Step 27 is complete.**
 
 ---
 

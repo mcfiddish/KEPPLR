@@ -7,6 +7,7 @@ import java.util.ArrayList;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.IntToDoubleFunction;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -111,10 +112,19 @@ public class VectorManager {
      * @param cameraHelioJ2000 camera heliocentric J2000 position in km (length ≥ 3)
      * @param cam active JME camera (used for screen-space length projection)
      * @param focusedBodyId NAIF ID of the currently focused body, or −1 if none
+     * @param sceneRadiusLookup function returning the effective rendered radius (km) for a NAIF ID, or 0.0 if unknown;
+     *     used by origin-body-radius vector types (e.g. body-fixed axes) to scale arrows relative to the body they are
+     *     drawn on rather than the focused body
      */
-    public void update(double et, double[] cameraHelioJ2000, Camera cam, int focusedBodyId) {
+    public void update(
+            double et,
+            double[] cameraHelioJ2000,
+            Camera cam,
+            int focusedBodyId,
+            IntToDoubleFunction sceneRadiusLookup) {
         try {
-            renderer.update(List.copyOf(orderedDefinitions), et, cameraHelioJ2000, cam, focusedBodyId);
+            renderer.update(
+                    List.copyOf(orderedDefinitions), et, cameraHelioJ2000, cam, focusedBodyId, sceneRadiusLookup);
             dirty = false;
         } catch (Exception e) {
             logger.warn("VectorManager.update() failed at ET={}: {}", et, e.getMessage());

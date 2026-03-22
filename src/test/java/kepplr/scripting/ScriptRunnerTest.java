@@ -232,5 +232,8 @@ class ScriptRunnerTest {
 
         @Override
         public void setFrustumVisible(String name, boolean v) {}
+
+        @Override
+        public void loadConfiguration(String path) {}
     }
 }

@@ -363,4 +363,29 @@ public interface SimulationCommands {
      * }</pre>
      */
     void cancelTransition();
+
+    // ── Configuration reload (Step 27) ──
+
+    /**
+     * Reload the KEPPLR configuration from the given properties file and rebuild the scene (Step 27).
+     *
+     * <p>This is the first {@link SimulationCommands} method that triggers a render-manager rebuild. It is added here
+     * for script loggability — the implementation is a thin dispatcher that contains no render logic.
+     *
+     * <p>The method calls {@link kepplr.config.KEPPLRConfiguration#reload(java.nio.file.Path)}, then enqueues
+     * {@code rebuildBodyScene()} on the JME render thread and blocks the calling thread until the rebuild completes (or
+     * the timeout elapses). If the file cannot be parsed the error is logged and the method returns immediately without
+     * blocking; the previous configuration remains active.
+     *
+     * <p>Thread-safe — designed for the Groovy script thread ({@code kepplr-groovy-script}). Note: the
+     * {@code KEPPLRConfiguration.instance} static field is non-volatile; the race window during reload is the same as
+     * for the interactive File → Load Configuration path.
+     *
+     * <p>Recorded by {@link kepplr.scripting.CommandRecorder} as:
+     *
+     * <pre>{@code kepplr.loadConfiguration("/path/to/config.properties") }</pre>
+     *
+     * @param path file system path to the {@code .properties} configuration file
+     */
+    void loadConfiguration(String path);
 }

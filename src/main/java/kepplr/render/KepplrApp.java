@@ -185,6 +185,13 @@ public class KepplrApp extends SimpleApplication {
 
         DefaultSimulationCommands commands =
                 new DefaultSimulationCommands(simulationState, simulationClock, transitionController);
+        // Wire the scene rebuild callback so loadConfiguration() can block the script thread
+        // until rebuildBodyScene() finishes on the JME render thread.
+        commands.setSceneRebuildCallback(latch -> enqueue(() -> {
+            rebuildBodyScene();
+            latch.countDown();
+            return null;
+        }));
         CommandRecorder recorder = new CommandRecorder(commands);
         ScriptRunner scriptRunner = new ScriptRunner(commands, simulationState);
 
@@ -435,7 +442,8 @@ public class KepplrApp extends SimpleApplication {
         hud.setInfoVisible(simulationState.hudInfoVisibleProperty().get());
 
         trailManager.update(currentEt, cameraHelioJ2000);
-        vectorManager.update(currentEt, cameraHelioJ2000, cam, focusedBodyId);
+        vectorManager.update(
+                currentEt, cameraHelioJ2000, cam, focusedBodyId, bodySceneManager::getEffectiveBodyRadiusKm);
         instrumentFrustumManager.update(currentEt, cameraHelioJ2000);
         starFieldManager.update(currentEt, cameraHelioJ2000);
         try {

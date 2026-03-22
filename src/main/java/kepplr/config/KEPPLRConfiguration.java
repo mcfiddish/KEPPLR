@@ -58,7 +58,7 @@ import picante.time.UTCEpoch;
 public class KEPPLRConfiguration implements KEPPLRConfigBlock {
 
     private static final Logger logger = LogManager.getLogger();
-    private static KEPPLRConfiguration instance = null;
+    private static volatile KEPPLRConfiguration instance = null;
     private KEPPLRConfigBlock config = null;
     private ThreadLocal<KEPPLREphemeris> ephemeris;
     private final Map<String, BodyBlock> bodyBlocks = new LinkedHashMap<>();
@@ -255,7 +255,6 @@ public class KEPPLRConfiguration implements KEPPLRConfigBlock {
      * @return newly constructed KEPPLRConfiguration
      */
     public static KEPPLRConfiguration reload(PropertiesConfiguration pc) {
-        instance = null;
         return load(pc);
     }
 
@@ -266,37 +265,40 @@ public class KEPPLRConfiguration implements KEPPLRConfigBlock {
      * @return new configuration
      */
     public static KEPPLRConfiguration reload(Path filename) {
-        instance = null;
-        return load(filename);
+        try {
+            PropertiesConfiguration pc = new Configurations().properties(filename.toFile());
+            return load(pc);
+        } catch (ConfigurationException e) {
+            throw new RuntimeException("Cannot load configuration file " + filename);
+        }
     }
     /**
      * @param pc properties configuration
      * @return configuration object
      */
     private static KEPPLRConfiguration load(PropertiesConfiguration pc) {
-
-        instance = new KEPPLRConfiguration();
-        instance.config = new KEPPLRConfigBlockFactory().fromConfig(pc);
-        instance.ephemeris = new ThreadLocal<>();
+        KEPPLRConfiguration localInstance = new KEPPLRConfiguration();
+        localInstance.config = new KEPPLRConfigBlockFactory().fromConfig(pc);
+        localInstance.ephemeris = new ThreadLocal<>();
 
         Log4j2Configurator lc = Log4j2Configurator.getInstance();
-        lc.setLevel(Level.valueOf(instance.config.logLevel().toUpperCase().trim()));
-        lc.setPattern(instance.config.logFormat());
+        lc.setLevel(Level.valueOf(localInstance.config.logLevel().toUpperCase().trim()));
+        lc.setPattern(localInstance.config.logFormat());
 
         // if outputFolder is blank, set its value
-        if (instance.config.outputFolder().trim().isEmpty()) {
-            String outputRoot = instance.config.outputRoot();
+        if (localInstance.config.outputFolder().trim().isEmpty()) {
+            String outputRoot = localInstance.config.outputRoot();
             String outputFolder = getSuggestedFolder(outputRoot);
             PropertiesConfiguration new_pc = (PropertiesConfiguration) pc.clone();
             new_pc.setProperty("outputFolder", outputFolder);
-            instance.config = new KEPPLRConfigBlockFactory().fromConfig(new_pc);
+            localInstance.config = new KEPPLRConfigBlockFactory().fromConfig(new_pc);
         }
 
         for (String s : bodies(pc)) {
             String prefix = String.format("body.%s.", s.toLowerCase());
             if (pc.containsKey(prefix + "naifID")) {
                 BodyBlockFactory bbf = new BodyBlockFactory(prefix);
-                instance.bodyBlocks.put(s.toLowerCase(), bbf.fromConfig(pc));
+                localInstance.bodyBlocks.put(s.toLowerCase(), bbf.fromConfig(pc));
             }
         }
 
@@ -305,36 +307,12 @@ public class KEPPLRConfiguration implements KEPPLRConfigBlock {
             if (pc.containsKey(prefix + "naifID")) {
                 SpacecraftBlockFactory sbf = new SpacecraftBlockFactory(prefix);
                 SpacecraftBlock sb = sbf.fromConfig(pc);
-                instance.spacecraftBlocks.put(sb.naifID(), sb);
+                localInstance.spacecraftBlocks.put(sb.naifID(), sb);
             }
         }
 
-        return instance;
-    }
-
-    /**
-     * @param pc properties configuration
-     * @return configuration object with missing properties filled in with default values
-     */
-    private static KEPPLRConfiguration loadWithDefaults(PropertiesConfiguration pc) {
-
-        KEPPLRConfiguration template = KEPPLRConfiguration.getTemplate();
-        PropertiesConfiguration templateConfig = template.getConfig();
-
-        for (Iterator<String> it = pc.getKeys(); it.hasNext(); ) {
-            String key = it.next();
-            if (templateConfig.containsKey(key)) {
-                templateConfig.setProperty(key, pc.getProperty(key));
-            } else {
-                System.err.printf("Supplied configuration contains key %s which is no longer supported.\n", key);
-            }
-        }
-
-        instance = null;
-
-        instance = load(templateConfig);
-
-        return instance;
+        instance = localInstance;
+        return localInstance;
     }
 
     /**
