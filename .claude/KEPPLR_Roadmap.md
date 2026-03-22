@@ -728,6 +728,55 @@ pass with no architectural impact.
 
 ---
 
+### 28. Script Enhancements
+
+Four improvements to the scripting layer and its GUI integration.
+
+**(1) Interactive script console.** A text input field in the JavaFX control
+window where the user can type and execute single-line Groovy expressions
+(e.g., `kepplr.focusBody("Earth")`). Expressions are evaluated via JSR 223
+with the same `kepplr` binding as `ScriptRunner`. Execution runs on a
+dedicated daemon thread (not the FX thread). Output and errors are displayed
+in the existing script output panel. The console must not interfere with a
+running script — if a script is active, console input is rejected with a
+message in the output panel.
+
+**(2) Configuration access from scripts.** `KepplrScript.getConfiguration()`
+returns `KEPPLRConfiguration.getInstance()` directly, giving scripts full
+access to the configuration and ephemeris (e.g.,
+`config = kepplr.getConfiguration(); eph = config.getEphemeris()`). This is
+a sanctioned exception to Rule 3 for the scripting layer only — Groovy
+scripts are ephemeral and do not persist references as class fields. The
+`KepplrScript.getConfiguration()` method itself calls
+`KEPPLRConfiguration.getInstance()` at point-of-use, consistent with Rule 3
+at the Java level. No other Java class gains a stored reference.
+
+**(3) Script display messages.** `KepplrScript.displayMessage(String text)`
+and `KepplrScript.displayMessage(String text, double durationSeconds)` show
+a message on the JME HUD overlay. Messages appear in the lower-center of the
+screen with a default duration of 5 seconds and fade out. Only one message
+is visible at a time — a new message replaces any existing one. A
+`HudMessageDisplay` class in `kepplr.render` manages the lifecycle on the
+JME thread. `SCRIPT_MESSAGE_DEFAULT_DURATION_SEC` and
+`SCRIPT_MESSAGE_FADE_DURATION_SEC` added to `KepplrConstants`.
+
+**(4) Rename `setCameraLookDirection` → `setCameraOrientation`.** Rename
+across all layers: `SimulationCommands`, `DefaultSimulationCommands`,
+`TransitionController`, `CommandRecorder`, `KepplrScript`, and all tests.
+No behavioral change — purely a naming improvement.
+
+**Hard constraints:**
+- `Platform.runLater()` permitted only in `SimulationStateFxBridge` and
+  `KepplrApp.destroy()`. Console output drains via the existing
+  `AnimationTimer` pattern in the script output panel.
+- `KEPPLRConfiguration` and `KEPPLREphemeris` must not be stored or passed
+  as fields/parameters (Rule 3).
+- All new `SimulationCommands` methods (if any) must be loggable by
+  `CommandRecorder`.
+- `mvn test` passes with no new failures.
+
+---
+
 ## Backlog (unsequenced, post-v0.2)
 
 - Camera navigation inertia and damping (§16.2)
