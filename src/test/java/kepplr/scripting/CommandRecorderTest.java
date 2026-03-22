@@ -253,6 +253,87 @@ class CommandRecorderTest {
         }
     }
 
+    // ── Cinematic command coalescing (Step 24) ──────────────────────────────────────
+
+    @Nested
+    @DisplayName("Cinematic camera command coalescing")
+    class CinematicCoalescing {
+
+        @Test
+        @DisplayName("Multiple instant truck commands coalesce by summation")
+        void truckCoalesced() {
+            recorder.startRecording();
+            recorder.truck(100.0, 0);
+            recorder.truck(200.0, 0);
+            recorder.setPaused(true); // flush
+            recorder.stopRecording();
+
+            String script = recorder.getScript();
+            long count = script.lines().filter(l -> l.contains("kepplr.truck(")).count();
+            assertEquals(1, count, "Should have one coalesced truck: " + script);
+            assertTrue(script.contains("300.0000"), "Coalesced truck should sum to 300: " + script);
+        }
+
+        @Test
+        @DisplayName("Multiple instant crane commands coalesce by summation")
+        void craneCoalesced() {
+            recorder.startRecording();
+            recorder.crane(50.0, 0);
+            recorder.crane(75.0, 0);
+            recorder.setPaused(true);
+            recorder.stopRecording();
+
+            String script = recorder.getScript();
+            long count = script.lines().filter(l -> l.contains("kepplr.crane(")).count();
+            assertEquals(1, count, "Should have one coalesced crane: " + script);
+            assertTrue(script.contains("125.0000"), "Coalesced crane should sum to 125: " + script);
+        }
+
+        @Test
+        @DisplayName("Multiple instant dolly commands coalesce by summation")
+        void dollyCoalesced() {
+            recorder.startRecording();
+            recorder.dolly(1000.0, 0);
+            recorder.dolly(-500.0, 0);
+            recorder.setPaused(true);
+            recorder.stopRecording();
+
+            String script = recorder.getScript();
+            long count = script.lines().filter(l -> l.contains("kepplr.dolly(")).count();
+            assertEquals(1, count, "Should have one coalesced dolly: " + script);
+            assertTrue(script.contains("500.0000"), "Coalesced dolly should sum to 500: " + script);
+        }
+
+        @Test
+        @DisplayName("truck and crane are NOT coalesced together — different types")
+        void truckAndCraneNotCoalesced() {
+            recorder.startRecording();
+            recorder.truck(100.0, 0);
+            recorder.crane(50.0, 0); // different type flushes truck
+            recorder.setPaused(true);
+            recorder.stopRecording();
+
+            String script = recorder.getScript();
+            assertTrue(script.contains("kepplr.truck("), "Should contain truck: " + script);
+            assertTrue(script.contains("kepplr.crane("), "Should contain crane: " + script);
+        }
+
+        @Test
+        @DisplayName("Non-instant cinematic commands are recorded verbatim")
+        void nonInstantVerbatim() {
+            recorder.startRecording();
+            recorder.truck(500.0, 3.0);
+            recorder.crane(200.0, 2.0);
+            recorder.dolly(1000.0, 5.0);
+            recorder.stopRecording();
+
+            String script = recorder.getScript();
+            assertTrue(script.contains("kepplr.truck(500.0, 3.0)"), "truck verbatim: " + script);
+            assertTrue(script.contains("kepplr.crane(200.0, 2.0)"), "crane verbatim: " + script);
+            assertTrue(script.contains("kepplr.dolly(1000.0, 5.0)"), "dolly verbatim: " + script);
+        }
+    }
+
     // ── VectorType serialization ──────────────────────────────────────────────────
 
     @Nested
@@ -506,6 +587,21 @@ class CommandRecorderTest {
         @Override
         public void setFrustumVisible(String name, boolean v) {
             lastMethod = "setFrustumVisible";
+        }
+
+        @Override
+        public void truck(double km, double dur) {
+            lastMethod = "truck";
+        }
+
+        @Override
+        public void crane(double km, double dur) {
+            lastMethod = "crane";
+        }
+
+        @Override
+        public void dolly(double km, double dur) {
+            lastMethod = "dolly";
         }
 
         @Override

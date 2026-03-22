@@ -380,6 +380,72 @@ public final class KepplrScript {
         commands.setCameraLookDirection(lookX, lookY, lookZ, upX, upY, upZ, durationSeconds);
     }
 
+    // ── Cinematic camera commands (Step 24) ──────────────────────────────────────
+
+    /**
+     * Translate the camera along its screen-right axis.
+     *
+     * <p>Example: {@code kepplr.truck(1000.0, 3.0)} — move 1000 km right over 3 seconds.
+     *
+     * @param km distance to translate in km; positive = right
+     * @param durationSeconds transition duration in seconds
+     */
+    public void truck(double km, double durationSeconds) {
+        commands.truck(km, durationSeconds);
+    }
+
+    /**
+     * Translate the camera along its screen-right axis using the default cinematic duration.
+     *
+     * @param km distance to translate in km; positive = right
+     */
+    public void truck(double km) {
+        commands.truck(km, KepplrConstants.DEFAULT_CINEMATIC_TRANSITION_DURATION_SECONDS);
+    }
+
+    /**
+     * Translate the camera along its screen-up axis.
+     *
+     * <p>Example: {@code kepplr.crane(500.0, 2.0)} — move 500 km up over 2 seconds.
+     *
+     * @param km distance to translate in km; positive = up
+     * @param durationSeconds transition duration in seconds
+     */
+    public void crane(double km, double durationSeconds) {
+        commands.crane(km, durationSeconds);
+    }
+
+    /**
+     * Translate the camera along its screen-up axis using the default cinematic duration.
+     *
+     * @param km distance to translate in km; positive = up
+     */
+    public void crane(double km) {
+        commands.crane(km, KepplrConstants.DEFAULT_CINEMATIC_TRANSITION_DURATION_SECONDS);
+    }
+
+    /**
+     * Translate the camera along its look direction.
+     *
+     * <p>Example: {@code kepplr.dolly(2000.0, 5.0)} — move 2000 km forward over 5 seconds. Note: dolly is a pure
+     * spatial translation — it does not modify apparent radius relative to any body, unlike {@code goTo}.
+     *
+     * @param km distance to translate in km; positive = forward
+     * @param durationSeconds transition duration in seconds
+     */
+    public void dolly(double km, double durationSeconds) {
+        commands.dolly(km, durationSeconds);
+    }
+
+    /**
+     * Translate the camera along its look direction using the default cinematic duration.
+     *
+     * @param km distance to translate in km; positive = forward
+     */
+    public void dolly(double km) {
+        commands.dolly(km, KepplrConstants.DEFAULT_CINEMATIC_TRANSITION_DURATION_SECONDS);
+    }
+
     /**
      * Switch to the synodic camera frame with explicit body IDs.
      *

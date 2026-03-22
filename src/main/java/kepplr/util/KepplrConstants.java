@@ -622,6 +622,22 @@ public final class KepplrConstants {
     public static final double DEFAULT_CAMERA_TRANSITION_DURATION_SECONDS = 1.0;
 
     /**
+     * Default transition duration for cinematic camera commands (truck, crane, dolly) in seconds.
+     *
+     * <p>Used by the convenience overloads on {@code KepplrScript} when no duration is specified.
+     */
+    public static final double DEFAULT_CINEMATIC_TRANSITION_DURATION_SECONDS = 2.0;
+
+    /**
+     * Whether smoothstep easing is applied to the interpolation parameter {@code t} for all timed transitions.
+     *
+     * <p>When {@code true}, the raw linear {@code t ∈ [0, 1]} is mapped through {@code t² × (3 − 2t)} before reaching
+     * slerp/lerp calls, producing acceleration from rest and deceleration to rest. When {@code false}, raw linear
+     * {@code t} is used (useful for testing). Instant transitions ({@code durationSeconds == 0}) are unaffected.
+     */
+    public static final boolean TRANSITION_EASING_ENABLED = true;
+
+    /**
      * Minimum camera field of view in degrees.
      *
      * <p>Clamping floor for {@code setFov()} commands. Prevents the FOV from becoming so narrow that rendering

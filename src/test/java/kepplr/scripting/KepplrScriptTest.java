@@ -465,6 +465,24 @@ class KepplrScriptTest {
         }
 
         @Override
+        public void truck(double km, double dur) {
+            lastMethod = "truck";
+            lastDoubleArg = km;
+        }
+
+        @Override
+        public void crane(double km, double dur) {
+            lastMethod = "crane";
+            lastDoubleArg = km;
+        }
+
+        @Override
+        public void dolly(double km, double dur) {
+            lastMethod = "dolly";
+            lastDoubleArg = km;
+        }
+
+        @Override
         public void loadConfiguration(String path) {
             lastMethod = "loadConfiguration";
         }

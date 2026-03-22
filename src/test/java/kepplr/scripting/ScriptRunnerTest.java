@@ -234,6 +234,15 @@ class ScriptRunnerTest {
         public void setFrustumVisible(String name, boolean v) {}
 
         @Override
+        public void truck(double km, double dur) {}
+
+        @Override
+        public void crane(double km, double dur) {}
+
+        @Override
+        public void dolly(double km, double dur) {}
+
+        @Override
         public void loadConfiguration(String path) {}
     }
 }

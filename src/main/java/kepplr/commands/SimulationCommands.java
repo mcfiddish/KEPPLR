@@ -255,6 +255,45 @@ public interface SimulationCommands {
      */
     void setSynodicFrame(int focusNaifId, int targetNaifId);
 
+    // ── Cinematic camera commands (Step 24) ──
+    //
+    // All non-blocking; all use TransitionController.  If durationSeconds is zero
+    // or negative, the translation is applied instantly on the next frame.
+    // Camera orientation is not modified.
+
+    /**
+     * Translate the camera along its current screen-right axis by {@code km} kilometres over {@code durationSeconds}.
+     *
+     * <p>Positive values move right; negative move left. Non-blocking. The translation axis is captured at the moment
+     * the command is issued and held fixed for the duration.
+     *
+     * @param km distance to translate in kilometres
+     * @param durationSeconds transition duration in wall-clock seconds
+     */
+    void truck(double km, double durationSeconds);
+
+    /**
+     * Translate the camera along its current screen-up axis by {@code km} kilometres over {@code durationSeconds}.
+     *
+     * <p>Positive values move up; negative move down. Non-blocking. The translation axis is captured at the moment the
+     * command is issued and held fixed for the duration.
+     *
+     * @param km distance to translate in kilometres
+     * @param durationSeconds transition duration in wall-clock seconds
+     */
+    void crane(double km, double durationSeconds);
+
+    /**
+     * Translate the camera along its current look direction by {@code km} kilometres over {@code durationSeconds}.
+     *
+     * <p>Positive values move forward; negative move back. Non-blocking. Note: dolly is a pure spatial translation — it
+     * does not modify apparent radius relative to any body, unlike {@link #goTo}.
+     *
+     * @param km distance to translate in kilometres
+     * @param durationSeconds transition duration in wall-clock seconds
+     */
+    void dolly(double km, double durationSeconds);
+
     // ── Camera frame commands (§1.5) ──
 
     /**
