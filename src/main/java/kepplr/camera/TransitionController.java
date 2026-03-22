@@ -61,6 +61,7 @@ public final class TransitionController {
                     RollRequest,
                     CameraPositionRequest,
                     CameraLookDirectionRequest,
+                    TranslateRequest,
                     CancelRequest {}
 
     private record PointAtRequest(int naifId, double durationSeconds) implements PendingRequest {}
@@ -87,6 +88,20 @@ public final class TransitionController {
     private record CameraLookDirectionRequest(
             double lookX, double lookY, double lookZ, double upX, double upY, double upZ, double durationSeconds)
             implements PendingRequest {}
+
+    /** Identifies which camera axis a translate request uses. */
+    private enum TranslateAxis {
+        RIGHT,
+        UP,
+        FORWARD
+    }
+
+    /**
+     * Unified request for truck/crane/dolly. The translation axis is resolved from the camera's orientation when the
+     * request is handled on the JME thread, then held fixed for the duration. All three cinematic commands share the
+     * same handler — only the axis differs.
+     */
+    private record TranslateRequest(TranslateAxis axis, double km, double durationSeconds) implements PendingRequest {}
 
     private record CancelRequest() implements PendingRequest {}
 
@@ -199,6 +214,21 @@ public final class TransitionController {
         inbox.add(new CameraLookDirectionRequest(lookX, lookY, lookZ, upX, upY, upZ, durationSeconds));
     }
 
+    /** Request a truck (screen-right) translation (Step 24). Thread-safe. */
+    public void requestTruck(double km, double durationSeconds) {
+        inbox.add(new TranslateRequest(TranslateAxis.RIGHT, km, durationSeconds));
+    }
+
+    /** Request a crane (screen-up) translation (Step 24). Thread-safe. */
+    public void requestCrane(double km, double durationSeconds) {
+        inbox.add(new TranslateRequest(TranslateAxis.UP, km, durationSeconds));
+    }
+
+    /** Request a dolly (look-direction) translation (Step 24). Thread-safe. */
+    public void requestDolly(double km, double durationSeconds) {
+        inbox.add(new TranslateRequest(TranslateAxis.FORWARD, km, durationSeconds));
+    }
+
     /**
      * Request cancellation of the active transition and any pending requests (Step 20).
      *
@@ -271,6 +301,7 @@ public final class TransitionController {
                 case RollRequest r -> handleRollRequest(r, cam);
                 case CameraPositionRequest r -> handleCameraPositionRequest(r, cam, cameraHelioJ2000);
                 case CameraLookDirectionRequest r -> handleCameraLookDirectionRequest(r, cam);
+                case TranslateRequest r -> handleTranslateRequest(r, cam, cameraHelioJ2000);
                 case CancelRequest r -> {
                     active = null;
                     pendingGoTo = null;
@@ -294,6 +325,12 @@ public final class TransitionController {
         active.advanceElapsed(tpf);
         double t = active.getT();
 
+        // Apply smoothstep easing: t² × (3 − 2t). Produces ease-in-out (acceleration from rest,
+        // deceleration to rest). Instant transitions (t == 1.0 immediately) are unaffected.
+        if (KepplrConstants.TRANSITION_EASING_ENABLED) {
+            t = smoothstep(t);
+        }
+
         boolean earlyComplete = false;
         switch (active.getType()) {
             case POINT_AT, TILT, YAW, ROLL, CAMERA_LOOK_DIRECTION -> applyOrientationTransition(active, t, cam);
@@ -302,6 +339,7 @@ public final class TransitionController {
             case FOV -> applyFovTransition(active, t, cam);
             case ORBIT -> earlyComplete = !applyOrbitTransition(active, t, cam, cameraHelioJ2000);
             case CAMERA_POSITION -> earlyComplete = !applyCameraPositionTransition(active, t, cameraHelioJ2000);
+            case TRANSLATE -> applyTranslateTransition(active, t, cameraHelioJ2000);
         }
 
         if (t >= 1.0 || earlyComplete) {
@@ -551,6 +589,35 @@ public final class TransitionController {
 
         active = CameraTransition.orientation(
                 CameraTransition.Type.CAMERA_LOOK_DIRECTION, startQ, endQ, r.durationSeconds());
+    }
+
+    private void handleTranslateRequest(TranslateRequest r, Camera cam, double[] cameraHelioJ2000) {
+        cancelForNewRequest();
+
+        // Resolve the translation axis from the camera's current orientation (captured here on the JME thread)
+        Vector3f axis =
+                switch (r.axis()) {
+                    case RIGHT -> cam.getLeft().negate();
+                    case UP -> cam.getUp().clone();
+                    case FORWARD -> cam.getDirection().normalize();
+                };
+
+        double[] startPos = cameraHelioJ2000.clone();
+        double[] endPos = {
+            cameraHelioJ2000[0] + axis.x * r.km(),
+            cameraHelioJ2000[1] + axis.y * r.km(),
+            cameraHelioJ2000[2] + axis.z * r.km()
+        };
+
+        if (r.durationSeconds() <= KepplrConstants.CAMERA_TRANSITION_INSTANT_THRESHOLD_SEC) {
+            cameraHelioJ2000[0] = endPos[0];
+            cameraHelioJ2000[1] = endPos[1];
+            cameraHelioJ2000[2] = endPos[2];
+            state.setCameraPositionJ2000(cameraHelioJ2000);
+            return;
+        }
+
+        active = CameraTransition.translate(startPos, endPos, r.durationSeconds());
     }
 
     // ── Private: apply methods for animated transitions ─────────────────────────
@@ -807,7 +874,21 @@ public final class TransitionController {
         return q.normalizeLocal();
     }
 
+    /** Apply translate transition: lerp camera position between start and end (truck/crane/dolly). */
+    private static void applyTranslateTransition(CameraTransition transition, double t, double[] cameraHelioJ2000) {
+        double[] startOff = transition.getStartOffset();
+        double[] endOff = transition.getEndOffset();
+        cameraHelioJ2000[0] = lerp(startOff[0], endOff[0], t);
+        cameraHelioJ2000[1] = lerp(startOff[1], endOff[1], t);
+        cameraHelioJ2000[2] = lerp(startOff[2], endOff[2], t);
+    }
+
     private static double lerp(double a, double b, double t) {
         return a + (b - a) * t;
+    }
+
+    /** Smoothstep easing: {@code t² × (3 − 2t)}. Maps [0,1] → [0,1] with zero derivative at both endpoints. */
+    static double smoothstep(double t) {
+        return t * t * (3.0 - 2.0 * t);
     }
 }

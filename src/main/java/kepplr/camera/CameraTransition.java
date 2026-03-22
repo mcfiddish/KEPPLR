@@ -34,7 +34,9 @@ public final class CameraTransition {
         /** Translate to explicit position offset relative to an origin body (Step 19c). */
         CAMERA_POSITION,
         /** Set look direction and up vector: slerp orientation (Step 19c). */
-        CAMERA_LOOK_DIRECTION
+        CAMERA_LOOK_DIRECTION,
+        /** Pure spatial translation along a fixed axis: lerp position (Step 24 — truck/crane/dolly). */
+        TRANSLATE
     }
 
     private final Type type;
@@ -176,6 +178,18 @@ public final class CameraTransition {
                 startOff.clone(),
                 endOff.clone(),
                 durationSeconds);
+    }
+
+    /**
+     * Create a {@link Type#TRANSLATE} transition (truck, crane, or dolly).
+     *
+     * @param startPos camera heliocentric J2000 position at transition start (length 3, km); cloned
+     * @param endPos camera heliocentric J2000 position at transition end (length 3, km); cloned
+     * @param durationSeconds total duration in seconds
+     */
+    public static CameraTransition translate(double[] startPos, double[] endPos, double durationSeconds) {
+        return new CameraTransition(
+                Type.TRANSLATE, -1, null, null, 0, 0, 0, 0, startPos.clone(), endPos.clone(), durationSeconds);
     }
 
     private CameraTransition(

@@ -240,6 +240,9 @@ public final class CommandRecorder implements SimulationCommands {
                 String.format(
                         "kepplr.setCameraLookDirection(%.4f, %.4f, %.4f, %.4f, %.4f, %.4f, 0.0)",
                         args[0], args[1], args[2], args[3], args[4], args[5]);
+            case "truck" -> String.format("kepplr.truck(%.4f, 0.0)", args[0]);
+            case "crane" -> String.format("kepplr.crane(%.4f, 0.0)", args[0]);
+            case "dolly" -> String.format("kepplr.dolly(%.4f, 0.0)", args[0]);
             default -> "// unknown coalesced command: " + type;
         };
     }
@@ -413,6 +416,38 @@ public final class CommandRecorder implements SimulationCommands {
                     + fmt(upX) + ", " + fmt(upY) + ", " + fmt(upZ) + ", " + fmt(durationSeconds) + ")");
         }
         delegate.setCameraLookDirection(lookX, lookY, lookZ, upX, upY, upZ, durationSeconds);
+    }
+
+    // ── Cinematic camera commands (Step 24) ──
+
+    @Override
+    public void truck(double km, double durationSeconds) {
+        if (durationSeconds <= 0) {
+            recordInstantCamera("truck", new double[] {km}, MergeMode.SUM);
+        } else {
+            recordCommand("kepplr.truck(" + fmt(km) + ", " + fmt(durationSeconds) + ")");
+        }
+        delegate.truck(km, durationSeconds);
+    }
+
+    @Override
+    public void crane(double km, double durationSeconds) {
+        if (durationSeconds <= 0) {
+            recordInstantCamera("crane", new double[] {km}, MergeMode.SUM);
+        } else {
+            recordCommand("kepplr.crane(" + fmt(km) + ", " + fmt(durationSeconds) + ")");
+        }
+        delegate.crane(km, durationSeconds);
+    }
+
+    @Override
+    public void dolly(double km, double durationSeconds) {
+        if (durationSeconds <= 0) {
+            recordInstantCamera("dolly", new double[] {km}, MergeMode.SUM);
+        } else {
+            recordCommand("kepplr.dolly(" + fmt(km) + ", " + fmt(durationSeconds) + ")");
+        }
+        delegate.dolly(km, durationSeconds);
     }
 
     @Override

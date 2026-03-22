@@ -159,6 +159,23 @@ public final class DefaultSimulationCommands implements SimulationCommands {
         transitionController.requestCameraLookDirection(lookX, lookY, lookZ, upX, upY, upZ, durationSeconds);
     }
 
+    // ── Cinematic camera commands (Step 24) ──
+
+    @Override
+    public void truck(double km, double durationSeconds) {
+        transitionController.requestTruck(km, durationSeconds);
+    }
+
+    @Override
+    public void crane(double km, double durationSeconds) {
+        transitionController.requestCrane(km, durationSeconds);
+    }
+
+    @Override
+    public void dolly(double km, double durationSeconds) {
+        transitionController.requestDolly(km, durationSeconds);
+    }
+
     @Override
     public void setSynodicFrame(int focusNaifId, int targetNaifId) {
         state.setSynodicFrameFocusId(focusNaifId);

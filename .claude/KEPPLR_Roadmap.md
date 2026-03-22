@@ -544,7 +544,7 @@ side-by-side comparison with Cosmographia (Saturn, March 2026).
 
 ---
 
-### 24. Cinematic Camera Commands and Transition Easing
+### 24. Cinematic Camera Commands and Transition Easing *(complete)*
 
 Two related improvements to the camera transition system:
 
@@ -568,6 +568,9 @@ parameter `t` before it reaches the slerp/lerp call is the minimal change.
 Easing constants in `KepplrConstants`. The scripting API and
 `CommandRecorder` are unaffected — easing is internal to
 `TransitionController`.
+
+**Also delivered:** Trail period fix for comparable-mass binary systems
+(D-041); barycenter label filtering (D-042).
 
 ---
 
@@ -721,3 +724,4 @@ pass with no architectural impact.
 - Instrument boresight line rendering (frustum overlays implemented in Step 22; boresight as a separate line is deferred)
 - Frustum shortening when boresight intersects a body surface
 - Per-instrument frustum color configuration (hardcoded cyan for now)
+- `primary` parameter in `KEPPLRConfiguration.bodyBlock()` — needed for asteroid satellites whose NAIF IDs do not follow the planet convention (primary = x99, barycenter = x, satellites = x01–x98). Trail period computation (D-041), satellite anchoring, and decluttering all currently infer the primary from NAIF arithmetic; a configured `primary` would override that inference.
