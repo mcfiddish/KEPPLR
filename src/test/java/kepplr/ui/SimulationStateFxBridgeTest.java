@@ -304,4 +304,97 @@ class SimulationStateFxBridgeTest {
             assertTrue(utc.contains("2015"), "UTC for New Horizons flyby should contain '2015', got: " + utc);
         }
     }
+
+    // ─────────────────────────────────────────────────────────────────
+    // formatBodyNameWithId
+    // ─────────────────────────────────────────────────────────────────
+
+    @Nested
+    @DisplayName("formatBodyNameWithId")
+    class FormatBodyNameWithId {
+
+        @Test
+        @DisplayName("-1 → em-dash")
+        void noBody() {
+            assertEquals("—", SimulationStateFxBridge.formatBodyNameWithId(-1));
+        }
+
+        @Test
+        @DisplayName("Includes NAIF ID in parentheses")
+        void includesNaifId() {
+            // Without SPICE loaded, falls back to "NAIF <id> (<id>)"
+            String result = SimulationStateFxBridge.formatBodyNameWithId(399);
+            assertTrue(result.contains("(399)"), "Should contain '(399)', got: " + result);
+        }
+
+        @Test
+        @DisplayName("With SPICE loaded, shows name + NAIF ID")
+        void withSpice() {
+            TestHarness.resetSingleton();
+            KEPPLRConfiguration.getTestTemplate();
+            String result = SimulationStateFxBridge.formatBodyNameWithId(399);
+            assertTrue(result.contains("Earth") || result.contains("earth"), "Should contain 'Earth', got: " + result);
+            assertTrue(result.contains("(399)"), "Should contain '(399)', got: " + result);
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────────
+    // formatDistance
+    // ─────────────────────────────────────────────────────────────────
+
+    @Nested
+    @DisplayName("formatDistance")
+    class FormatDistance {
+
+        @Test
+        @DisplayName("NaN → em-dash")
+        void nanDistance() {
+            assertEquals("—", SimulationStateFxBridge.formatDistance(Double.NaN));
+        }
+
+        @Test
+        @DisplayName("Negative → em-dash")
+        void negativeDistance() {
+            assertEquals("—", SimulationStateFxBridge.formatDistance(-1.0));
+        }
+
+        @Test
+        @DisplayName("Sub-km distance displayed in metres")
+        void metreDistance() {
+            String result = SimulationStateFxBridge.formatDistance(0.342);
+            assertTrue(result.contains("m"), "Should use metres, got: " + result);
+            assertTrue(result.contains("342"), "Should show 342 m, got: " + result);
+        }
+
+        @Test
+        @DisplayName("Very small distance displayed in metres with decimals")
+        void verySmallDistance() {
+            String result = SimulationStateFxBridge.formatDistance(0.00005);
+            assertTrue(result.contains("m"), "Should use metres, got: " + result);
+            assertTrue(result.contains("0.050"), "Should show ~0.050 m, got: " + result);
+        }
+
+        @Test
+        @DisplayName("Mid-range distance displayed in km")
+        void kmDistance() {
+            String result = SimulationStateFxBridge.formatDistance(500_000.0);
+            assertTrue(result.contains("km"), "Should use km, got: " + result);
+            assertFalse(result.contains("AU"), "Should not use AU, got: " + result);
+        }
+
+        @Test
+        @DisplayName("Large distance displayed in AU")
+        void auDistance() {
+            // 1 AU = 1.495978707e8 km
+            String result = SimulationStateFxBridge.formatDistance(1.5e8);
+            assertTrue(result.contains("AU"), "Should use AU, got: " + result);
+        }
+
+        @Test
+        @DisplayName("Zero distance shown in metres")
+        void zeroDistance() {
+            String result = SimulationStateFxBridge.formatDistance(0.0);
+            assertTrue(result.contains("m"), "Should use metres for zero, got: " + result);
+        }
+    }
 }

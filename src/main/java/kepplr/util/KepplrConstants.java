@@ -724,4 +724,25 @@ public final class KepplrConstants {
      * pyramid. Both are approximated as regular polygons with this many sides.
      */
     public static final int INSTRUMENT_FRUSTUM_CIRCLE_APPROX_SIDES = 32;
+
+    // ── Unit conversion ──
+
+    /** One astronomical unit in kilometres (IAU 2012 exact definition). */
+    public static final double KM_PER_AU = 1.495_978_707e8;
+
+    // ── Distance display thresholds ──
+
+    /**
+     * Camera-to-body distances below this value (in km) are displayed in metres.
+     *
+     * <p>1 km threshold — spacecraft proximity operations can be sub-kilometre.
+     */
+    public static final double DISTANCE_DISPLAY_M_THRESHOLD_KM = 1.0;
+
+    /**
+     * Camera-to-body distances at or above this value (in AU) are displayed in AU.
+     *
+     * <p>0.01 AU ≈ 1.5 million km — roughly 4× the Earth–Moon distance.
+     */
+    public static final double DISTANCE_DISPLAY_AU_THRESHOLD_AU = 0.01;
 }

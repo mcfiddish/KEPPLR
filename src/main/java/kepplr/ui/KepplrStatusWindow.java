@@ -23,8 +23,8 @@ import javafx.scene.control.Label;
 import javafx.scene.control.Menu;
 import javafx.scene.control.MenuBar;
 import javafx.scene.control.MenuItem;
-import javafx.scene.control.ProgressBar;
 import javafx.scene.control.RadioButton;
+import javafx.scene.control.Separator;
 import javafx.scene.control.SeparatorMenuItem;
 import javafx.scene.control.TextField;
 import javafx.scene.control.ToggleGroup;
@@ -73,7 +73,7 @@ public final class KepplrStatusWindow {
 
     private static final Logger logger = LogManager.getLogger();
 
-    private static final double WINDOW_WIDTH = 380.0;
+    private static final double WINDOW_WIDTH = 440.0;
     private static final double WINDOW_HEIGHT = 720.0;
 
     private final SimulationStateFxBridge bridge;
@@ -157,14 +157,14 @@ public final class KepplrStatusWindow {
 
         stage = new Stage();
         stage.setTitle("KEPPLR");
+        stage.setAlwaysOnTop(true);
 
         MenuBar menuBar = buildMenuBar();
         VBox bodyReadout = buildBodyReadout();
         VBox statusSection = buildStatusSection();
-        VBox transitionBar = buildTransitionBar();
         VBox bodyListSection = buildBodyListSection();
 
-        VBox root = new VBox(6, menuBar, bodyReadout, statusSection, transitionBar, bodyListSection);
+        VBox root = new VBox(6, menuBar, bodyReadout, new Separator(), statusSection, new Separator(), bodyListSection);
         VBox.setVgrow(bodyListSection, Priority.ALWAYS);
 
         Scene scene = new Scene(root, WINDOW_WIDTH, WINDOW_HEIGHT);
@@ -206,7 +206,7 @@ public final class KepplrStatusWindow {
         }
     }
 
-    // ── Body Readout (Selected, Focused, Targeted with action buttons) ────────
+    // ── Body Readout (Focused, Targeted, Selected with action buttons) ────────
 
     private VBox buildBodyReadout() {
         GridPane grid = new GridPane();
@@ -215,15 +215,42 @@ public final class KepplrStatusWindow {
         grid.setVgap(4);
 
         ColumnConstraints labelCol = new ColumnConstraints(70);
-        ColumnConstraints valueCol = new ColumnConstraints();
-        valueCol.setHgrow(Priority.ALWAYS);
+        ColumnConstraints nameCol = new ColumnConstraints();
+        nameCol.setHgrow(Priority.ALWAYS);
+        ColumnConstraints distCol = new ColumnConstraints();
         ColumnConstraints buttonCol = new ColumnConstraints();
-        grid.getColumnConstraints().addAll(labelCol, valueCol, buttonCol);
+        grid.getColumnConstraints().addAll(labelCol, nameCol, distCol, buttonCol);
 
-        // Row 0: Selected — with Focus, Target, Clear buttons
-        Label selLabel = boldLabel("Selected:");
+        int row = 0;
+
+        // Row 0: Focused
+        grid.add(boldLabel("Focused:"), 0, row);
+        Label focValue = monoLabel();
+        focValue.textProperty().bind(bridge.focusedBodyNameProperty());
+        grid.add(focValue, 1, row);
+        Label focDist = dimLabel();
+        focDist.textProperty().bind(bridge.focusedBodyDistanceProperty());
+        grid.add(focDist, 2, row);
+        row++;
+
+        // Row 1: Targeted
+        grid.add(boldLabel("Targeted:"), 0, row);
+        Label tgtValue = monoLabel();
+        tgtValue.textProperty().bind(bridge.targetedBodyNameProperty());
+        grid.add(tgtValue, 1, row);
+        Label tgtDist = dimLabel();
+        tgtDist.textProperty().bind(bridge.targetedBodyDistanceProperty());
+        grid.add(tgtDist, 2, row);
+        row++;
+
+        // Row 2: Selected — with Focus, Target buttons
+        grid.add(boldLabel("Selected:"), 0, row);
         Label selValue = monoLabel();
         selValue.textProperty().bind(bridge.selectedBodyNameProperty());
+        grid.add(selValue, 1, row);
+        Label selDist = dimLabel();
+        selDist.textProperty().bind(bridge.selectedBodyDistanceProperty());
+        grid.add(selDist, 2, row);
 
         Button focusBtn = smallButton("Focus");
         focusBtn.setOnAction(e -> {
@@ -235,29 +262,10 @@ public final class KepplrStatusWindow {
             int id = bridge.selectedBodyIdProperty().get();
             if (id != -1) commands.targetBody(id);
         });
-        Button clearSelBtn = smallButton("Clear");
-        clearSelBtn.setOnAction(e -> commands.selectBody(-1));
-        HBox selButtons = new HBox(4, focusBtn, targetBtn, clearSelBtn);
+        HBox selButtons = new HBox(4, focusBtn, targetBtn);
         selButtons.visibleProperty().bind(bridge.selectedBodyActiveProperty());
         selButtons.managedProperty().bind(bridge.selectedBodyActiveProperty());
-
-        grid.add(selLabel, 0, 0);
-        grid.add(selValue, 1, 0);
-        grid.add(selButtons, 2, 0);
-
-        // Row 1: Focused
-        Label focLabel = boldLabel("Focused:");
-        Label focValue = monoLabel();
-        focValue.textProperty().bind(bridge.focusedBodyNameProperty());
-        grid.add(focLabel, 0, 1);
-        grid.add(focValue, 1, 1);
-
-        // Row 2: Targeted
-        Label tgtLabel = boldLabel("Targeted:");
-        Label tgtValue = monoLabel();
-        tgtValue.textProperty().bind(bridge.targetedBodyNameProperty());
-        grid.add(tgtLabel, 0, 2);
-        grid.add(tgtValue, 1, 2);
+        grid.add(selButtons, 3, row);
 
         return new VBox(grid);
     }
@@ -284,20 +292,6 @@ public final class KepplrStatusWindow {
         addStatusRow(grid, row, "BF pos:", bridge.cameraBodyFixedTextProperty());
 
         return new VBox(grid);
-    }
-
-    // ── Transition Progress Bar ──────────────────────────────────────────────
-
-    private VBox buildTransitionBar() {
-        ProgressBar progressBar = new ProgressBar();
-        progressBar.setMaxWidth(Double.MAX_VALUE);
-        progressBar.progressProperty().bind(bridge.transitionProgressProperty());
-
-        VBox box = new VBox(progressBar);
-        box.setPadding(new Insets(0, 10, 0, 10));
-        box.visibleProperty().bind(bridge.transitionActiveProperty());
-        box.managedProperty().bind(bridge.transitionActiveProperty());
-        return box;
     }
 
     // ── Body List TreeView ───────────────────────────────────────────────────
@@ -990,6 +984,12 @@ public final class KepplrStatusWindow {
     private static Label monoLabel() {
         Label label = new Label("—");
         label.setStyle("-fx-font-family: monospace; -fx-font-size: 11px;");
+        return label;
+    }
+
+    private static Label dimLabel() {
+        Label label = new Label("—");
+        label.setStyle("-fx-font-family: monospace; -fx-font-size: 10px; -fx-text-fill: #888888;");
         return label;
     }
 

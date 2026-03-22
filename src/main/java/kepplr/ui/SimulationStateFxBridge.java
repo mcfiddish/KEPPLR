@@ -23,6 +23,7 @@ import kepplr.ephemeris.Instrument;
 import kepplr.state.BodyInView;
 import kepplr.state.SimulationState;
 import kepplr.util.KepplrConstants;
+import picante.math.vectorspace.VectorIJK;
 
 /**
  * Sole location of {@link Platform#runLater(Runnable)} calls (CLAUDE.md Rule 2).
@@ -78,6 +79,11 @@ public final class SimulationStateFxBridge {
     private final SimpleStringProperty focusedBodyName = new SimpleStringProperty("—");
     private final SimpleStringProperty targetedBodyName = new SimpleStringProperty("—");
     private final SimpleBooleanProperty selectedBodyActive = new SimpleBooleanProperty(false);
+
+    // ── Camera-to-body distance (Step 42) ────────────────────────────────────
+    private final SimpleStringProperty selectedBodyDistance = new SimpleStringProperty("—");
+    private final SimpleStringProperty focusedBodyDistance = new SimpleStringProperty("—");
+    private final SimpleStringProperty targetedBodyDistance = new SimpleStringProperty("—");
     private final SimpleBooleanProperty cameraFrameFallbackActive = new SimpleBooleanProperty(false);
     private final SimpleIntegerProperty selectedBodyIdFx = new SimpleIntegerProperty(-1);
     private final SimpleIntegerProperty focusedBodyIdFx = new SimpleIntegerProperty(-1);
@@ -136,14 +142,24 @@ public final class SimulationStateFxBridge {
         transitionActive.set(state.transitionActiveProperty().get());
         transitionProgress.set(state.transitionProgressProperty().get());
         fovDeg.set(state.fovDegProperty().get());
-        selectedBodyName.set(formatBodyName(state.selectedBodyIdProperty().get()));
-        focusedBodyName.set(formatBodyName(state.focusedBodyIdProperty().get()));
-        targetedBodyName.set(formatBodyName(state.targetedBodyIdProperty().get()));
+        selectedBodyName.set(formatBodyNameWithId(state.selectedBodyIdProperty().get()));
+        focusedBodyName.set(formatBodyNameWithId(state.focusedBodyIdProperty().get()));
+        targetedBodyName.set(formatBodyNameWithId(state.targetedBodyIdProperty().get()));
         selectedBodyActive.set(state.selectedBodyIdProperty().get() != -1);
         cameraFrameFallbackActive.set(state.cameraFrameFallbackActiveProperty().get());
         selectedBodyIdFx.set(state.selectedBodyIdProperty().get());
         focusedBodyIdFx.set(state.focusedBodyIdProperty().get());
         targetedBodyIdFx.set(state.targetedBodyIdProperty().get());
+        {
+            double[] initCamPos = state.cameraPositionJ2000Property().get();
+            double initEt = state.currentEtProperty().get();
+            selectedBodyDistance.set(formatDistance(
+                    computeCameraToBodyDistanceKm(state.selectedBodyIdProperty().get(), initCamPos, initEt)));
+            focusedBodyDistance.set(formatDistance(
+                    computeCameraToBodyDistanceKm(state.focusedBodyIdProperty().get(), initCamPos, initEt)));
+            targetedBodyDistance.set(formatDistance(
+                    computeCameraToBodyDistanceKm(state.targetedBodyIdProperty().get(), initCamPos, initEt)));
+        }
         hudTimeVisibleFx.set(state.hudTimeVisibleProperty().get());
         hudInfoVisibleFx.set(state.hudInfoVisibleProperty().get());
         // Attach listeners — fire on the thread that mutates state (JME thread).
@@ -234,31 +250,43 @@ public final class SimulationStateFxBridge {
         });
         state.selectedBodyIdProperty().addListener((obs, oldVal, newVal) -> {
             if (polling) return;
-            String n = formatBodyName(newVal.intValue());
-            boolean active = newVal.intValue() != -1;
             int id = newVal.intValue();
+            String n = formatBodyNameWithId(id);
+            boolean active = id != -1;
+            double[] camPos = state.cameraPositionJ2000Property().get();
+            double et = state.currentEtProperty().get();
+            String dist = formatDistance(computeCameraToBodyDistanceKm(id, camPos, et));
             dispatcher.accept(() -> {
                 selectedBodyName.set(n);
                 selectedBodyActive.set(active);
                 selectedBodyIdFx.set(id);
+                selectedBodyDistance.set(dist);
             });
         });
         state.focusedBodyIdProperty().addListener((obs, oldVal, newVal) -> {
             if (polling) return;
-            String n = formatBodyName(newVal.intValue());
             int id = newVal.intValue();
+            String n = formatBodyNameWithId(id);
+            double[] camPos = state.cameraPositionJ2000Property().get();
+            double et = state.currentEtProperty().get();
+            String dist = formatDistance(computeCameraToBodyDistanceKm(id, camPos, et));
             dispatcher.accept(() -> {
                 focusedBodyName.set(n);
                 focusedBodyIdFx.set(id);
+                focusedBodyDistance.set(dist);
             });
         });
         state.targetedBodyIdProperty().addListener((obs, oldVal, newVal) -> {
             if (polling) return;
-            String n = formatBodyName(newVal.intValue());
             int id = newVal.intValue();
+            String n = formatBodyNameWithId(id);
+            double[] camPos = state.cameraPositionJ2000Property().get();
+            double et = state.currentEtProperty().get();
+            String dist = formatDistance(computeCameraToBodyDistanceKm(id, camPos, et));
             dispatcher.accept(() -> {
                 targetedBodyName.set(n);
                 targetedBodyIdFx.set(id);
+                targetedBodyDistance.set(dist);
             });
         });
         state.cameraFrameFallbackActiveProperty().addListener((obs, oldVal, newVal) -> {
@@ -333,14 +361,24 @@ public final class SimulationStateFxBridge {
         transitionActive.set(state.transitionActiveProperty().get());
         transitionProgress.set(state.transitionProgressProperty().get());
         fovDeg.set(state.fovDegProperty().get());
-        selectedBodyName.set(formatBodyName(state.selectedBodyIdProperty().get()));
-        focusedBodyName.set(formatBodyName(state.focusedBodyIdProperty().get()));
-        targetedBodyName.set(formatBodyName(state.targetedBodyIdProperty().get()));
+        selectedBodyName.set(formatBodyNameWithId(state.selectedBodyIdProperty().get()));
+        focusedBodyName.set(formatBodyNameWithId(state.focusedBodyIdProperty().get()));
+        targetedBodyName.set(formatBodyNameWithId(state.targetedBodyIdProperty().get()));
         selectedBodyActive.set(state.selectedBodyIdProperty().get() != -1);
         cameraFrameFallbackActive.set(state.cameraFrameFallbackActiveProperty().get());
         selectedBodyIdFx.set(state.selectedBodyIdProperty().get());
         focusedBodyIdFx.set(state.focusedBodyIdProperty().get());
         targetedBodyIdFx.set(state.targetedBodyIdProperty().get());
+        {
+            double[] camPos = state.cameraPositionJ2000Property().get();
+            double et = state.currentEtProperty().get();
+            selectedBodyDistance.set(formatDistance(
+                    computeCameraToBodyDistanceKm(state.selectedBodyIdProperty().get(), camPos, et)));
+            focusedBodyDistance.set(formatDistance(
+                    computeCameraToBodyDistanceKm(state.focusedBodyIdProperty().get(), camPos, et)));
+            targetedBodyDistance.set(formatDistance(
+                    computeCameraToBodyDistanceKm(state.targetedBodyIdProperty().get(), camPos, et)));
+        }
         hudTimeVisibleFx.set(state.hudTimeVisibleProperty().get());
         hudInfoVisibleFx.set(state.hudInfoVisibleProperty().get());
         frustumVisibleFxMap.forEach(
@@ -445,6 +483,21 @@ public final class SimulationStateFxBridge {
         return selectedBodyActive;
     }
 
+    /** Camera-to-selected-body distance, formatted with auto-switching units. */
+    public ReadOnlyStringProperty selectedBodyDistanceProperty() {
+        return selectedBodyDistance;
+    }
+
+    /** Camera-to-focused-body distance, formatted with auto-switching units. */
+    public ReadOnlyStringProperty focusedBodyDistanceProperty() {
+        return focusedBodyDistance;
+    }
+
+    /** Camera-to-targeted-body distance, formatted with auto-switching units. */
+    public ReadOnlyStringProperty targetedBodyDistanceProperty() {
+        return targetedBodyDistance;
+    }
+
     /** {@code true} when the camera frame fell back from BODY_FIXED to INERTIAL. */
     public ReadOnlyBooleanProperty cameraFrameFallbackActiveProperty() {
         return cameraFrameFallbackActive;
@@ -535,6 +588,52 @@ public final class SimulationStateFxBridge {
     }
 
     /**
+     * Format a NAIF ID as {@code "Name (ID)"}, e.g. {@code "Earth (399)"}.
+     *
+     * @param id NAIF ID, or -1 for "no body"
+     * @return formatted name with ID, or {@code "—"} for -1
+     */
+    static String formatBodyNameWithId(int id) {
+        if (id == -1) return "—";
+        String name = BodyLookupService.formatName(id);
+        return name + " (" + id + ")";
+    }
+
+    /**
+     * Format a camera-to-body distance with auto-switching units.
+     *
+     * <ul>
+     *   <li>&lt; 1 km → metres (e.g. {@code "342 m"})
+     *   <li>&lt; 0.01 AU → km (e.g. {@code "1.23e+05 km"})
+     *   <li>≥ 0.01 AU → AU (e.g. {@code "1.024 AU"})
+     * </ul>
+     *
+     * @param distanceKm distance in kilometres, or {@code Double.NaN} / negative for unavailable
+     * @return formatted distance string, or {@code "—"} if unavailable
+     */
+    static String formatDistance(double distanceKm) {
+        if (Double.isNaN(distanceKm) || distanceKm < 0) return "—";
+
+        if (distanceKm < KepplrConstants.DISTANCE_DISPLAY_M_THRESHOLD_KM) {
+            double metres = distanceKm * 1000.0;
+            if (metres < 0.1) {
+                return String.format("%.3f m", metres);
+            }
+            return String.format("%.1f m", metres);
+        }
+
+        double au = distanceKm / KepplrConstants.KM_PER_AU;
+        if (au >= KepplrConstants.DISTANCE_DISPLAY_AU_THRESHOLD_AU) {
+            return String.format("%.4f AU", au);
+        }
+
+        if (distanceKm < 1000.0) {
+            return String.format("%.2f km", distanceKm);
+        }
+        return String.format("%.3e km", distanceKm);
+    }
+
+    /**
      * Convert ET to a UTC display string.
      *
      * <p>Acquires {@link picante.time.TimeConversion} at point-of-use (CLAUDE.md Rule 3). Returns {@code "—"} if the
@@ -605,6 +704,29 @@ public final class SimulationStateFxBridge {
     static String formatBodyFixed(double[] sph) {
         if (sph == null) return "N/A";
         return String.format("r=%.3e km  φ=%.2f°  λ=%.2f°", sph[0], sph[1], sph[2]);
+    }
+
+    /**
+     * Compute the distance in km from the camera to a body, both in heliocentric J2000.
+     *
+     * @param bodyId NAIF body code, or -1 for "no body"
+     * @param cameraHelioJ2000 camera position [x, y, z] in km (heliocentric J2000)
+     * @param et current ephemeris time
+     * @return distance in km, or {@code Double.NaN} if unavailable
+     */
+    static double computeCameraToBodyDistanceKm(int bodyId, double[] cameraHelioJ2000, double et) {
+        if (bodyId == -1 || cameraHelioJ2000 == null || cameraHelioJ2000.length < 3) return Double.NaN;
+        try {
+            VectorIJK bodyPos =
+                    KEPPLRConfiguration.getInstance().getEphemeris().getHeliocentricPositionJ2000(bodyId, et);
+            if (bodyPos == null) return Double.NaN;
+            double dx = cameraHelioJ2000[0] - bodyPos.getI();
+            double dy = cameraHelioJ2000[1] - bodyPos.getJ();
+            double dz = cameraHelioJ2000[2] - bodyPos.getK();
+            return Math.sqrt(dx * dx + dy * dy + dz * dz);
+        } catch (Exception e) {
+            return Double.NaN;
+        }
     }
 
     /**
