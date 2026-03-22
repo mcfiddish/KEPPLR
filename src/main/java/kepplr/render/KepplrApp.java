@@ -162,7 +162,7 @@ public class KepplrApp extends SimpleApplication {
     @Override
     public void simpleInitApp() {
         setLostFocusBehavior(LostFocusBehavior.Disabled);
-        setDisplayFps(true);
+        setDisplayFps(false);
         setDisplayStatView(false);
         flyCam.setEnabled(false);
 

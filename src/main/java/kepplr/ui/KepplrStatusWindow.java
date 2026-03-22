@@ -107,6 +107,7 @@ public final class KepplrStatusWindow {
     private CustomMenuItem captureSeqItem;
     private CustomMenuItem saveScreenshotItem;
     private volatile Thread captureSequenceThread;
+    private LogWindow logWindow;
 
     /**
      * @param bridge the bridge exposing FX-thread-safe display properties; must not be null
@@ -207,23 +208,31 @@ public final class KepplrStatusWindow {
             if (jmeShutdown != null) jmeShutdown.run();
         });
 
+        // Install the log4j2 appender and create the log window
+        LogAppender.install();
+        logWindow = new LogWindow();
+
         stage.show();
         stage.toFront();
         bridge.startPolling();
 
-        // Drain script output queue and check capture thread status on each FX frame
+        // Drain script output queue, log window, and check capture thread status on each FX frame
         // (avoids Platform.runLater per CLAUDE.md Rule 2)
         new AnimationTimer() {
             @Override
             public void handle(long now) {
                 drainScriptOutput();
                 checkCaptureThreadDone();
+                logWindow.drain();
             }
         }.start();
     }
 
     /** Close the window programmatically (called from JME destroy() hook). */
     public void close() {
+        if (logWindow != null) {
+            logWindow.close();
+        }
         if (stage != null) {
             stage.close();
         }
@@ -856,13 +865,20 @@ public final class KepplrStatusWindow {
 
         // ── Quit ─────────────────────────────────────────────────────────
         CustomMenuItem quit = tipItem("Quit", "Exit KEPPLR");
-        quit.setOnAction(e -> {
+        Runnable doQuit = () -> {
             if (jmeShutdown != null) jmeShutdown.run();
-        });
+        };
+        quit.setOnAction(e -> doQuit.run());
+        // CustomMenuItem.onAction can sometimes not fire due to a JavaFX timing issue where the
+        // menu hides before the action event propagates. Wire the label's mouse handler as well.
+        ((Label) quit.getContent()).setOnMouseClicked(e -> doQuit.run());
 
         // Store references for mutual exclusion
         this.captureSeqItem = captureSeq;
         this.saveScreenshotItem = saveScreenshot;
+
+        CustomMenuItem showLog = tipItem("Show Log", "Show the application log window");
+        showLog.setOnAction(e -> logWindow.show());
 
         return new Menu(
                 "File",
@@ -874,6 +890,8 @@ public final class KepplrStatusWindow {
                 new SeparatorMenuItem(),
                 saveScreenshot,
                 captureSeq,
+                new SeparatorMenuItem(),
+                showLog,
                 new SeparatorMenuItem(),
                 quit);
     }
