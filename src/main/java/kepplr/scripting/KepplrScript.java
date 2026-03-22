@@ -4,7 +4,9 @@ import kepplr.camera.CameraFrame;
 import kepplr.commands.SimulationCommands;
 import kepplr.config.KEPPLRConfiguration;
 import kepplr.ephemeris.BodyLookupService;
+import kepplr.ephemeris.KEPPLREphemeris;
 import kepplr.render.RenderQuality;
+import picante.mechanics.EphemerisID;
 import kepplr.render.vector.VectorType;
 import kepplr.state.SimulationState;
 import kepplr.util.KepplrConstants;
@@ -525,6 +527,20 @@ public final class KepplrScript {
     }
 
     /**
+     * Toggle label visibility for ALL bodies and spacecraft.
+     *
+     * <p>When enabling, barycenters (NAIF 1–9) are skipped except Pluto barycenter (9), matching the Overlays menu
+     * behavior.
+     *
+     * <p>Example: {@code kepplr.setAllLabelsVisible(true)}
+     *
+     * @param visible {@code true} to show all labels, {@code false} to hide all
+     */
+    public void setAllLabelsVisible(boolean visible) {
+        forEachBody((code, show) -> commands.setLabelVisible(code, show), visible);
+    }
+
+    /**
      * Toggle the HUD time display.
      *
      * <p>Example: {@code kepplr.setHudTimeVisible(true)}
@@ -569,6 +585,20 @@ public final class KepplrScript {
      */
     public void setTrailVisible(String bodyName, boolean visible) {
         commands.setTrailVisible(resolve(bodyName), visible);
+    }
+
+    /**
+     * Toggle trail visibility for ALL bodies and spacecraft.
+     *
+     * <p>When enabling, barycenters (NAIF 1–9) are skipped except Pluto barycenter (9), matching the Overlays menu
+     * behavior.
+     *
+     * <p>Example: {@code kepplr.setAllTrailsVisible(true)}
+     *
+     * @param visible {@code true} to show all trails, {@code false} to hide all
+     */
+    public void setAllTrailsVisible(boolean visible) {
+        forEachBody((code, show) -> commands.setTrailVisible(code, show), visible);
     }
 
     /**
@@ -815,6 +845,27 @@ public final class KepplrScript {
     }
 
     // ── Private ─────────────────────────────────────────────────────────────────
+
+    /**
+     * Iterate all known bodies and spacecraft, applying a per-body action. When {@code visible} is true, barycenters
+     * (NAIF 1–9 except Pluto barycenter 9) are skipped, matching the Overlays menu convention.
+     */
+    private void forEachBody(java.util.function.BiConsumer<Integer, Boolean> action, boolean visible) {
+        try {
+            KEPPLREphemeris eph = KEPPLRConfiguration.getInstance().getEphemeris();
+            for (EphemerisID id : eph.getKnownBodies()) {
+                eph.getSpiceBundle().getObjectCode(id).ifPresent(code -> {
+                    if (visible && code >= 1 && code <= 9 && code != KepplrConstants.PLUTO_BARYCENTER_NAIF_ID) return;
+                    action.accept(code, visible);
+                });
+            }
+            for (var sc : eph.getSpacecraft()) {
+                action.accept(sc.code(), visible);
+            }
+        } catch (Exception ex) {
+            logger.warn("Failed to apply visibility to all bodies: {}", ex.getMessage());
+        }
+    }
 
     private void waitUntilSimInternal(double targetEt) throws InterruptedException {
         double currentEt = state.currentEtProperty().get();
