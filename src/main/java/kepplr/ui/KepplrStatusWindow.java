@@ -14,13 +14,15 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.function.BiConsumer;
 import javafx.animation.AnimationTimer;
 import javafx.beans.binding.Bindings;
+import javafx.beans.property.ReadOnlyBooleanProperty;
+import javafx.beans.value.ChangeListener;
 import javafx.geometry.Insets;
 import javafx.geometry.Orientation;
 import javafx.scene.Scene;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
 import javafx.scene.control.ButtonType;
-import javafx.scene.control.CheckBox;
+import javafx.scene.control.CheckMenuItem;
 import javafx.scene.control.ContextMenu;
 import javafx.scene.control.CustomMenuItem;
 import javafx.scene.control.Label;
@@ -56,6 +58,7 @@ import kepplr.ephemeris.spice.SpiceBundle;
 import kepplr.render.vector.VectorTypes;
 import kepplr.scripting.CommandRecorder;
 import kepplr.scripting.ScriptRunner;
+import kepplr.state.SimulationState;
 import kepplr.util.KepplrConstants;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -95,7 +98,7 @@ public final class KepplrStatusWindow {
     private TreeView<BodyTreeEntry> bodyTree;
     private TreeItem<BodyTreeEntry> masterRoot;
     private Menu instrumentsMenu;
-    private CheckBox labelsCheckBox;
+    private CheckMenuItem labelsCheckItem;
     private TextArea scriptOutputArea;
     private final ConcurrentLinkedQueue<String> scriptOutputQueue = new ConcurrentLinkedQueue<>();
     private int scriptOutputLineCount;
@@ -399,20 +402,20 @@ public final class KepplrStatusWindow {
         MenuItem targetItem = new MenuItem("Target");
         targetItem.setOnAction(e -> commands.targetBody(naifId));
 
-        boolean trailOn = bridge.getState().trailVisibleProperty(naifId).get();
-        MenuItem trailItem = new MenuItem(trailOn ? "Hide Trail" : "Show Trail");
-        trailItem.setOnAction(e -> commands.setTrailVisible(naifId, !trailOn));
+        CheckMenuItem trailItem = new CheckMenuItem("Trail");
+        trailItem.setSelected(bridge.getState().trailVisibleProperty(naifId).get());
+        trailItem.setOnAction(e -> commands.setTrailVisible(naifId, trailItem.isSelected()));
 
-        boolean labelOn = bridge.getState().labelVisibleProperty(naifId).get();
-        MenuItem labelItem = new MenuItem(labelOn ? "Hide Label" : "Show Label");
-        labelItem.setOnAction(e -> commands.setLabelVisible(naifId, !labelOn));
+        CheckMenuItem labelItem = new CheckMenuItem("Label");
+        labelItem.setSelected(bridge.getState().labelVisibleProperty(naifId).get());
+        labelItem.setOnAction(e -> commands.setLabelVisible(naifId, labelItem.isSelected()));
 
-        boolean axesOn = bridge.getState()
+        CheckMenuItem axesItem = new CheckMenuItem("Axes");
+        axesItem.setSelected(bridge.getState()
                 .vectorVisibleProperty(naifId, VectorTypes.bodyAxisX())
-                .get();
-        MenuItem axesItem = new MenuItem(axesOn ? "Hide Axes" : "Show Axes");
+                .get());
         axesItem.setOnAction(e -> {
-            boolean show = !axesOn;
+            boolean show = axesItem.isSelected();
             commands.setVectorVisible(naifId, VectorTypes.bodyAxisX(), show);
             commands.setVectorVisible(naifId, VectorTypes.bodyAxisY(), show);
             commands.setVectorVisible(naifId, VectorTypes.bodyAxisZ(), show);
@@ -644,18 +647,15 @@ public final class KepplrStatusWindow {
         for (Instrument instrument : instruments) {
             String name = instrument.id().getName();
             int code = instrument.code();
-            CheckBox checkBox = menuCheckBox(name);
-            checkBox.setSelected(false);
-            Tooltip.install(checkBox, new Tooltip("Toggle the " + name + " instrument frustum overlay"));
-            CustomMenuItem item = new CustomMenuItem(checkBox);
-            item.setHideOnClick(false);
+            CheckMenuItem item = new CheckMenuItem(name);
+            item.setSelected(false);
 
             javafx.beans.property.ReadOnlyBooleanProperty bridgeProp = bridge.frustumVisibleProperty(code);
             if (bridgeProp != null) {
-                bridgeProp.addListener((obs, oldVal, newVal) -> checkBox.setSelected(newVal));
+                bridgeProp.addListener((obs, oldVal, newVal) -> item.setSelected(newVal));
             }
 
-            item.setOnAction(e -> commands.setFrustumVisible(code, checkBox.isSelected()));
+            item.setOnAction(e -> commands.setFrustumVisible(code, item.isSelected()));
             instrumentsMenu.getItems().add(item);
         }
     }
@@ -731,8 +731,8 @@ public final class KepplrStatusWindow {
                 commands.loadConfiguration(file.getAbsolutePath());
                 populateBodyTree();
                 populateInstrumentsMenu();
-                if (labelsCheckBox != null) {
-                    applyLabelVisibility(labelsCheckBox.isSelected());
+                if (labelsCheckItem != null) {
+                    applyLabelVisibility(labelsCheckItem.isSelected());
                 }
             }
         });
@@ -766,15 +766,11 @@ public final class KepplrStatusWindow {
         });
 
         // ── Start/Stop Recording ─────────────────────────────────────────
-        CheckBox recordCheckBox = menuCheckBox("Record Session");
-        Tooltip.install(recordCheckBox, new Tooltip("Record interactive session as a runnable Groovy script"));
-        // Wire the action on the CheckBox, not the CustomMenuItem — wiring it on the
-        // CustomMenuItem causes the handler to fire twice (once for the CheckBox click
-        // that bubbles up, and once for the CustomMenuItem's own activation).
-        recordCheckBox.setOnAction(e -> {
+        CheckMenuItem recordToggle = new CheckMenuItem("Record Session");
+        recordToggle.setOnAction(e -> {
             if (commandRecorder == null) return;
 
-            if (recordCheckBox.isSelected()) {
+            if (recordToggle.isSelected()) {
                 commandRecorder.startRecording();
                 logger.info("Command recording started");
             } else {
@@ -802,8 +798,6 @@ public final class KepplrStatusWindow {
                 }
             }
         });
-        CustomMenuItem recordToggle = new CustomMenuItem(recordCheckBox);
-        recordToggle.setHideOnClick(false);
 
         // ── Quit ─────────────────────────────────────────────────────────
         CustomMenuItem quit = tipItem("Quit", "Exit KEPPLR");
@@ -912,38 +906,26 @@ public final class KepplrStatusWindow {
 
     private Menu buildOverlaysMenu() {
         // ── Labels ────────────────────────────────────────────────────────────
-        labelsCheckBox = menuCheckBox("Show Labels");
-        labelsCheckBox.setSelected(false);
-        Tooltip.install(labelsCheckBox, new Tooltip("Show or hide body name labels"));
-        CustomMenuItem labelsItem = new CustomMenuItem(labelsCheckBox);
-        labelsItem.setHideOnClick(false);
-        labelsItem.setOnAction(e -> applyLabelVisibility(labelsCheckBox.isSelected()));
+        labelsCheckItem = new CheckMenuItem("Labels");
+        labelsCheckItem.setSelected(false);
+        labelsCheckItem.setOnAction(e -> applyLabelVisibility(labelsCheckItem.isSelected()));
 
         // ── HUD toggles ──────────────────────────────────────────────────────
-        CheckBox hudInfoCheckBox = menuCheckBox("HUD / Info");
-        hudInfoCheckBox.setSelected(bridge.hudInfoVisibleProperty().get());
-        Tooltip.install(hudInfoCheckBox, new Tooltip("Show or hide the heads-up display info panel"));
-        bridge.hudInfoVisibleProperty().addListener((obs, old, val) -> hudInfoCheckBox.setSelected(val));
-        CustomMenuItem hudInfoItem = new CustomMenuItem(hudInfoCheckBox);
-        hudInfoItem.setHideOnClick(false);
-        hudInfoItem.setOnAction(e -> commands.setHudInfoVisible(hudInfoCheckBox.isSelected()));
+        CheckMenuItem hudInfoItem = new CheckMenuItem("HUD / Info");
+        hudInfoItem.setSelected(bridge.hudInfoVisibleProperty().get());
+        bridge.hudInfoVisibleProperty().addListener((obs, old, val) -> hudInfoItem.setSelected(val));
+        hudInfoItem.setOnAction(e -> commands.setHudInfoVisible(hudInfoItem.isSelected()));
 
-        CheckBox showTimeCheckBox = menuCheckBox("Show Time");
-        showTimeCheckBox.setSelected(bridge.hudTimeVisibleProperty().get());
-        Tooltip.install(showTimeCheckBox, new Tooltip("Show or hide the simulation time display"));
-        bridge.hudTimeVisibleProperty().addListener((obs, old, val) -> showTimeCheckBox.setSelected(val));
-        CustomMenuItem showTimeItem = new CustomMenuItem(showTimeCheckBox);
-        showTimeItem.setHideOnClick(false);
-        showTimeItem.setOnAction(e -> commands.setHudTimeVisible(showTimeCheckBox.isSelected()));
+        CheckMenuItem showTimeItem = new CheckMenuItem("Show Time");
+        showTimeItem.setSelected(bridge.hudTimeVisibleProperty().get());
+        bridge.hudTimeVisibleProperty().addListener((obs, old, val) -> showTimeItem.setSelected(val));
+        showTimeItem.setOnAction(e -> commands.setHudTimeVisible(showTimeItem.isSelected()));
 
         // ── Trajectories (global toggle) ─────────────────────────────────────
-        CheckBox trajCheckBox = menuCheckBox("Show Trajectories");
-        trajCheckBox.setSelected(false);
-        Tooltip.install(trajCheckBox, new Tooltip("Show or hide orbital trails for all bodies"));
-        CustomMenuItem trajItem = new CustomMenuItem(trajCheckBox);
-        trajItem.setHideOnClick(false);
+        CheckMenuItem trajItem = new CheckMenuItem("Trajectories");
+        trajItem.setSelected(false);
         trajItem.setOnAction(e -> {
-            boolean show = trajCheckBox.isSelected();
+            boolean show = trajItem.isSelected();
             try {
                 KEPPLREphemeris eph = KEPPLRConfiguration.getInstance().getEphemeris();
                 for (EphemerisID id : eph.getKnownBodies()) {
@@ -962,79 +944,111 @@ public final class KepplrStatusWindow {
         });
 
         // ── Current Focus submenu ─────────────────────────────────────────────
-        CheckBox sunDirCheckBox = menuCheckBox("Sun Direction");
-        Tooltip.install(sunDirCheckBox, new Tooltip("Show a vector from the focused body toward the Sun"));
-        CustomMenuItem sunDirItem = new CustomMenuItem(sunDirCheckBox);
-        sunDirItem.setHideOnClick(false);
+        CheckMenuItem sunDirItem = new CheckMenuItem("Sun Direction");
         sunDirItem.setOnAction(e -> {
             int focId = bridge.focusedBodyIdProperty().get();
             if (focId != -1)
                 commands.setVectorVisible(
-                        focId, VectorTypes.towardBody(KepplrConstants.SUN_NAIF_ID), sunDirCheckBox.isSelected());
+                        focId, VectorTypes.towardBody(KepplrConstants.SUN_NAIF_ID), sunDirItem.isSelected());
         });
 
-        CheckBox earthDirCheckBox = menuCheckBox("Earth Direction");
-        Tooltip.install(earthDirCheckBox, new Tooltip("Show a vector from the focused body toward Earth"));
-        CustomMenuItem earthDirItem = new CustomMenuItem(earthDirCheckBox);
-        earthDirItem.setHideOnClick(false);
+        CheckMenuItem earthDirItem = new CheckMenuItem("Earth Direction");
         earthDirItem.setOnAction(e -> {
             int focId = bridge.focusedBodyIdProperty().get();
-            if (focId != -1)
-                commands.setVectorVisible(focId, VectorTypes.towardBody(399), earthDirCheckBox.isSelected());
+            if (focId != -1) commands.setVectorVisible(focId, VectorTypes.towardBody(399), earthDirItem.isSelected());
         });
 
-        CheckBox velocityCheckBox = menuCheckBox("Velocity Direction");
-        Tooltip.install(velocityCheckBox, new Tooltip("Show the velocity vector of the focused body"));
-        CustomMenuItem velocityItem = new CustomMenuItem(velocityCheckBox);
-        velocityItem.setHideOnClick(false);
+        CheckMenuItem velocityItem = new CheckMenuItem("Velocity Direction");
         velocityItem.setOnAction(e -> {
             int focId = bridge.focusedBodyIdProperty().get();
-            if (focId != -1) commands.setVectorVisible(focId, VectorTypes.velocity(), velocityCheckBox.isSelected());
+            if (focId != -1) commands.setVectorVisible(focId, VectorTypes.velocity(), velocityItem.isSelected());
         });
 
-        CheckBox targetTrailCheckBox = menuCheckBox("Trajectory");
-        Tooltip.install(targetTrailCheckBox, new Tooltip("Show or hide the orbital trail for the focused body"));
-        CustomMenuItem targetTrailItem = new CustomMenuItem(targetTrailCheckBox);
-        targetTrailItem.setHideOnClick(false);
+        CheckMenuItem targetTrailItem = new CheckMenuItem("Trajectory");
         targetTrailItem.setOnAction(e -> {
             int focId = bridge.focusedBodyIdProperty().get();
-            if (focId != -1) commands.setTrailVisible(focId, targetTrailCheckBox.isSelected());
+            if (focId != -1) commands.setTrailVisible(focId, targetTrailItem.isSelected());
         });
 
-        CheckBox axesCheckBox = menuCheckBox("Axes");
-        Tooltip.install(axesCheckBox, new Tooltip("Show body-fixed X/Y/Z axes for the focused body"));
-        CustomMenuItem axesItem = new CustomMenuItem(axesCheckBox);
-        axesItem.setHideOnClick(false);
+        CheckMenuItem axesItem = new CheckMenuItem("Axes");
         axesItem.setOnAction(e -> {
             int focId = bridge.focusedBodyIdProperty().get();
             if (focId != -1) {
-                boolean show = axesCheckBox.isSelected();
+                boolean show = axesItem.isSelected();
                 commands.setVectorVisible(focId, VectorTypes.bodyAxisX(), show);
                 commands.setVectorVisible(focId, VectorTypes.bodyAxisY(), show);
                 commands.setVectorVisible(focId, VectorTypes.bodyAxisZ(), show);
             }
         });
 
-        // When focus body changes, hide overlays on the old body and reset checkmarks
+        // Track state-property listeners so we can unbind them when focus changes
+        Runnable[] unbindPrev = {() -> {}};
+
+        // Bind menu checkmarks to the state properties of the given body so that
+        // changes made from other sources (e.g. context menu) are reflected here.
+        Runnable bindToFocused = () -> {
+            unbindPrev[0].run();
+            int id = bridge.focusedBodyIdProperty().get();
+            if (id == -1) {
+                unbindPrev[0] = () -> {};
+                return;
+            }
+            SimulationState st = bridge.getState();
+
+            ChangeListener<Boolean> sunL = (o, ov, nv) -> sunDirItem.setSelected(nv);
+            ChangeListener<Boolean> earthL = (o, ov, nv) -> earthDirItem.setSelected(nv);
+            ChangeListener<Boolean> velL = (o, ov, nv) -> velocityItem.setSelected(nv);
+            ChangeListener<Boolean> trailL = (o, ov, nv) -> targetTrailItem.setSelected(nv);
+            ChangeListener<Boolean> axesL = (o, ov, nv) -> axesItem.setSelected(nv);
+
+            ReadOnlyBooleanProperty sunP =
+                    st.vectorVisibleProperty(id, VectorTypes.towardBody(KepplrConstants.SUN_NAIF_ID));
+            ReadOnlyBooleanProperty earthP = st.vectorVisibleProperty(id, VectorTypes.towardBody(399));
+            ReadOnlyBooleanProperty velP = st.vectorVisibleProperty(id, VectorTypes.velocity());
+            ReadOnlyBooleanProperty trailP = st.trailVisibleProperty(id);
+            ReadOnlyBooleanProperty axesP = st.vectorVisibleProperty(id, VectorTypes.bodyAxisX());
+
+            sunP.addListener(sunL);
+            earthP.addListener(earthL);
+            velP.addListener(velL);
+            trailP.addListener(trailL);
+            axesP.addListener(axesL);
+
+            // Sync initial state
+            sunDirItem.setSelected(sunP.get());
+            earthDirItem.setSelected(earthP.get());
+            velocityItem.setSelected(velP.get());
+            targetTrailItem.setSelected(trailP.get());
+            axesItem.setSelected(axesP.get());
+
+            unbindPrev[0] = () -> {
+                sunP.removeListener(sunL);
+                earthP.removeListener(earthL);
+                velP.removeListener(velL);
+                trailP.removeListener(trailL);
+                axesP.removeListener(axesL);
+            };
+        };
+
+        // Bind for the initial focus body (if any)
+        bindToFocused.run();
+
+        // When focus body changes, hide overlays on the old body and rebind to the new one
         bridge.focusedBodyIdProperty().addListener((obs, oldVal, newVal) -> {
             int oldId = oldVal.intValue();
             if (oldId != -1) {
-                if (sunDirCheckBox.isSelected())
+                if (sunDirItem.isSelected())
                     commands.setVectorVisible(oldId, VectorTypes.towardBody(KepplrConstants.SUN_NAIF_ID), false);
-                if (earthDirCheckBox.isSelected()) commands.setVectorVisible(oldId, VectorTypes.towardBody(399), false);
-                if (velocityCheckBox.isSelected()) commands.setVectorVisible(oldId, VectorTypes.velocity(), false);
-                if (targetTrailCheckBox.isSelected()) commands.setTrailVisible(oldId, false);
-                if (axesCheckBox.isSelected()) {
+                if (earthDirItem.isSelected()) commands.setVectorVisible(oldId, VectorTypes.towardBody(399), false);
+                if (velocityItem.isSelected()) commands.setVectorVisible(oldId, VectorTypes.velocity(), false);
+                if (targetTrailItem.isSelected()) commands.setTrailVisible(oldId, false);
+                if (axesItem.isSelected()) {
                     commands.setVectorVisible(oldId, VectorTypes.bodyAxisX(), false);
                     commands.setVectorVisible(oldId, VectorTypes.bodyAxisY(), false);
                     commands.setVectorVisible(oldId, VectorTypes.bodyAxisZ(), false);
                 }
             }
-            sunDirCheckBox.setSelected(false);
-            earthDirCheckBox.setSelected(false);
-            velocityCheckBox.setSelected(false);
-            targetTrailCheckBox.setSelected(false);
-            axesCheckBox.setSelected(false);
+            bindToFocused.run();
         });
 
         Menu currentFocus = new Menu("Current Focus");
@@ -1050,7 +1064,7 @@ public final class KepplrStatusWindow {
         return new Menu(
                 "Overlays",
                 null,
-                labelsItem,
+                labelsCheckItem,
                 hudInfoItem,
                 showTimeItem,
                 new SeparatorMenuItem(),
@@ -1081,19 +1095,16 @@ public final class KepplrStatusWindow {
         for (Instrument instrument : instruments) {
             String name = instrument.id().getName();
             int code = instrument.code();
-            CheckBox checkBox = menuCheckBox(name);
-            checkBox.setSelected(false);
-            Tooltip.install(checkBox, new Tooltip("Toggle the " + name + " instrument frustum overlay"));
-            CustomMenuItem item = new CustomMenuItem(checkBox);
-            item.setHideOnClick(false);
+            CheckMenuItem item = new CheckMenuItem(name);
+            item.setSelected(false);
 
             // Bind checked state to SimulationState via the bridge (Rule 2: no direct state access from UI).
             javafx.beans.property.ReadOnlyBooleanProperty bridgeProp = bridge.frustumVisibleProperty(code);
             if (bridgeProp != null) {
-                bridgeProp.addListener((obs, oldVal, newVal) -> checkBox.setSelected(newVal));
+                bridgeProp.addListener((obs, oldVal, newVal) -> item.setSelected(newVal));
             }
 
-            item.setOnAction(e -> commands.setFrustumVisible(code, checkBox.isSelected()));
+            item.setOnAction(e -> commands.setFrustumVisible(code, item.isSelected()));
             menu.getItems().add(item);
         }
 
@@ -1139,25 +1150,7 @@ public final class KepplrStatusWindow {
         return item;
     }
 
-    /**
-     * Create a styled {@link CheckBox} suitable for use inside a {@link CustomMenuItem}.
-     *
-     * <p>Without an explicit {@code -fx-text-fill}, JavaFX resolves the text color through the {@code CustomMenuItem}'s
-     * parent chain and can produce invisible text in some states. Using {@code -fx-text-base-color} anchors the fill to
-     * the theme's base text color.
-     */
-    private static CheckBox menuCheckBox(String text) {
-        CheckBox cb = new CheckBox(text);
-        cb.setMaxWidth(Double.MAX_VALUE);
-        cb.setStyle("-fx-text-fill: -fx-text-base-color;");
-        return cb;
-    }
-
-    /**
-     * Create a styled {@link RadioButton} suitable for use inside a {@link CustomMenuItem}.
-     *
-     * @see #menuCheckBox(String)
-     */
+    /** Create a styled {@link RadioButton} suitable for use inside a {@link CustomMenuItem}. */
     private static RadioButton menuRadioButton(String text) {
         RadioButton rb = new RadioButton(text);
         rb.setMaxWidth(Double.MAX_VALUE);
