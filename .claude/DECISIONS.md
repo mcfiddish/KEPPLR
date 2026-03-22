@@ -862,7 +862,37 @@ would cause a compilation error since `toScript()` has no default implementation
 
 ---
 
-*Last updated: Step 27 (complete)*
+## D-041: Trail period for comparable-mass binaries uses relative orbit
+**Status:** Accepted
+**Roadmap step:** 24
+
+**Context:** `TrailSampler.computeTrailDurationSec` computed the orbital period of a satellite by feeding its state relative to the system **barycenter** and the system GM into `oscltx`. For the two-body period formula T = 2π√(a³/GM), `a` must be the semi-major axis of the **relative** orbit (body-to-body separation), not the body-to-barycenter distance. For most planet–satellite pairs (mass ratio ≫ 1) the barycenter is inside the primary and the error is negligible (~2% for Earth–Moon). For Pluto–Charon (mass ratio ~8.5:1) the barycentric semi-major axis is ~2,035 km vs. the relative semi-major axis of ~19,571 km, producing a period 30× too short (~5 hours instead of 6.387 days). The trail showed only ~12° of arc — effectively invisible.
+
+**Decision:** Compute the period from the state of the satellite relative to the **primary body** (NAIF code `barycenterId × 100 + 99`) rather than relative to the barycenter. The system GM is still correct for the relative orbit: T = 2π√(a_rel³ / G(M₁+M₂)) is exact. For Pluto (999), where the primary code equals the satellite code itself, the companion body (`barycenterId × 100 + 1`, i.e. Charon 901) is used instead. Falls back to the barycenter if neither primary nor companion can be resolved.
+
+**Future work:** The NAIF naming convention (primary = x99, satellites = x01–x98, barycenter = x) does not hold for asteroids with satellites. A `primary` parameter in `KEPPLRConfiguration.bodyBlock()` will be needed to support those systems. See roadmap future items.
+
+**Alternatives considered:** Correcting the barycentric period with an effective GM = G·M₂³/(M₁+M₂)² — rejected because it requires individual body masses that may not be in the kernel pool. Using the barycentric state unchanged — rejected because the 30× error for Pluto makes the trail invisible.
+
+**Consequences:** `TrailSampler.computeTrailDurationSec` now resolves the primary body for all satellites. Existing behaviour for standard satellites is unchanged (relative orbit ≈ barycentric orbit when mass ratio is extreme). Pluto's trail correctly shows the full ~6.387-day orbit around the Pluto Barycenter.
+
+---
+
+## D-042: Barycenter label and trail filtering
+**Status:** Accepted
+**Roadmap step:** 24
+
+**Context:** The Overlays → Labels and Overlays → Trajectories global toggles iterated over all known bodies. Barycenters (NAIF codes 1–9) received labels and trails, cluttering the view with redundant overlays that overlap the planet they represent. However, the Pluto Barycenter (9) is a meaningful distinct object because Pluto (999) visibly orbits it.
+
+**Decision:** When enabling labels or trails via the global toggle, skip NAIF codes 1–8 (planet system barycenters). Pluto Barycenter (9) is exempted from the skip. When disabling, turn all off including barycenters. Per-body toggles in context menus are unaffected.
+
+**Alternatives considered:** Filtering all barycenters including Pluto — rejected because the Pluto–Charon barycenter is visually distinct from either body. No filtering — rejected because barycenter labels overlap planet labels at all zoom levels.
+
+**Consequences:** `KepplrStatusWindow.applyLabelVisibility` and the Trajectories toggle handler both skip codes 1–8. Pluto Barycenter labels and trails appear when toggled on.
+
+---
+
+*Last updated: Step 24 (complete)*
 *Backfill note: Entries D-001 through D-009 were reconstructed retrospectively.
 D-010 onwards recorded in real time.*
 
