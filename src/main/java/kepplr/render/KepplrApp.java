@@ -442,7 +442,8 @@ public class KepplrApp extends SimpleApplication {
         hud.setInfoVisible(simulationState.hudInfoVisibleProperty().get());
 
         trailManager.update(currentEt, cameraHelioJ2000);
-        vectorManager.update(currentEt, cameraHelioJ2000, cam, focusedBodyId);
+        vectorManager.update(
+                currentEt, cameraHelioJ2000, cam, focusedBodyId, bodySceneManager::getEffectiveBodyRadiusKm);
         instrumentFrustumManager.update(currentEt, cameraHelioJ2000);
         starFieldManager.update(currentEt, cameraHelioJ2000);
         try {

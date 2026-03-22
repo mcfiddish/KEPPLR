@@ -2,6 +2,7 @@ package kepplr.render.vector;
 
 import com.jme3.asset.AssetManager;
 import com.jme3.material.Material;
+import com.jme3.math.Quaternion;
 import com.jme3.math.Vector3f;
 import com.jme3.renderer.Camera;
 import com.jme3.scene.Geometry;
@@ -13,6 +14,7 @@ import java.util.EnumMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.IntToDoubleFunction;
 import kepplr.config.KEPPLRConfiguration;
 import kepplr.ephemeris.KEPPLREphemeris;
 import kepplr.render.frustum.FrustumLayer;
@@ -24,7 +26,7 @@ import picante.mechanics.EphemerisID;
 import picante.surfaces.Ellipsoid;
 
 /**
- * Renders a list of {@link VectorDefinition} objects as line segments in the JME scene graph.
+ * Renders a list of {@link VectorDefinition} objects as arrows (line + cone arrowhead) in the JME scene graph.
  *
  * <p>For each definition, this renderer:
  *
@@ -33,12 +35,14 @@ import picante.surfaces.Ellipsoid;
  *   <li>Calls {@link VectorType#computeDirection} — no branching over type.
  *   <li>Projects the scale to screen space and skips vectors shorter than
  *       {@link KepplrConstants#VECTOR_MIN_VISIBLE_LENGTH_PX}.
- *   <li>Assigns the line to the correct frustum layer via {@link FrustumLayer#assign}.
- *   <li>Creates a two-vertex {@link Mesh#Mode#Lines} geometry and attaches it.
+ *   <li>Assigns the geometry to the correct frustum layer via {@link FrustumLayer#assign}.
+ *   <li>Creates a line segment with an arrowhead cone at the tip.
  * </ol>
  *
- * <p>Previously attached geometries are detached before each rebuild. One {@link Geometry} per active
- * {@link VectorDefinition} is created.
+ * <p>Arrow length for types where {@link VectorType#usesOriginBodyRadius()} returns {@code true} (e.g. body-fixed axes)
+ * is based on the <em>origin</em> body's radius. For all other types it is based on the focused body's radius.
+ *
+ * <p>Previously attached geometries are detached before each rebuild.
  *
  * <p>All methods must be called on the JME render thread (CLAUDE.md Rule 4). No switch/case or if/else chain over
  * {@link VectorType} exists anywhere in this class.
@@ -46,6 +50,18 @@ import picante.surfaces.Ellipsoid;
 class VectorRenderer {
 
     private static final Logger logger = LogManager.getLogger(VectorRenderer.class);
+
+    /** Fraction of the arrow shaft length used for the arrowhead cone height. */
+    private static final float ARROWHEAD_LENGTH_FRACTION = 0.12f;
+
+    /** Ratio of arrowhead base radius to arrowhead height. */
+    private static final float ARROWHEAD_RADIUS_RATIO = 0.35f;
+
+    /** Number of radial segments for the arrowhead cone mesh. */
+    private static final int ARROWHEAD_SEGMENTS = 8;
+
+    /** Line width in pixels for vector shafts. */
+    private static final float LINE_WIDTH = 2f;
 
     private final AssetManager assetManager;
     private final Map<FrustumLayer, Node> layerNodes;
@@ -75,21 +91,30 @@ class VectorRenderer {
      * Rebuild all vector geometries for the current simulation time.
      *
      * <p>Detaches all previously attached geometries. Returns immediately (no vectors rendered) if {@code focusedBodyId
-     * == -1}, if the focused body has no shape data, or if {@code definitions} is empty. Arrow length is computed each
-     * call as focused-body mean radius × {@link KepplrConstants#VECTOR_ARROW_FOCUS_BODY_RADIUS_MULTIPLE} ×
-     * {@link VectorDefinition#getScaleFactor()}.
+     * == -1} or if {@code definitions} is empty.
+     *
+     * <p>For definitions whose {@link VectorType#usesOriginBodyRadius()} returns {@code true}, the arrow length is
+     * based on the origin body's effective radius (from the scene, with ephemeris fallback). For all others it is based
+     * on the focused body's radius.
      *
      * <p>Definitions whose direction is unavailable or whose projected length falls below
      * {@link KepplrConstants#VECTOR_MIN_VISIBLE_LENGTH_PX} are silently skipped.
      *
      * @param definitions active vector definitions to render
      * @param et current simulation ET (TDB seconds past J2000)
-     * @param cameraHelioJ2000 camera heliocentric J2000 position in km (length ≥ 3)
+     * @param cameraHelioJ2000 camera heliocentric J2000 position in km (length >= 3)
      * @param cam active JME camera (used for screen-space length projection)
-     * @param focusedBodyId NAIF ID of the currently focused body, or −1 if none
+     * @param focusedBodyId NAIF ID of the currently focused body, or -1 if none
+     * @param sceneRadiusLookup function returning the effective rendered radius (km) for a NAIF ID, or 0.0 if unknown;
+     *     used for origin-body radius when {@link VectorType#usesOriginBodyRadius()} is true
      */
     void update(
-            List<VectorDefinition> definitions, double et, double[] cameraHelioJ2000, Camera cam, int focusedBodyId) {
+            List<VectorDefinition> definitions,
+            double et,
+            double[] cameraHelioJ2000,
+            Camera cam,
+            int focusedBodyId,
+            IntToDoubleFunction sceneRadiusLookup) {
         detachAll();
         if (focusedBodyId == -1) {
             return;
@@ -99,31 +124,17 @@ class VectorRenderer {
         }
 
         // Resolve focused body mean radius at point-of-use (Architecture Rule 3).
-        KEPPLREphemeris eph = KEPPLRConfiguration.getInstance().getEphemeris();
-        EphemerisID focusedBodyEphId;
-        try {
-            focusedBodyEphId = eph.getSpiceBundle().getObject(focusedBodyId);
-        } catch (Exception e) {
-            logger.warn("VectorRenderer: no EphemerisID for focused body NAIF {}: {}", focusedBodyId, e.getMessage());
-            return;
-        }
-        if (focusedBodyEphId == null) {
-            logger.warn("VectorRenderer: no EphemerisID for focused body NAIF {}", focusedBodyId);
-            return;
-        }
-        Ellipsoid shape = eph.getShape(focusedBodyEphId);
-        double meanRadiusKm;
-        if (shape == null) {
-            // Spacecraft and other shape-less bodies (no PCK entry) use the default radius so
-            // vector arrows are still rendered at a visible scale (§7.6, KepplrConstants).
-            meanRadiusKm = KepplrConstants.BODY_DEFAULT_RADIUS_KM;
-        } else {
-            meanRadiusKm = (shape.getA() + shape.getB() + shape.getC()) / 3.0;
-        }
+        double focusedMeanRadiusKm = resolveMeanRadiusKm(focusedBodyId, sceneRadiusLookup);
 
         for (VectorDefinition def : definitions) {
             try {
-                double arrowLengthKm = computeArrowLengthKm(meanRadiusKm, def.getScaleFactor());
+                double baseRadiusKm;
+                if (def.getVectorType().usesOriginBodyRadius()) {
+                    baseRadiusKm = resolveMeanRadiusKm(def.getOriginNaifId(), sceneRadiusLookup);
+                } else {
+                    baseRadiusKm = focusedMeanRadiusKm;
+                }
+                double arrowLengthKm = computeArrowLengthKm(baseRadiusKm, def.getScaleFactor());
                 renderOne(def, arrowLengthKm, et, cameraHelioJ2000, cam);
             } catch (Exception e) {
                 logger.warn("Vector render failed for '{}': {}", def.getLabel(), e.getMessage());
@@ -132,11 +143,11 @@ class VectorRenderer {
     }
 
     /**
-     * Computes arrow length in km from the focused body mean radius and the definition's scale factor.
+     * Computes arrow length in km from a body mean radius and the definition's scale factor.
      *
      * <p>Package-private for unit testing.
      *
-     * @param meanRadiusKm focused body mean radius in km
+     * @param meanRadiusKm body mean radius in km (focused or origin body depending on vector type)
      * @param scaleFactor dimensionless multiplier from {@link VectorDefinition#getScaleFactor()}
      * @return arrow length in km
      */
@@ -150,6 +161,37 @@ class VectorRenderer {
     }
 
     // ── private helpers ───────────────────────────────────────────────────────────────────────
+
+    /**
+     * Resolve the effective radius for the given NAIF body ID. Prefers the scene-derived radius (which accounts for GLB
+     * bounding radius and spacecraft scale factors), falling back to ephemeris shape data, then to
+     * {@link KepplrConstants#BODY_DEFAULT_RADIUS_KM}.
+     */
+    private static double resolveMeanRadiusKm(int naifId, IntToDoubleFunction sceneRadiusLookup) {
+        // Try scene-derived radius first (accounts for GLB bounding radius / spacecraft scale).
+        if (sceneRadiusLookup != null) {
+            double sceneRadius = sceneRadiusLookup.applyAsDouble(naifId);
+            if (sceneRadius > 0.0) {
+                return sceneRadius;
+            }
+        }
+        // Fall back to ephemeris shape data.
+        KEPPLREphemeris eph = KEPPLRConfiguration.getInstance().getEphemeris();
+        EphemerisID ephId;
+        try {
+            ephId = eph.getSpiceBundle().getObject(naifId);
+        } catch (Exception e) {
+            return KepplrConstants.BODY_DEFAULT_RADIUS_KM;
+        }
+        if (ephId == null) {
+            return KepplrConstants.BODY_DEFAULT_RADIUS_KM;
+        }
+        Ellipsoid shape = eph.getShape(ephId);
+        if (shape == null) {
+            return KepplrConstants.BODY_DEFAULT_RADIUS_KM;
+        }
+        return (shape.getA() + shape.getB() + shape.getC()) / 3.0;
+    }
 
     private void renderOne(
             VectorDefinition def, double arrowLengthKm, double et, double[] cameraHelioJ2000, Camera cam) {
@@ -190,24 +232,102 @@ class VectorRenderer {
         // 5. Frustum layer assignment (same logic as body rendering, §8.3).
         FrustumLayer layer = FrustumLayer.assign(distKm, 0.0);
 
-        // 6. Build a two-vertex Lines mesh.
-        Vector3f start = new Vector3f((float) ox, (float) oy, (float) oz);
-        Vector3f end = new Vector3f((float) ex, (float) ey, (float) ez);
-
-        Mesh mesh = new Mesh();
-        mesh.setMode(Mesh.Mode.Lines);
-        mesh.setBuffer(VertexBuffer.Type.Position, 3, BufferUtils.createFloatBuffer(start, end));
-        mesh.setBuffer(VertexBuffer.Type.Index, 2, BufferUtils.createIntBuffer(new int[] {0, 1}));
-        mesh.updateBound();
-
         Material mat = new Material(assetManager, "Common/MatDefs/Misc/Unshaded.j3md");
         mat.setColor("Color", def.getColor());
 
-        Geometry geom = new Geometry("vector-" + def.getLabel(), mesh);
-        geom.setMaterial(mat);
+        // 6. Build the line shaft (origin → shaft end, leaving room for arrowhead).
+        Vector3f startF = new Vector3f((float) ox, (float) oy, (float) oz);
+        Vector3f endF = new Vector3f((float) ex, (float) ey, (float) ez);
+        Vector3f dirF = endF.subtract(startF);
+        float shaftLen = dirF.length();
+        if (shaftLen < 1e-12f) {
+            return;
+        }
+        Vector3f dirUnit = dirF.divide(shaftLen);
 
-        layerNodes.get(layer).attachChild(geom);
-        attachedGeoms.put(geom, layer);
+        float headLen = shaftLen * ARROWHEAD_LENGTH_FRACTION;
+        Vector3f shaftEnd = endF.subtract(dirUnit.mult(headLen));
+
+        Mesh lineMesh = new Mesh();
+        lineMesh.setMode(Mesh.Mode.Lines);
+        lineMesh.setLineWidth(LINE_WIDTH);
+        lineMesh.setBuffer(VertexBuffer.Type.Position, 3, BufferUtils.createFloatBuffer(startF, shaftEnd));
+        lineMesh.setBuffer(VertexBuffer.Type.Index, 2, BufferUtils.createIntBuffer(new int[] {0, 1}));
+        lineMesh.updateBound();
+
+        Geometry lineGeom = new Geometry("vector-" + def.getLabel(), lineMesh);
+        lineGeom.setMaterial(mat);
+        layerNodes.get(layer).attachChild(lineGeom);
+        attachedGeoms.put(lineGeom, layer);
+
+        // 7. Build the arrowhead cone at the tip.
+        float headRadius = headLen * ARROWHEAD_RADIUS_RATIO;
+        Mesh coneMesh = buildConeMesh(headLen, headRadius);
+        Geometry coneGeom = new Geometry("arrow-" + def.getLabel(), coneMesh);
+        coneGeom.setMaterial(mat);
+
+        // Orient cone: default cone axis is +Y; rotate to align with dirUnit.
+        Quaternion rot = new Quaternion();
+        rot.lookAt(dirUnit, Vector3f.UNIT_Y);
+        // lookAt aligns -Z with dirUnit; we need +Y aligned, so apply a 90° pitch correction.
+        Quaternion pitch = new Quaternion().fromAngleAxis((float) (Math.PI / 2.0), Vector3f.UNIT_X);
+        coneGeom.setLocalRotation(rot.mult(pitch));
+        coneGeom.setLocalTranslation(shaftEnd);
+
+        layerNodes.get(layer).attachChild(coneGeom);
+        attachedGeoms.put(coneGeom, layer);
+    }
+
+    /**
+     * Build a cone mesh with the apex at (0, height, 0) and base centred at the origin in the XZ plane.
+     *
+     * <p>The cone is oriented along +Y so that the apex points in the positive Y direction. After construction the
+     * caller rotates it to align with the vector direction.
+     */
+    private static Mesh buildConeMesh(float height, float radius) {
+        int segments = ARROWHEAD_SEGMENTS;
+        // vertices: segments for base ring + 1 apex + 1 base centre
+        int vertCount = segments + 2;
+        float[] positions = new float[vertCount * 3];
+
+        // Base ring vertices (y=0, in XZ plane)
+        for (int i = 0; i < segments; i++) {
+            double angle = 2.0 * Math.PI * i / segments;
+            positions[i * 3] = radius * (float) Math.cos(angle);
+            positions[i * 3 + 1] = 0.0f;
+            positions[i * 3 + 2] = radius * (float) Math.sin(angle);
+        }
+        // Apex vertex
+        int apexIdx = segments;
+        positions[apexIdx * 3] = 0.0f;
+        positions[apexIdx * 3 + 1] = height;
+        positions[apexIdx * 3 + 2] = 0.0f;
+        // Base centre vertex
+        int centreIdx = segments + 1;
+        positions[centreIdx * 3] = 0.0f;
+        positions[centreIdx * 3 + 1] = 0.0f;
+        positions[centreIdx * 3 + 2] = 0.0f;
+
+        // Triangles: side faces (apex, ring[i], ring[i+1]) + base faces (centre, ring[i+1], ring[i])
+        int triCount = segments * 2;
+        int[] indices = new int[triCount * 3];
+        for (int i = 0; i < segments; i++) {
+            int next = (i + 1) % segments;
+            // Side face
+            indices[i * 6] = apexIdx;
+            indices[i * 6 + 1] = i;
+            indices[i * 6 + 2] = next;
+            // Base face
+            indices[i * 6 + 3] = centreIdx;
+            indices[i * 6 + 4] = next;
+            indices[i * 6 + 5] = i;
+        }
+
+        Mesh mesh = new Mesh();
+        mesh.setBuffer(VertexBuffer.Type.Position, 3, BufferUtils.createFloatBuffer(positions));
+        mesh.setBuffer(VertexBuffer.Type.Index, 3, BufferUtils.createIntBuffer(indices));
+        mesh.updateBound();
+        return mesh;
     }
 
     private void detachAll() {

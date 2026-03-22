@@ -184,6 +184,11 @@ public final class VectorTypes {
         }
 
         @Override
+        public boolean usesOriginBodyRadius() {
+            return true;
+        }
+
+        @Override
         public boolean equals(Object o) {
             return o instanceof BodyAxisVectorType that && this.axisIndex == that.axisIndex;
         }
