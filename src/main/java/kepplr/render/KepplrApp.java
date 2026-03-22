@@ -151,10 +151,18 @@ public class KepplrApp extends SimpleApplication {
     private volatile KepplrStatusWindow statusWindow;
     private boolean fxWindowPositioned;
 
+    // ── Post-render screenshot capture (Step 25) ──────────────────────────────────────────────
+    // Pending capture is set by the screenshot callback (from the capture/script thread) and
+    // processed AFTER the render pass completes so the framebuffer reflects the current frame's
+    // scene graph — not the previous frame's.
+    private record PendingCapture(String outputPath, java.util.concurrent.CountDownLatch latch) {}
+
+    private volatile PendingCapture pendingCapture;
+
     @Override
     public void simpleInitApp() {
         setLostFocusBehavior(LostFocusBehavior.Disabled);
-        setDisplayFps(true);
+        setDisplayFps(false);
         setDisplayStatView(false);
         flyCam.setEnabled(false);
 
@@ -192,6 +200,10 @@ public class KepplrApp extends SimpleApplication {
             latch.countDown();
             return null;
         }));
+        // Wire the screenshot callback: store a pending capture that will be processed after the
+        // render pass completes (see update() override). This ensures the framebuffer reflects the
+        // current frame's scene graph, including focus-body tracking from simpleUpdate().
+        commands.setScreenshotCallback((outputPath, latch) -> pendingCapture = new PendingCapture(outputPath, latch));
         CommandRecorder recorder = new CommandRecorder(commands);
         ScriptRunner scriptRunner = new ScriptRunner(commands, simulationState);
 
@@ -465,6 +477,19 @@ public class KepplrApp extends SimpleApplication {
     }
 
     @Override
+    public void update() {
+        super.update(); // runs enqueued tasks → simpleUpdate() → render pass
+        // Process pending screenshot capture AFTER the render pass so the framebuffer
+        // contains the fully rendered scene at the current ET with focus tracking applied.
+        PendingCapture capture = pendingCapture;
+        if (capture != null) {
+            pendingCapture = null;
+            captureFramebufferToPng(capture.outputPath());
+            capture.latch().countDown();
+        }
+    }
+
+    @Override
     public void destroy() {
         super.destroy();
         if (statusWindow != null) {
@@ -683,6 +708,60 @@ public class KepplrApp extends SimpleApplication {
         sunHaloRenderer.init();
         labelManager = new LabelManager(guiNode, assetManager);
         logger.info("All render managers rebuilt after configuration reload");
+    }
+
+    // ── Screenshot capture (Step 25) ──────────────────────────────────────────────────────────
+
+    /**
+     * Capture the current framebuffer to a PNG file on the JME render thread.
+     *
+     * <p>Reads the framebuffer of the default viewport (which composites all three frustum layers after rendering),
+     * converts the pixel data to a {@code BufferedImage}, and writes it to the specified path.
+     *
+     * @param outputPath file system path for the output PNG file
+     */
+    private void captureFramebufferToPng(String outputPath) {
+        int width = cam.getWidth();
+        int height = cam.getHeight();
+
+        java.nio.ByteBuffer buf = org.lwjgl.BufferUtils.createByteBuffer(width * height * 4);
+        renderManager.getRenderer().readFrameBuffer(null, buf);
+
+        java.awt.image.BufferedImage img =
+                new java.awt.image.BufferedImage(width, height, java.awt.image.BufferedImage.TYPE_INT_ARGB);
+        for (int y = 0; y < height; y++) {
+            for (int x = 0; x < width; x++) {
+                // OpenGL reads bottom-to-top; BufferedImage is top-to-bottom
+                int srcIdx = ((height - 1 - y) * width + x) * 4;
+                int r = buf.get(srcIdx) & 0xFF;
+                int g = buf.get(srcIdx + 1) & 0xFF;
+                int b = buf.get(srcIdx + 2) & 0xFF;
+                int a = buf.get(srcIdx + 3) & 0xFF;
+                img.setRGB(x, y, (a << 24) | (r << 16) | (g << 8) | b);
+            }
+        }
+
+        try {
+            java.nio.file.Path path = java.nio.file.Path.of(outputPath);
+            if (path.getParent() != null) {
+                java.nio.file.Files.createDirectories(path.getParent());
+            }
+            javax.imageio.ImageIO.write(img, "PNG", path.toFile());
+            logger.info("Screenshot saved: {}", outputPath);
+        } catch (java.io.IOException e) {
+            logger.error("Failed to save screenshot '{}': {}", outputPath, e.getMessage());
+        }
+    }
+
+    /**
+     * Get the current viewport dimensions as {@code [width, height]}.
+     *
+     * <p>Used by {@link kepplr.core.CaptureService} to record dimensions in {@code capture_info.json}.
+     *
+     * @return {@code int[2]} containing width and height in pixels
+     */
+    int[] getViewportDimensions() {
+        return new int[] {cam.getWidth(), cam.getHeight()};
     }
 
     // ── private helpers ───────────────────────────────────────────────────────────────────────

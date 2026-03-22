@@ -524,6 +524,14 @@ public final class CommandRecorder implements SimulationCommands {
         delegate.setFrustumVisible(instrumentName, visible);
     }
 
+    // ── Screenshot capture (Step 25) ──
+
+    @Override
+    public void saveScreenshot(String outputPath) {
+        recordCommand("kepplr.saveScreenshot(\"" + outputPath + "\")");
+        delegate.saveScreenshot(outputPath);
+    }
+
     // ── Configuration reload (Step 27) ──
 
     @Override

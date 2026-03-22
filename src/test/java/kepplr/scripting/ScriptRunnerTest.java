@@ -244,5 +244,8 @@ class ScriptRunnerTest {
 
         @Override
         public void loadConfiguration(String path) {}
+
+        @Override
+        public void saveScreenshot(String outputPath) {}
     }
 }

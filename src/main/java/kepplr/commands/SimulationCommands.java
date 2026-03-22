@@ -403,6 +403,23 @@ public interface SimulationCommands {
      */
     void cancelTransition();
 
+    // ── Screenshot capture (Step 25) ──
+
+    /**
+     * Capture the current JME framebuffer to a PNG file at the specified path (Step 25).
+     *
+     * <p>The capture waits for the current frame to finish rendering before writing. When called from a background
+     * thread (e.g., the Groovy script thread), this method <b>blocks</b> until the screenshot is written. When called
+     * from the FX thread (e.g., a menu action), it is fire-and-forget.
+     *
+     * <p>Recorded by {@link kepplr.scripting.CommandRecorder} as:
+     *
+     * <pre>{@code kepplr.saveScreenshot("/path/to/output.png") }</pre>
+     *
+     * @param outputPath file system path for the output PNG file
+     */
+    void saveScreenshot(String outputPath);
+
     // ── Configuration reload (Step 27) ──
 
     /**

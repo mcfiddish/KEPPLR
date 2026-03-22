@@ -54,7 +54,7 @@ public class SynodicFrameApplier {
      * @param cameraHelioJ2000 current camera heliocentric J2000 position in km (length 3; not modified)
      * @param camOrientation current camera orientation quaternion
      * @param focusId NAIF ID of the focused body, or -1 if none
-     * @param targetId NAIF ID of the targeted body, or -1 if none
+     * @param targetId NAIF ID of the selected body, or -1 if none
      * @param et current simulation ET
      * @return updated pose and fallback flag
      */

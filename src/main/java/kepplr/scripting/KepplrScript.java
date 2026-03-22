@@ -4,7 +4,9 @@ import kepplr.camera.CameraFrame;
 import kepplr.commands.SimulationCommands;
 import kepplr.config.KEPPLRConfiguration;
 import kepplr.ephemeris.BodyLookupService;
+import kepplr.ephemeris.KEPPLREphemeris;
 import kepplr.render.RenderQuality;
+import picante.mechanics.EphemerisID;
 import kepplr.render.vector.VectorType;
 import kepplr.state.SimulationState;
 import kepplr.util.KepplrConstants;
@@ -525,6 +527,20 @@ public final class KepplrScript {
     }
 
     /**
+     * Toggle label visibility for ALL bodies and spacecraft.
+     *
+     * <p>When enabling, barycenters (NAIF 1–9) are skipped except Pluto barycenter (9), matching the Overlays menu
+     * behavior.
+     *
+     * <p>Example: {@code kepplr.setAllLabelsVisible(true)}
+     *
+     * @param visible {@code true} to show all labels, {@code false} to hide all
+     */
+    public void setAllLabelsVisible(boolean visible) {
+        forEachBody((code, show) -> commands.setLabelVisible(code, show), visible);
+    }
+
+    /**
      * Toggle the HUD time display.
      *
      * <p>Example: {@code kepplr.setHudTimeVisible(true)}
@@ -569,6 +585,20 @@ public final class KepplrScript {
      */
     public void setTrailVisible(String bodyName, boolean visible) {
         commands.setTrailVisible(resolve(bodyName), visible);
+    }
+
+    /**
+     * Toggle trail visibility for ALL bodies and spacecraft.
+     *
+     * <p>When enabling, barycenters (NAIF 1–9) are skipped except Pluto barycenter (9), matching the Overlays menu
+     * behavior.
+     *
+     * <p>Example: {@code kepplr.setAllTrailsVisible(true)}
+     *
+     * @param visible {@code true} to show all trails, {@code false} to hide all
+     */
+    public void setAllTrailsVisible(boolean visible) {
+        forEachBody((code, show) -> commands.setTrailVisible(code, show), visible);
     }
 
     /**
@@ -648,6 +678,59 @@ public final class KepplrScript {
      */
     public void setFrustumVisible(String instrumentName, boolean visible) {
         commands.setFrustumVisible(resolve(instrumentName), visible);
+    }
+
+    // ── Screenshot and capture (Step 25) ────────────────────────────────────────
+
+    /**
+     * Capture the current JME framebuffer to a PNG file.
+     *
+     * <p>Blocks the script thread until the screenshot is written.
+     *
+     * <p>Example: {@code kepplr.saveScreenshot("/tmp/screenshot.png")}
+     *
+     * @param outputPath file system path for the output PNG file
+     */
+    public void saveScreenshot(String outputPath) {
+        commands.saveScreenshot(outputPath);
+    }
+
+    /**
+     * Capture a sequence of frames as PNG files (Step 25).
+     *
+     * <p>Sets ET to {@code startET}, pauses the simulation, then loops {@code frameCount} times: captures a screenshot,
+     * advances ET by {@code etStep}. After the sequence completes, the simulation remains paused at the final ET.
+     *
+     * <p>This is a compound operation — it is NOT on {@code SimulationCommands} and is NOT loggable by
+     * {@code CommandRecorder}.
+     *
+     * <p>Example: {@code kepplr.captureSequence("/tmp/frames", 4.895e8, 60, 2.0)}
+     *
+     * @param outputDir directory for output PNG files (created if it doesn't exist)
+     * @param startET starting ET (TDB seconds past J2000)
+     * @param frameCount number of frames to capture; must be positive
+     * @param etStep ET advance per frame in seconds
+     */
+    public void captureSequence(String outputDir, double startET, int frameCount, double etStep) {
+        kepplr.core.CaptureService.captureSequence(outputDir, startET, frameCount, etStep, commands, state);
+    }
+
+    /**
+     * Capture a sequence of frames as PNG files, starting from a UTC string (Step 25).
+     *
+     * <p>Converts {@code startUTC} to ET via ephemeris, then delegates to {@link #captureSequence(String, double, int,
+     * double)}.
+     *
+     * <p>Example: {@code kepplr.captureSequence("/tmp/frames", "2015 Jul 14 07:59:00", 60, 2.0)}
+     *
+     * @param outputDir directory for output PNG files (created if it doesn't exist)
+     * @param startUTC UTC time string in Picante format
+     * @param frameCount number of frames to capture; must be positive
+     * @param etStep ET advance per frame in seconds
+     */
+    public void captureSequence(String outputDir, String startUTC, int frameCount, double etStep) {
+        double startET = KEPPLRConfiguration.getInstance().getTimeConversion().utcStringToTDB(startUTC);
+        captureSequence(outputDir, startET, frameCount, etStep);
     }
 
     // ── Configuration reload (Step 27) ──────────────────────────────────────────
@@ -762,6 +845,27 @@ public final class KepplrScript {
     }
 
     // ── Private ─────────────────────────────────────────────────────────────────
+
+    /**
+     * Iterate all known bodies and spacecraft, applying a per-body action. When {@code visible} is true, barycenters
+     * (NAIF 1–9 except Pluto barycenter 9) are skipped, matching the Overlays menu convention.
+     */
+    private void forEachBody(java.util.function.BiConsumer<Integer, Boolean> action, boolean visible) {
+        try {
+            KEPPLREphemeris eph = KEPPLRConfiguration.getInstance().getEphemeris();
+            for (EphemerisID id : eph.getKnownBodies()) {
+                eph.getSpiceBundle().getObjectCode(id).ifPresent(code -> {
+                    if (visible && code >= 1 && code <= 9 && code != KepplrConstants.PLUTO_BARYCENTER_NAIF_ID) return;
+                    action.accept(code, visible);
+                });
+            }
+            for (var sc : eph.getSpacecraft()) {
+                action.accept(sc.code(), visible);
+            }
+        } catch (Exception ex) {
+            logger.warn("Failed to apply visibility to all bodies: {}", ex.getMessage());
+        }
+    }
 
     private void waitUntilSimInternal(double targetEt) throws InterruptedException {
         double currentEt = state.currentEtProperty().get();

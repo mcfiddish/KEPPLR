@@ -31,7 +31,7 @@ public interface KEPPLRConfigBlock {
     @Comment("""
         Format for log messages.  See https://logging.apache.org/log4j/2.x/manual/layouts.html#PatternLayout for
         more details.""")
-    @DefaultValue("%highlight{%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%c{1}:%L] %msg%n%throwable}")
+    @DefaultValue("%highlight{%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level} [%c{1}:%L] %msg%n%throwable")
     String logFormat();
 
     @Comment("""

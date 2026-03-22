@@ -16,7 +16,7 @@ import picante.mechanics.providers.aberrated.AberrationCorrection;
  * <h3>Frame axes (§5.1)</h3>
  *
  * <ul>
- *   <li><b>+X</b> = normalized geometric vector from focus body center → targeted body center
+ *   <li><b>+X</b> = normalized geometric vector from focus body center → selected body center
  *   <li><b>+Z candidate</b> = J2000 +Z by default; Ecliptic J2000 +Z if degenerate (§5.2)
  *   <li><b>+Y</b> = normalize(Z_candidate × X) — perpendicular to both (right-handed)
  *   <li><b>+Z final</b> = normalize(X × Y) — re-derived for exact orthonormality
@@ -58,7 +58,7 @@ public final class SynodicFrame {
      * correction), as the frame definition is a geometric construction.
      *
      * @param focusBodyId NAIF ID of the focus body, or -1 if none
-     * @param targetBodyId NAIF ID of the targeted body (the "other body"), or -1 if none
+     * @param targetBodyId NAIF ID of the selected body (the "other body"), or -1 if none
      * @param et current simulation epoch (TDB seconds past J2000)
      * @return orthonormal {@link Basis} in J2000, or {@code null} if either body is absent or the ephemeris query fails
      *     — caller must fall back to inertial frame

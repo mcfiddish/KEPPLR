@@ -741,6 +741,19 @@ public final class KepplrConstants {
      */
     public static final int INSTRUMENT_FRUSTUM_CIRCLE_APPROX_SIDES = 32;
 
+    // ── Screenshot and capture (Step 25) ──────────────────────────────────────────────────────
+
+    /**
+     * Format string for capture sequence frame filenames.
+     *
+     * <p>The zero-pad width auto-widens if {@code frameCount >= 10000}. The default 4-digit pad handles up to 9999
+     * frames; for larger sequences, compute the required width from the frame count.
+     */
+    public static final String CAPTURE_FRAME_NAME_FORMAT = "frame_%04d.png";
+
+    /** Sidecar JSON filename written alongside captured frames. Purely informational — no tool depends on it. */
+    public static final String CAPTURE_INFO_FILENAME = "capture_info.json";
+
     // ── Unit conversion ──
 
     /** One astronomical unit in kilometres (IAU 2012 exact definition). */
