@@ -892,7 +892,35 @@ would cause a compilation error since `toScript()` has no default implementation
 
 ---
 
-*Last updated: Step 24 (complete)*
+## D-043: Screenshot capture runs post-render, not pre-simpleUpdate
+**Status:** Accepted
+**Roadmap step:** 25
+
+**Context:** The initial implementation used `KepplrApp.enqueue()` to schedule framebuffer capture. In JME's `Application.update()` loop, enqueued tasks run at the start of the frame — before `simpleUpdate()` and before the render pass. This meant the capture read the framebuffer from the *previous* frame's render. During animation sequences, `setET()` advanced the simulation clock and `applyFocusTracking()` moved the camera to follow the focus body, but neither had executed yet when the capture ran. Every captured frame showed the camera at its initial position rather than tracking the focus body.
+
+**Decision:** `KepplrApp` overrides `update()` instead of using `enqueue()`. A `volatile PendingCapture` record (outputPath + CountDownLatch) is set by the screenshot callback from the capture/script thread. `update()` calls `super.update()` first (which runs enqueued tasks → `simpleUpdate()` → render pass), then checks for and processes any pending capture. The framebuffer now contains the fully rendered scene at the current ET with focus-body tracking, body-fixed/synodic camera frame rotation, and all render managers updated.
+
+**Alternatives considered:** Double-enqueue (one fence frame, then one capture frame) — rejected as fragile and adding unnecessary latency. `SceneProcessor.postFrame()` — considered but the `update()` override is simpler and requires no additional JME interface implementation.
+
+**Consequences:** Each `saveScreenshot()` call blocks until the JME thread completes one full update cycle (simpleUpdate + render + capture). The volatile field ensures visibility across threads. The capture thread and JME thread are serialised per frame via the CountDownLatch.
+
+---
+
+## D-044: Log window with ANSI color rendering
+**Status:** Accepted
+**Roadmap step:** 25
+
+**Context:** Log output was only visible on the console. Users running KEPPLR from a launcher or IDE often could not see log messages. A JavaFX log window was needed, but the `%highlight` pattern in log4j2 produces ANSI escape sequences (e.g., `\033[32m` for green) that would appear as garbage in a plain `TextArea`.
+
+**Decision:** `LogAppender` (package-private, `kepplr.ui`) is a custom `AbstractAppender` registered programmatically on all loggers via the `LoggerContext` configuration, following the same pattern as `Log4j2Configurator.addFile()`. It uses a `PatternLayout` with the pattern from `KEPPLRConfiguration.getInstance().logFormat()` and `disableAnsi=false` to force ANSI output. Log lines are buffered in a `ConcurrentLinkedQueue`. `LogWindow` (package-private, `kepplr.ui`) displays log output in a `TextFlow` inside a `ScrollPane` on a dark background (`#1e1e1e`). An ANSI parser (`Pattern`-based) converts SGR codes to styled `Text` nodes with appropriate foreground colors. The queue is drained on each FX frame pulse from the existing `AnimationTimer` in `KepplrStatusWindow`, avoiding `Platform.runLater()` per CLAUDE.md Rule 2. A "Save Log..." button writes ANSI-stripped plain text via `FileChooser`. Accessible from `File → Show Log`.
+
+**Alternatives considered:** `TextArea` with no color — rejected because the user specifically wanted ANSI colors for level distinction. RichTextFX library — rejected to avoid an external dependency. `Platform.runLater()` per log event — rejected per CLAUDE.md Rule 2.
+
+**Consequences:** Max 50,000 `Text` nodes retained; oldest are trimmed. The `LogAppender` reads `KEPPLRConfiguration.getInstance().logFormat()` at install time (point-of-use, Rule 3). The `logFormat()` method is on the user-owned `KEPPLRConfiguration` class.
+
+---
+
+*Last updated: Step 25 (complete)*
 *Backfill note: Entries D-001 through D-009 were reconstructed retrospectively.
 D-010 onwards recorded in real time.*
 

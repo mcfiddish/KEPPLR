@@ -574,29 +574,45 @@ Easing constants in `KepplrConstants`. The scripting API and
 
 ---
 
-### 25. Screenshot Capture and Animation Sequences
+### 25. Screenshot Capture and Animation Sequences ✅
 
-Two capabilities:
+**(1) Single screenshot.** `SimulationCommands.saveScreenshot(String)` with a
+`ScreenshotCallback` functional interface on `DefaultSimulationCommands`.
+The callback uses a `CountDownLatch` pattern (same as `loadConfiguration`)
+to block the calling thread until the JME thread completes the capture.
+`KepplrApp` captures via `renderManager.getRenderer().readFrameBuffer(null, buf)`,
+converting to `BufferedImage` with Y-flip and writing PNG via `ImageIO`.
+Loggable by `CommandRecorder`. Exposed as `KepplrScript.saveScreenshot(String)`
+and `File → Save Screenshot` menu item.
 
-**(1) Single screenshot.** `File → Save Screenshot` menu action and
-`SimulationCommands.saveScreenshot(Path)` (with a String overload on
-`KepplrScript`). Writes the current JME framebuffer to a PNG file.
-`ViewPort.addProcessor()` with a `ScreenshotAppState` or equivalent is the
-JME pattern — the capture must wait for the frame to finish rendering. The
-command is loggable by `CommandRecorder`. The GUI action opens a file-save
-dialog; the scripting API writes to the specified path directly.
+**(2) Capture sequences.** `CaptureService.captureSequence(outputDir, startET,
+frameCount, etStep, commands, state)` in `kepplr.core` — a blocking loop
+that pauses the simulation, advances ET per step, and captures each frame.
+Frame filenames auto-widen padding (4 digits up to 9999 frames, 5 for 10000+,
+etc.). Writes `capture_info.json` sidecar with start ET, step, frame count,
+resolution, and capture timestamp (dimensions read from the first captured PNG).
+NOT on `SimulationCommands` — called directly from `KepplrScript` and the
+GUI capture dialog.
 
-**(2) Animation sequences.** `captureSequence(String outputDir,
-double startET, int frameCount, double etStep)` on `KepplrScript`. Sets ET
-to `startET`, pauses the simulation, then loops `frameCount` times: advance
-ET by `etStep`, wait for one frame to render, capture a screenshot to
-`outputDir/frame_NNNN.png`. The sequence runs on the script thread and must
-block until each frame is rendered before capturing. The user combines the
-resulting PNGs into video externally (e.g., ffmpeg). After the sequence
-completes, the simulation remains paused at the final ET.
+**(3) GUI integration.** `File → Capture Sequence…` opens a dialog (Start UTC,
+ET step, frame count) with a `DirectoryChooser`, runs on a dedicated daemon
+thread. Mutual exclusion with the script runner (each checks the other's
+active state).
 
-The single-screenshot primitive is a prerequisite for the sequence — the
-sequence is implemented as a loop calling the single-frame capture.
+**(4) PngToMovie update.** Supports flat directory layout (frame_*.png directly
+in seqDir) with auto-detection; legacy manifest.json layout preserved.
+Optional `capture_info.json` printed for informational display.
+
+**(5) Post-render capture (D-043).** Screenshot capture runs after the render
+pass (via `KepplrApp.update()` override) to ensure the framebuffer reflects
+the current frame's scene graph with focus-body tracking applied, not the
+previous frame's stale content.
+
+**Also delivered:** Log window (`File → Show Log`) with ANSI color rendering
+from the `%highlight` log4j2 pattern (D-044); Save Log button for plain-text
+export. `setAllLabelsVisible(boolean)` and `setAllTrailsVisible(boolean)`
+on `KepplrScript`. Synodic frame javadoc corrected from "targeted" to
+"selected."
 
 ---
 
