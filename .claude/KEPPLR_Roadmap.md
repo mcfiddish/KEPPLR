@@ -671,6 +671,42 @@ pass with no architectural impact.
   end, eliminating the window where `getInstance()` would throw
   `IllegalStateException` during config reload. (See D-036, D-037.)
 
+- **Script output panel.** Groovy script stdout/stderr captured via
+  `ScriptOutputListener` and `LineForwardingWriter`; output displayed in a
+  `TextArea` below the body tree. `ConcurrentLinkedQueue` + `AnimationTimer`
+  drain pattern avoids `Platform.runLater()` from the script thread. Capped at
+  200 lines.
+
+- **Draggable SplitPane.** Body tree and script output panel wrapped in a
+  vertical `SplitPane` (default 75/25 split) so the user can resize the script
+  output area.
+
+- **Consistent CheckMenuItem toggles.** All menu toggles (Overlays, Instruments,
+  File > Record Session, body tree context menu) use `CheckMenuItem` instead
+  of a mix of `CheckBox` + `CustomMenuItem` and `CheckMenuItem`. Removed
+  `menuCheckBox` helper and `CheckBox` import.
+
+- **Bidirectional overlay / context menu sync.** The "Current Focus" submenu
+  items now bind to `SimulationState` visibility properties for the focused
+  body. Changes from any source (context menu, scripts, etc.) update the
+  overlays menu checkmarks automatically. Listeners rebind on focus change.
+  (See D-038.)
+
+- **Dynamic context menu.** Right-click on a body tree item opens a context menu
+  with Focus, Target, and toggle items (Trail, Label, Axes) reflecting current
+  state. (See D-039.)
+
+- **Vector arrowheads.** Vectors render as arrows: line shaft + 8-segment cone
+  arrowhead (12% of shaft length). Shaft line width increased to 2px.
+
+- **Body-fixed axes scale to origin body.** `VectorType.usesOriginBodyRadius()`
+  (default `false`, `true` for body axes) tells `VectorRenderer` to use the
+  origin body's rendered radius (via `BodySceneManager.getEffectiveBodyRadiusKm`)
+  instead of the focused body's. Spacecraft axes now scale proportionally to the
+  GLB bounding radius including the configured `scale()` factor. (See D-040.)
+
+**Step 27 is complete.**
+
 ---
 
 ## Backlog (unsequenced, post-v0.2)

@@ -820,7 +820,49 @@ would cause a compilation error since `toScript()` has no default implementation
 
 ---
 
-*Last updated: Step 27 (status window layout improvements)*
+## D-038: Overlays menu bidirectionally synced to SimulationState visibility properties
+**Status:** Accepted
+**Roadmap step:** 27
+
+**Context:** The "Current Focus" submenu in the Overlays menu maintained its own checked state. When a user toggled a trail or axes via the body tree context menu (or a script), the overlays menu checkmarks became stale. The two menus were visually inconsistent.
+
+**Decision:** Each `CheckMenuItem` in the "Current Focus" submenu is bound to the corresponding `SimulationState` visibility property (`trailVisibleProperty`, `vectorVisibleProperty`) for the currently focused body. `ChangeListener` instances are added when focus is set and removed (unbound) when focus changes. Initial state is synced immediately on bind. A `Runnable[] unbindPrev` array-of-one pattern stores the cleanup action.
+
+**Alternatives considered:** Rebuilding the menu items on each show event — rejected because it would lose the menu's position/state mid-interaction. Polling via AnimationTimer — rejected as wasteful when property listeners are available.
+
+**Consequences:** Any source of visibility changes (context menu, scripts, keyboard shortcuts) is automatically reflected in the overlays menu. No additional wiring needed when new visibility sources are added.
+
+---
+
+## D-039: Body tree context menu uses CheckMenuItem with dynamic state
+**Status:** Accepted
+**Roadmap step:** 27
+
+**Context:** The context menu initially used "Show/Hide" text toggling (e.g., "Show Trail" / "Hide Trail"). The status window menus used `CheckBox` inside `CustomMenuItem`. This was visually inconsistent.
+
+**Decision:** All toggle items across the application use `CheckMenuItem`. The context menu's `populateBodyTreeContextMenu()` reads current visibility state from `SimulationState` at show time and sets `CheckMenuItem.setSelected()` accordingly. The overlays menu, instruments menu, and File > Record Session also use `CheckMenuItem`. The `menuCheckBox` helper and `CheckBox` import were removed.
+
+**Alternatives considered:** Using `CheckBox` + `CustomMenuItem` everywhere (allows tooltips) — rejected because `CheckMenuItem` is the standard JavaFX pattern and tooltips on toggle items are low-value.
+
+**Consequences:** Consistent checkmark-style toggles everywhere. `CustomMenuItem` is still used for non-toggle items that need tooltips (e.g., `tipItem` helper for action items, radio buttons for camera frame).
+
+---
+
+## D-040: Body-fixed axes scale to origin body radius, not focused body radius
+**Status:** Accepted
+**Roadmap step:** 27
+
+**Context:** All vector overlays scaled their arrow length relative to the focused body's mean radius. When viewing a spacecraft's body-fixed axes while focused on a planet, the axes were enormous (planet-radius scale). Conversely, if the spacecraft was focused but had no PCK shape data, axes used the 1.0 km fallback — ignoring the GLB bounding radius.
+
+**Decision:** Added `VectorType.usesOriginBodyRadius()` default method (returns `false`). `BodyAxisVectorType` overrides it to return `true`. `VectorRenderer.update()` now accepts an `IntToDoubleFunction sceneRadiusLookup` parameter (supplied as `bodySceneManager::getEffectiveBodyRadiusKm`). When `usesOriginBodyRadius()` is true, the arrow length is computed from the origin body's effective rendered radius (scene-derived, including GLB bounding radius and spacecraft `scale()` factor), with ephemeris shape fallback, then `BODY_DEFAULT_RADIUS_KM` fallback. Other vector types (velocity, towardBody) continue to use the focused body's radius.
+
+**Alternatives considered:** Adding a per-VectorDefinition radius override — rejected as over-engineering; the VectorType already knows whether it's body-intrinsic. Querying ephemeris only — rejected because spacecraft have no PCK shape entry; the scene-derived radius from `BodySceneManager` is the only source that accounts for GLB bounding radius and configured scale.
+
+**Consequences:** `VectorManager.update()` and `VectorRenderer.update()` signatures gain an `IntToDoubleFunction` parameter. `KepplrApp` passes `bodySceneManager::getEffectiveBodyRadiusKm`. Six new tests cover `usesOriginBodyRadius()` for all built-in types plus a custom default.
+
+---
+
+*Last updated: Step 27 (complete)*
 *Backfill note: Entries D-001 through D-009 were reconstructed retrospectively.
 D-010 onwards recorded in real time.*
 
