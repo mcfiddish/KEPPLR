@@ -9,6 +9,7 @@ import com.jme3.scene.Node;
 import com.jme3.scene.Spatial;
 import kepplr.config.KEPPLRConfiguration;
 import kepplr.ephemeris.BodyLookupService;
+import kepplr.util.KepplrConstants;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import picante.math.vectorspace.VectorIJK;
@@ -36,13 +37,20 @@ public final class KepplrHud {
 
     private static final float TEXT_SIZE_PX = 16f;
     private static final float MARGIN_PX = 10f;
+    private static final float MESSAGE_BOTTOM_MARGIN_PX = 60f;
 
     private final Camera cam;
     private final BitmapText utcLabel;
     private final BitmapText infoLabel;
+    private final BitmapText messageLabel;
 
     private boolean timeVisible = true;
     private boolean infoVisible = true;
+
+    /** Wall-clock time (System.nanoTime) when the current message was shown, or -1 if no active message. */
+    private long messageStartNanos = -1;
+    /** Total display duration of the current message in seconds (before fade begins). */
+    private double messageDurationSec;
 
     /**
      * Create the HUD and attach its nodes to {@code guiNode}.
@@ -67,8 +75,15 @@ public final class KepplrHud {
         infoLabel.setText("");
         infoLabel.setCullHint(Spatial.CullHint.Always);
 
+        messageLabel = new BitmapText(font, false);
+        messageLabel.setSize(TEXT_SIZE_PX);
+        messageLabel.setColor(ColorRGBA.White);
+        messageLabel.setText("");
+        messageLabel.setCullHint(Spatial.CullHint.Always);
+
         guiNode.attachChild(utcLabel);
         guiNode.attachChild(infoLabel);
+        guiNode.attachChild(messageLabel);
 
         repositionLabels();
     }
@@ -83,6 +98,20 @@ public final class KepplrHud {
     public void setInfoVisible(boolean visible) {
         this.infoVisible = visible;
         infoLabel.setCullHint(visible ? Spatial.CullHint.Inherit : Spatial.CullHint.Always);
+    }
+
+    /**
+     * Display a message on the HUD. Replaces any existing message.
+     *
+     * @param text message text; may contain {@code \n} for line breaks
+     * @param durationSeconds display duration before fade-out begins
+     */
+    public void showMessage(String text, double durationSeconds) {
+        messageLabel.setText(text);
+        messageDurationSec = durationSeconds;
+        messageStartNanos = System.nanoTime();
+        repositionMessageLabel();
+        messageLabel.setCullHint(Spatial.CullHint.Inherit);
     }
 
     /**
@@ -111,9 +140,42 @@ public final class KepplrHud {
         } else if (infoVisible) {
             infoLabel.setCullHint(Spatial.CullHint.Always);
         }
+
+        updateMessage();
     }
 
     // ── Private helpers ───────────────────────────────────────────────────────
+
+    private void updateMessage() {
+        if (messageStartNanos < 0) return;
+
+        double elapsedSec = (System.nanoTime() - messageStartNanos) / 1_000_000_000.0;
+        double fadeDuration = KepplrConstants.SCRIPT_MESSAGE_FADE_DURATION_SEC;
+        double totalDuration = messageDurationSec + fadeDuration;
+
+        if (elapsedSec >= totalDuration) {
+            // Message fully expired
+            messageLabel.setCullHint(Spatial.CullHint.Always);
+            messageStartNanos = -1;
+            return;
+        }
+
+        if (elapsedSec > messageDurationSec) {
+            // Fading out
+            float alpha = 1.0f - (float) ((elapsedSec - messageDurationSec) / fadeDuration);
+            messageLabel.setColor(new ColorRGBA(1f, 1f, 1f, alpha));
+        }
+
+        repositionMessageLabel();
+    }
+
+    private void repositionMessageLabel() {
+        float textWidth = messageLabel.getLineWidth();
+        float textHeight = messageLabel.getHeight();
+        float x = (cam.getWidth() - textWidth) / 2f;
+        float y = MESSAGE_BOTTOM_MARGIN_PX + textHeight;
+        messageLabel.setLocalTranslation(x, y, 0f);
+    }
 
     private void repositionLabels() {
         float top = cam.getHeight() - MARGIN_PX;

@@ -398,4 +398,11 @@ public final class DefaultSimulationCommands implements SimulationCommands {
             logger.warn("loadConfiguration: interrupted while waiting for scene rebuild");
         }
     }
+
+    // ── HUD message (Step 28) ────────────────────────────────────────────────
+
+    @Override
+    public void displayMessage(String text, double durationSeconds) {
+        state.setHudMessage(text, durationSeconds);
+    }
 }

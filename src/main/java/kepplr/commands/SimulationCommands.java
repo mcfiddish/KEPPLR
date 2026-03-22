@@ -444,4 +444,18 @@ public interface SimulationCommands {
      * @param path file system path to the {@code .properties} configuration file
      */
     void loadConfiguration(String path);
+
+    /**
+     * Display a message on the JME HUD overlay.
+     *
+     * <p>The message appears in the lower-center of the screen for the specified duration, then fades out. Only one
+     * message is visible at a time — a new message replaces any existing one. The text may contain {@code \n} for line
+     * breaks.
+     *
+     * <pre>{@code kepplr.displayMessage("Hello, world!", 5.0) }</pre>
+     *
+     * @param text message text; may contain {@code \n} for line breaks
+     * @param durationSeconds display duration in seconds before fade-out begins
+     */
+    void displayMessage(String text, double durationSeconds);
 }

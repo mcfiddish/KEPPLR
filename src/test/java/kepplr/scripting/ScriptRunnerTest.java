@@ -247,5 +247,8 @@ class ScriptRunnerTest {
 
         @Override
         public void saveScreenshot(String outputPath) {}
+
+        @Override
+        public void displayMessage(String text, double durationSeconds) {}
     }
 }

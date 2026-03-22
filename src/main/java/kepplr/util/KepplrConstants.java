@@ -722,6 +722,12 @@ public final class KepplrConstants {
      */
     public static final long RECORDER_COALESCE_WINDOW_MS = 250L;
 
+    /** Default display duration in seconds for {@code displayMessage} when no duration is specified. */
+    public static final double SCRIPT_MESSAGE_DEFAULT_DURATION_SEC = 5.0;
+
+    /** Fade-out duration in seconds for HUD messages at the end of their display period. */
+    public static final double SCRIPT_MESSAGE_FADE_DURATION_SEC = 1.0;
+
     // ── Instrument frustum overlays (Step 22) ──────────────────────────────────────────────────
 
     /**

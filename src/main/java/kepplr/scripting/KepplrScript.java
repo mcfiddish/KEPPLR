@@ -749,6 +749,38 @@ public final class KepplrScript {
         commands.loadConfiguration(path);
     }
 
+    // ── HUD messages (Step 28) ──────────────────────────────────────────────────
+
+    /**
+     * Display a message on the JME HUD overlay with the default duration.
+     *
+     * <p>The message appears in the lower-center of the screen for
+     * {@value KepplrConstants#SCRIPT_MESSAGE_DEFAULT_DURATION_SEC} seconds, then fades out. Use {@code \n} in the text
+     * for line breaks.
+     *
+     * <p>Example: {@code kepplr.displayMessage("Hello, world!")}
+     *
+     * @param text message text; may contain {@code \n} for line breaks
+     */
+    public void displayMessage(String text) {
+        commands.displayMessage(text, KepplrConstants.SCRIPT_MESSAGE_DEFAULT_DURATION_SEC);
+    }
+
+    /**
+     * Display a message on the JME HUD overlay with a specified duration.
+     *
+     * <p>The message appears in the lower-center of the screen for the given duration, then fades out. Only one message
+     * is visible at a time — a new message replaces any existing one. Use {@code \n} for line breaks.
+     *
+     * <p>Example: {@code kepplr.displayMessage("Line 1\nLine 2", 3.0)}
+     *
+     * @param text message text; may contain {@code \n} for line breaks
+     * @param durationSeconds display duration in seconds before fade-out begins
+     */
+    public void displayMessage(String text, double durationSeconds) {
+        commands.displayMessage(text, durationSeconds);
+    }
+
     // ── Transition control ──────────────────────────────────────────────────────
 
     /**

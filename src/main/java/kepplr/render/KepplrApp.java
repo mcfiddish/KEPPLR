@@ -449,9 +449,13 @@ public class KepplrApp extends SimpleApplication {
         syncLabels();
         syncFrustums();
 
-        // ── HUD visibility ────────────────────────────────────────────────────────────────────
+        // ── HUD visibility and messages ──────────────────────────────────────────────────────
         hud.setTimeVisible(simulationState.hudTimeVisibleProperty().get());
         hud.setInfoVisible(simulationState.hudInfoVisibleProperty().get());
+        var pendingMsg = simulationState.consumeHudMessage();
+        if (pendingMsg != null) {
+            hud.showMessage(pendingMsg.text(), pendingMsg.durationSeconds());
+        }
 
         trailManager.update(currentEt, cameraHelioJ2000);
         vectorManager.update(

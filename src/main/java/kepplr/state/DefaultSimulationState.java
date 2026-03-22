@@ -4,6 +4,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicReference;
 import javafx.beans.property.ReadOnlyBooleanProperty;
 import javafx.beans.property.ReadOnlyDoubleProperty;
 import javafx.beans.property.ReadOnlyIntegerProperty;
@@ -81,6 +82,23 @@ public final class DefaultSimulationState implements SimulationState {
     private final ConcurrentHashMap<Integer, SimpleDoubleProperty> trailDuration = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<VectorKey, SimpleBooleanProperty> vectorVisibility = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<Integer, SimpleBooleanProperty> frustumVisibility = new ConcurrentHashMap<>();
+
+    // ── HUD message (Step 28) ──
+
+    /** An immutable snapshot of a pending HUD message. */
+    public record HudMessage(String text, double durationSeconds) {}
+
+    private final AtomicReference<HudMessage> pendingHudMessage = new AtomicReference<>();
+
+    /** Set a message to be displayed on the JME HUD. Thread-safe. */
+    public void setHudMessage(String text, double durationSeconds) {
+        pendingHudMessage.set(new HudMessage(text, durationSeconds));
+    }
+
+    /** Atomically retrieve and clear the pending HUD message. Returns null if none pending. */
+    public HudMessage consumeHudMessage() {
+        return pendingHudMessage.getAndSet(null);
+    }
 
     /** Composite key for per-body per-type vector visibility. */
     public record VectorKey(int naifId, VectorType type) {

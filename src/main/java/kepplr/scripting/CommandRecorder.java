@@ -539,4 +539,13 @@ public final class CommandRecorder implements SimulationCommands {
         recordCommand("kepplr.loadConfiguration(\"" + path + "\")");
         delegate.loadConfiguration(path);
     }
+
+    // ── HUD message (Step 28) ──
+
+    @Override
+    public void displayMessage(String text, double durationSeconds) {
+        recordCommand("kepplr.displayMessage(\"" + text.replace("\\", "\\\\").replace("\"", "\\\"") + "\", "
+                + fmt(durationSeconds) + ")");
+        delegate.displayMessage(text, durationSeconds);
+    }
 }

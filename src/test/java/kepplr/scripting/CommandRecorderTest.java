@@ -612,5 +612,10 @@ class CommandRecorderTest {
         public void saveScreenshot(String outputPath) {
             lastMethod = "saveScreenshot";
         }
+
+        @Override
+        public void displayMessage(String text, double durationSeconds) {
+            lastMethod = "displayMessage";
+        }
     }
 }
