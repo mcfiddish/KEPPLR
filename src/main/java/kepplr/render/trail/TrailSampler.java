@@ -63,15 +63,31 @@ public final class TrailSampler {
             try {
                 int barycenterId = naifId / 100;
                 EphemerisID satellite = spiceBundle.getObject(naifId);
-                EphemerisID barycenter = spiceBundle.getObject(barycenterId);
-                if (satellite != null && barycenter != null) {
-                    Double gm = lookupGm(spiceBundle, barycenterId);
-                    if (gm != null) {
+                Double gm = lookupGm(spiceBundle, barycenterId);
+                if (satellite != null && gm != null) {
+                    // Use the relative orbit (satellite vs. primary body) rather than the barycentric
+                    // orbit.  For comparable-mass systems like Pluto-Charon the barycenter lies far from
+                    // either body, so oscltx(state_relative_to_barycenter, system_GM) underestimates the
+                    // period by (a_bary / a_rel)^1.5 — a factor of ~30 for Pluto.  The relative orbit
+                    // gives the correct two-body period: T = 2π√(a_rel³ / GM_system).
+                    int primaryId = barycenterId * 100 + 99;
+                    EphemerisID center;
+                    if (primaryId != naifId) {
+                        // Standard satellite: compute relative orbit to primary (e.g. Moon→Earth)
+                        center = spiceBundle.getObject(primaryId);
+                    } else {
+                        // Pluto case: satellite IS the primary. Use the largest companion (Charon = x01).
+                        center = spiceBundle.getObject(barycenterId * 100 + 1);
+                    }
+                    if (center == null) {
+                        center = spiceBundle.getObject(barycenterId);
+                    }
+                    if (center != null) {
                         StateVectorFunction svf = spiceBundle
                                 .getAbProvider()
                                 .createAberratedStateVectorFunction(
                                         satellite,
-                                        barycenter,
+                                        center,
                                         CelestialFrames.J2000,
                                         Coverage.ALL_TIME,
                                         AberrationCorrection.NONE);

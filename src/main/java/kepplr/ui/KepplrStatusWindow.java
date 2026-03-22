@@ -894,7 +894,11 @@ public final class KepplrStatusWindow {
         try {
             KEPPLREphemeris eph = KEPPLRConfiguration.getInstance().getEphemeris();
             for (EphemerisID id : eph.getKnownBodies()) {
-                eph.getSpiceBundle().getObjectCode(id).ifPresent(code -> commands.setLabelVisible(code, show));
+                eph.getSpiceBundle().getObjectCode(id).ifPresent(code -> {
+                    // When turning on, skip barycenters (1–9) except Pluto barycenter (9)
+                    if (show && code >= 1 && code <= 9 && code != KepplrConstants.PLUTO_BARYCENTER_NAIF_ID) return;
+                    commands.setLabelVisible(code, show);
+                });
             }
             for (var sc : eph.getSpacecraft()) {
                 commands.setLabelVisible(sc.code(), show);
