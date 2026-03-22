@@ -546,7 +546,7 @@ script primitives is unnatural and unhelpful.
 
 **Decision:** A selective set of camera commands is added to SimulationCommands
 covering the actions a script author would genuinely want: zoom, orbit, tilt,
-roll, setFov, setCameraPosition, setCameraLookDirection, and setSynodicFrame.
+roll, setFov, setCameraPosition, setCameraOrientation, and setSynodicFrame.
 All are non-blocking and use the existing TransitionController infrastructure
 from step 18. Fine-grained mouse drag navigation remains in CameraInputHandler
 and is intentionally unscriptable.
@@ -589,7 +589,7 @@ wraps the live implementation. Instant same-type camera commands are coalesced w
 a 250ms window. A pose snapshot is taken on the first instant command after a flush
 to detect gesture boundaries; accumulated deltas are combined using type-appropriate
 math (sum degrees for orbit/tilt/roll/yaw; multiply factors for zoom; last-value-wins
-for setFov/setCameraPosition/setCameraLookDirection). The coalesced result is flushed
+for setFov/setCameraPosition/setCameraOrientation). The coalesced result is flushed
 as a single relative command when the window expires, a different command type arrives,
 or any command with `durationSeconds > 0` arrives. Commands with `durationSeconds > 0`
 are always recorded verbatim. The coalescing window constant

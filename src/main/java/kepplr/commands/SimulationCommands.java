@@ -220,7 +220,7 @@ public interface SimulationCommands {
      * <p>Example — point along the ecliptic toward vernal equinox:
      *
      * <pre>
-     *   setCameraLookDirection(1, 0, 0,   // look toward +X (vernal equinox)
+     *   setCameraOrientation(1, 0, 0,   // look toward +X (vernal equinox)
      *                          0, 0, 1,   // up toward +Z (ecliptic north)
      *                          2.0);
      * </pre>
@@ -233,7 +233,7 @@ public interface SimulationCommands {
      * @param upZ z component of up vector
      * @param durationSeconds transition duration in wall-clock seconds
      */
-    void setCameraLookDirection(
+    void setCameraOrientation(
             double lookX, double lookY, double lookZ, double upX, double upY, double upZ, double durationSeconds);
 
     /**

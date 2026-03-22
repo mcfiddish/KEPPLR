@@ -29,7 +29,7 @@ import org.apache.logging.log4j.Logger;
  * <ul>
  *   <li>{@code orbit}, {@code tilt}, {@code roll}, {@code yaw} — degree arguments are summed
  *   <li>{@code zoom} — factors are multiplied
- *   <li>{@code setFov}, {@code setCameraPosition}, {@code setCameraLookDirection} — last value wins
+ *   <li>{@code setFov}, {@code setCameraPosition}, {@code setCameraOrientation} — last value wins
  * </ul>
  *
  * <p>The coalescing window is {@value kepplr.util.KepplrConstants#RECORDER_COALESCE_WINDOW_MS} ms. A coalesced command
@@ -236,9 +236,9 @@ public final class CommandRecorder implements SimulationCommands {
                 String.format(
                         "kepplr.setCameraPosition(%.4f, %.4f, %.4f, %d, 0.0)",
                         args[0], args[1], args[2], (int) args[3]);
-            case "setCameraLookDirection" ->
+            case "setCameraOrientation" ->
                 String.format(
-                        "kepplr.setCameraLookDirection(%.4f, %.4f, %.4f, %.4f, %.4f, %.4f, 0.0)",
+                        "kepplr.setCameraOrientation(%.4f, %.4f, %.4f, %.4f, %.4f, %.4f, 0.0)",
                         args[0], args[1], args[2], args[3], args[4], args[5]);
             case "truck" -> String.format("kepplr.truck(%.4f, 0.0)", args[0]);
             case "crane" -> String.format("kepplr.crane(%.4f, 0.0)", args[0]);
@@ -406,16 +406,16 @@ public final class CommandRecorder implements SimulationCommands {
     }
 
     @Override
-    public void setCameraLookDirection(
+    public void setCameraOrientation(
             double lookX, double lookY, double lookZ, double upX, double upY, double upZ, double durationSeconds) {
         if (durationSeconds <= 0) {
             recordInstantCamera(
-                    "setCameraLookDirection", new double[] {lookX, lookY, lookZ, upX, upY, upZ}, MergeMode.LAST_WINS);
+                    "setCameraOrientation", new double[] {lookX, lookY, lookZ, upX, upY, upZ}, MergeMode.LAST_WINS);
         } else {
-            recordCommand("kepplr.setCameraLookDirection(" + fmt(lookX) + ", " + fmt(lookY) + ", " + fmt(lookZ) + ", "
+            recordCommand("kepplr.setCameraOrientation(" + fmt(lookX) + ", " + fmt(lookY) + ", " + fmt(lookZ) + ", "
                     + fmt(upX) + ", " + fmt(upY) + ", " + fmt(upZ) + ", " + fmt(durationSeconds) + ")");
         }
-        delegate.setCameraLookDirection(lookX, lookY, lookZ, upX, upY, upZ, durationSeconds);
+        delegate.setCameraOrientation(lookX, lookY, lookZ, upX, upY, upZ, durationSeconds);
     }
 
     // ── Cinematic camera commands (Step 24) ──

@@ -393,9 +393,8 @@ class KepplrScriptTest {
         }
 
         @Override
-        public void setCameraLookDirection(
-                double lx, double ly, double lz, double ux, double uy, double uz, double dur) {
-            lastMethod = "setCameraLookDirection";
+        public void setCameraOrientation(double lx, double ly, double lz, double ux, double uy, double uz, double dur) {
+            lastMethod = "setCameraOrientation";
         }
 
         @Override

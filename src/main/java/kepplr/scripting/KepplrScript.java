@@ -6,12 +6,12 @@ import kepplr.config.KEPPLRConfiguration;
 import kepplr.ephemeris.BodyLookupService;
 import kepplr.ephemeris.KEPPLREphemeris;
 import kepplr.render.RenderQuality;
-import picante.mechanics.EphemerisID;
 import kepplr.render.vector.VectorType;
 import kepplr.state.SimulationState;
 import kepplr.util.KepplrConstants;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import picante.mechanics.EphemerisID;
 
 /**
  * Groovy-friendly scripting API object (REDESIGN.md §11, Step 20).
@@ -367,7 +367,7 @@ public final class KepplrScript {
     /**
      * Set the camera look direction and up vector.
      *
-     * <p>Example: {@code kepplr.setCameraLookDirection(1, 0, 0, 0, 0, 1, 2.0)}
+     * <p>Example: {@code kepplr.setCameraOrientation(1, 0, 0, 0, 0, 1, 2.0)}
      *
      * @param lookX x component of look direction
      * @param lookY y component of look direction
@@ -377,9 +377,9 @@ public final class KepplrScript {
      * @param upZ z component of up vector
      * @param durationSeconds transition duration in seconds
      */
-    public void setCameraLookDirection(
+    public void setCameraOrientation(
             double lookX, double lookY, double lookZ, double upX, double upY, double upZ, double durationSeconds) {
-        commands.setCameraLookDirection(lookX, lookY, lookZ, upX, upY, upZ, durationSeconds);
+        commands.setCameraOrientation(lookX, lookY, lookZ, upX, upY, upZ, durationSeconds);
     }
 
     // ── Cinematic camera commands (Step 24) ──────────────────────────────────────

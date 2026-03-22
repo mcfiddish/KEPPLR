@@ -192,7 +192,7 @@ class ScriptRunnerTest {
         public void setCameraPosition(double x, double y, double z, int id, double dur) {}
 
         @Override
-        public void setCameraLookDirection(
+        public void setCameraOrientation(
                 double lx, double ly, double lz, double ux, double uy, double uz, double dur) {}
 
         @Override

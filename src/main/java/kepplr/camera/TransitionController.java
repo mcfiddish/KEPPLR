@@ -30,7 +30,7 @@ import picante.surfaces.Ellipsoid;
  * {@code goTo} exist, the pending {@code goTo} is discarded and the new {@code pointAt} takes over. Queue depth is
  * therefore at most 1: one active + one pending {@code goTo}.
  *
- * <p>All Step 19c camera commands (zoom, orbit, tilt, yaw, roll, fov, setCameraPosition, setCameraLookDirection) cancel
+ * <p>All Step 19c camera commands (zoom, orbit, tilt, yaw, roll, fov, setCameraPosition, setCameraOrientation) cancel
  * any active transition when they arrive, same as a new {@code pointAt}.
  *
  * <h3>Manual navigation cancellation</h3>
@@ -60,7 +60,7 @@ public final class TransitionController {
                     YawRequest,
                     RollRequest,
                     CameraPositionRequest,
-                    CameraLookDirectionRequest,
+                    CameraOrientationRequest,
                     TranslateRequest,
                     CancelRequest {}
 
@@ -85,7 +85,7 @@ public final class TransitionController {
     private record CameraPositionRequest(double x, double y, double z, int originNaifId, double durationSeconds)
             implements PendingRequest {}
 
-    private record CameraLookDirectionRequest(
+    private record CameraOrientationRequest(
             double lookX, double lookY, double lookZ, double upX, double upY, double upZ, double durationSeconds)
             implements PendingRequest {}
 
@@ -208,10 +208,10 @@ public final class TransitionController {
         inbox.add(new CameraPositionRequest(x, y, z, originNaifId, durationSeconds));
     }
 
-    /** Request a camera look direction transition (Step 19c). Thread-safe. */
-    public void requestCameraLookDirection(
+    /** Request a camera orientation transition (Step 19c). Thread-safe. */
+    public void requestCameraOrientation(
             double lookX, double lookY, double lookZ, double upX, double upY, double upZ, double durationSeconds) {
-        inbox.add(new CameraLookDirectionRequest(lookX, lookY, lookZ, upX, upY, upZ, durationSeconds));
+        inbox.add(new CameraOrientationRequest(lookX, lookY, lookZ, upX, upY, upZ, durationSeconds));
     }
 
     /** Request a truck (screen-right) translation (Step 24). Thread-safe. */
@@ -300,7 +300,7 @@ public final class TransitionController {
                 case YawRequest r -> handleYawRequest(r, cam);
                 case RollRequest r -> handleRollRequest(r, cam);
                 case CameraPositionRequest r -> handleCameraPositionRequest(r, cam, cameraHelioJ2000);
-                case CameraLookDirectionRequest r -> handleCameraLookDirectionRequest(r, cam);
+                case CameraOrientationRequest r -> handleCameraOrientationRequest(r, cam);
                 case TranslateRequest r -> handleTranslateRequest(r, cam, cameraHelioJ2000);
                 case CancelRequest r -> {
                     active = null;
@@ -571,7 +571,7 @@ public final class TransitionController {
         active = CameraTransition.cameraPosition(originId, startOff, endOff, r.durationSeconds());
     }
 
-    private void handleCameraLookDirectionRequest(CameraLookDirectionRequest r, Camera cam) {
+    private void handleCameraOrientationRequest(CameraOrientationRequest r, Camera cam) {
         cancelForNewRequest();
 
         Vector3f lookDir = new Vector3f((float) r.lookX(), (float) r.lookY(), (float) r.lookZ());

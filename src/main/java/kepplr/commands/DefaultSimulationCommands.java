@@ -161,9 +161,9 @@ public final class DefaultSimulationCommands implements SimulationCommands {
     }
 
     @Override
-    public void setCameraLookDirection(
+    public void setCameraOrientation(
             double lookX, double lookY, double lookZ, double upX, double upY, double upZ, double durationSeconds) {
-        transitionController.requestCameraLookDirection(lookX, lookY, lookZ, upX, upY, upZ, durationSeconds);
+        transitionController.requestCameraOrientation(lookX, lookY, lookZ, upX, upY, upZ, durationSeconds);
     }
 
     // ── Cinematic camera commands (Step 24) ──

@@ -372,7 +372,7 @@ any body and any `VectorType`; the GUI exposes the common cases only.
 
 ### 19c. Camera Scripting API
 Camera navigation commands (`zoom`, `orbit`, `tilt`, `roll`, `yaw`, `setFov`,
-`setCameraPosition`, `setCameraLookDirection`, `setSynodicFrame`) added to
+`setCameraPosition`, `setCameraOrientation`, `setSynodicFrame`) added to
 `SimulationCommands`. `CameraInputHandler` refactored to delegate to these
 commands with `durationSeconds = 0` for all mouse and keyboard navigation.
 `DEFAULT_CAMERA_TRANSITION_DURATION_SECONDS`, `FOV_MIN_DEG`, and `FOV_MAX_DEG`
@@ -760,7 +760,7 @@ is visible at a time — a new message replaces any existing one. A
 JME thread. `SCRIPT_MESSAGE_DEFAULT_DURATION_SEC` and
 `SCRIPT_MESSAGE_FADE_DURATION_SEC` added to `KepplrConstants`.
 
-**(4) Rename `setCameraLookDirection` → `setCameraOrientation`.** Rename
+**(4) Rename `setCameraOrientation` → `setCameraOrientation`.** Rename
 across all layers: `SimulationCommands`, `DefaultSimulationCommands`,
 `TransitionController`, `CommandRecorder`, `KepplrScript`, and all tests.
 No behavioral change — purely a naming improvement.
