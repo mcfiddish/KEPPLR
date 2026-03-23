@@ -2,6 +2,7 @@ package kepplr.ui;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.StringWriter;
 import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -49,6 +50,8 @@ import javafx.scene.layout.VBox;
 import javafx.stage.DirectoryChooser;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
+import javax.script.ScriptEngine;
+import javax.script.ScriptEngineManager;
 import kepplr.camera.CameraFrame;
 import kepplr.commands.SimulationCommands;
 import kepplr.config.KEPPLRConfiguration;
@@ -59,9 +62,6 @@ import kepplr.ephemeris.KEPPLREphemeris;
 import kepplr.ephemeris.spice.SpiceBundle;
 import kepplr.render.RenderQuality;
 import kepplr.render.vector.VectorTypes;
-import java.io.StringWriter;
-import javax.script.ScriptEngine;
-import javax.script.ScriptEngineManager;
 import kepplr.scripting.CommandRecorder;
 import kepplr.scripting.KepplrScript;
 import kepplr.scripting.ScriptRunner;
@@ -753,49 +753,52 @@ public final class KepplrStatusWindow {
         // Wrap in kepplr.with { ... } so the "kepplr." prefix is optional
         String wrappedCode = "kepplr.with {\n" + code + "\n}";
 
-        Thread thread = new Thread(() -> {
-            try {
-                ScriptEngineManager manager = new ScriptEngineManager();
-                ScriptEngine engine = manager.getEngineByName("groovy");
-                if (engine == null) {
-                    scriptOutputQueue.add("ERROR: Groovy engine not available");
-                    return;
-                }
+        Thread thread = new Thread(
+                () -> {
+                    try {
+                        ScriptEngineManager manager = new ScriptEngineManager();
+                        ScriptEngine engine = manager.getEngineByName("groovy");
+                        if (engine == null) {
+                            scriptOutputQueue.add("ERROR: Groovy engine not available");
+                            return;
+                        }
 
-                StringWriter outputWriter = new StringWriter();
-                engine.getContext().setWriter(outputWriter);
-                engine.getContext().setErrorWriter(outputWriter);
+                        StringWriter outputWriter = new StringWriter();
+                        engine.getContext().setWriter(outputWriter);
+                        engine.getContext().setErrorWriter(outputWriter);
 
-                KepplrScript api = new KepplrScript(commands, bridge.getState());
-                javax.script.Bindings bindings = engine.createBindings();
-                bindings.put("kepplr", api);
-                bindings.put("VectorTypes", VectorTypes.class);
-                bindings.put("CameraFrame", CameraFrame.class);
-                bindings.put("RenderQuality", RenderQuality.class);
+                        KepplrScript api = new KepplrScript(commands, bridge.getState());
+                        javax.script.Bindings bindings = engine.createBindings();
+                        bindings.put("kepplr", api);
+                        bindings.put("VectorTypes", VectorTypes.class);
+                        bindings.put("CameraFrame", CameraFrame.class);
+                        bindings.put("RenderQuality", RenderQuality.class);
 
-                Object result = engine.eval(wrappedCode, bindings);
+                        Object result = engine.eval(wrappedCode, bindings);
 
-                // Flush any print output from the script
-                String printed = outputWriter.toString();
-                if (!printed.isEmpty()) {
-                    for (String line : printed.split("\n")) {
-                        scriptOutputQueue.add(line);
+                        // Flush any print output from the script
+                        String printed = outputWriter.toString();
+                        if (!printed.isEmpty()) {
+                            for (String line : printed.split("\n")) {
+                                scriptOutputQueue.add(line);
+                            }
+                        }
+
+                        if (result != null) {
+                            scriptOutputQueue.add("= " + result);
+                        }
+                        scriptOutputQueue.add("✓ Done");
+                    } catch (Exception ex) {
+                        Throwable cause = ex;
+                        while (cause.getCause() != null && cause.getCause() != cause) {
+                            cause = cause.getCause();
+                        }
+                        String msg = cause.getMessage();
+                        scriptOutputQueue.add(
+                                "✗ " + (msg != null ? msg : cause.getClass().getSimpleName()));
                     }
-                }
-
-                if (result != null) {
-                    scriptOutputQueue.add("= " + result);
-                }
-                scriptOutputQueue.add("✓ Done");
-            } catch (Exception ex) {
-                Throwable cause = ex;
-                while (cause.getCause() != null && cause.getCause() != cause) {
-                    cause = cause.getCause();
-                }
-                String msg = cause.getMessage();
-                scriptOutputQueue.add("✗ " + (msg != null ? msg : cause.getClass().getSimpleName()));
-            }
-        }, "kepplr-console");
+                },
+                "kepplr-console");
         thread.setDaemon(true);
         consoleThread = thread;
         thread.start();

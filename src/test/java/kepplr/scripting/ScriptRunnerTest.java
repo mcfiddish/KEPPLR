@@ -250,5 +250,8 @@ class ScriptRunnerTest {
 
         @Override
         public void displayMessage(String text, double durationSeconds) {}
+
+        @Override
+        public void setWindowSize(int width, int height) {}
     }
 }

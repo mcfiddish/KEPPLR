@@ -466,4 +466,14 @@ public interface SimulationCommands {
      * @param durationSeconds display duration in seconds before fade-out begins
      */
     void displayMessage(String text, double durationSeconds);
+
+    /**
+     * Resize the JME render window.
+     *
+     * <pre>{@code kepplr.setWindowSize(1920, 1080) }</pre>
+     *
+     * @param width window width in pixels
+     * @param height window height in pixels
+     */
+    void setWindowSize(int width, int height);
 }

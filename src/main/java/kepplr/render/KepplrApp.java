@@ -204,6 +204,12 @@ public class KepplrApp extends SimpleApplication {
         // render pass completes (see update() override). This ensures the framebuffer reflects the
         // current frame's scene graph, including focus-body tracking from simpleUpdate().
         commands.setScreenshotCallback((outputPath, latch) -> pendingCapture = new PendingCapture(outputPath, latch));
+        commands.setWindowResizeCallback((w, h) -> enqueue(() -> {
+            long glfwWindowHandle = getGlfwWindowHandle();
+            if (glfwWindowHandle != 0) {
+                GLFW.glfwSetWindowSize(glfwWindowHandle, w, h);
+            }
+        }));
         CommandRecorder recorder = new CommandRecorder(commands);
         ScriptRunner scriptRunner = new ScriptRunner(commands, simulationState);
 

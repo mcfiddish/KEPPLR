@@ -617,5 +617,10 @@ class CommandRecorderTest {
         public void displayMessage(String text, double durationSeconds) {
             lastMethod = "displayMessage";
         }
+
+        @Override
+        public void setWindowSize(int width, int height) {
+            lastMethod = "setWindowSize";
+        }
     }
 }

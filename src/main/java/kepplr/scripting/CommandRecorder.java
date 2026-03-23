@@ -548,4 +548,12 @@ public final class CommandRecorder implements SimulationCommands {
                 + fmt(durationSeconds) + ")");
         delegate.displayMessage(text, durationSeconds);
     }
+
+    // ── Window resize (Step 28) ──
+
+    @Override
+    public void setWindowSize(int width, int height) {
+        recordCommand("kepplr.setWindowSize(" + width + ", " + height + ")");
+        delegate.setWindowSize(width, height);
+    }
 }

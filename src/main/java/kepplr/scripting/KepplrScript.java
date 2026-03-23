@@ -781,6 +781,20 @@ public final class KepplrScript {
         commands.displayMessage(text, durationSeconds);
     }
 
+    // ── Window (Step 28) ──────────────────────────────────────────────────────
+
+    /**
+     * Resize the JME render window.
+     *
+     * <p>Example: {@code kepplr.setWindowSize(1920, 1080)}
+     *
+     * @param width window width in pixels
+     * @param height window height in pixels
+     */
+    public void setWindowSize(int width, int height) {
+        commands.setWindowSize(width, height);
+    }
+
     // ── Transition control ──────────────────────────────────────────────────────
 
     /**
