@@ -182,10 +182,14 @@ public interface SimulationCommands {
     void roll(double degrees, double durationSeconds);
 
     /**
-     * Set the camera position relative to the current focus body in the current camera frame.
+     * Set the camera position relative to the current focus body in the active camera frame.
      *
-     * <p>Example: {@code setCameraPosition(0, 0, 10000, 2.0)} moves the camera to 10,000 km above the focus body's
-     * north pole (in body-fixed frame) over two seconds.
+     * <p>The offset vector is interpreted in the active camera frame and transformed to J2000 internally: in INERTIAL,
+     * (0,0,10000) is +Z in J2000; in BODY_FIXED, it is the body-fixed +Z axis (north pole); in SYNODIC, it is the
+     * synodic +Z axis.
+     *
+     * <p>Example: {@code setCameraPosition(0, 0, 10000, 2.0)} — in body-fixed frame, moves the camera to 10,000 km
+     * above the focus body's north pole over two seconds.
      *
      * @param x x component in km
      * @param y y component in km
@@ -195,7 +199,7 @@ public interface SimulationCommands {
     void setCameraPosition(double x, double y, double z, double durationSeconds);
 
     /**
-     * Set the camera position relative to an explicit origin body in the current camera frame.
+     * Set the camera position relative to an explicit origin body in the active camera frame.
      *
      * <p>Does not change the focused body. Useful for positioning the camera relative to a body other than the current
      * focus.
@@ -212,16 +216,20 @@ public interface SimulationCommands {
     void setCameraPosition(double x, double y, double z, int originNaifId, double durationSeconds);
 
     /**
-     * Set the camera look direction and up vector in the current camera frame.
+     * Set the camera look direction and up vector in the active camera frame.
+     *
+     * <p>Vectors are interpreted in the active camera frame and transformed to J2000 internally: in INERTIAL, (1,0,0)
+     * is the vernal equinox; in SYNODIC, (1,0,0) points toward the synodic target body; in BODY_FIXED, (1,0,0) is the
+     * body-fixed +X axis.
      *
      * <p>Vectors need not be normalized — they are normalized internally. The up vector must not be parallel to the
      * look vector.
      *
-     * <p>Example — point along the ecliptic toward vernal equinox:
+     * <p>Example — in synodic frame, look toward the target body with Z up:
      *
      * <pre>
-     *   setCameraOrientation(1, 0, 0,   // look toward +X (vernal equinox)
-     *                          0, 0, 1,   // up toward +Z (ecliptic north)
+     *   setCameraOrientation(1, 0, 0,   // look toward synodic +X (target body)
+     *                          0, 0, 1,   // up toward synodic +Z
      *                          2.0);
      * </pre>
      *

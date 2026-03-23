@@ -12,6 +12,7 @@ import kepplr.state.DefaultSimulationState;
 import kepplr.util.KepplrConstants;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import picante.math.vectorspace.RotationMatrixIJK;
 import picante.math.vectorspace.VectorIJK;
 import picante.mechanics.EphemerisID;
 import picante.surfaces.Ellipsoid;
@@ -558,7 +559,9 @@ public final class TransitionController {
         double[] startOff = {
             cameraHelioJ2000[0] - originPos[0], cameraHelioJ2000[1] - originPos[1], cameraHelioJ2000[2] - originPos[2]
         };
-        double[] endOff = {r.x(), r.y(), r.z()};
+        // Transform the requested offset from the active camera frame to J2000
+        VectorIJK endJ2000 = frameToJ2000(new VectorIJK(r.x(), r.y(), r.z()));
+        double[] endOff = {endJ2000.getI(), endJ2000.getJ(), endJ2000.getK()};
 
         if (r.durationSeconds() <= KepplrConstants.CAMERA_TRANSITION_INSTANT_THRESHOLD_SEC) {
             cameraHelioJ2000[0] = originPos[0] + endOff[0];
@@ -574,8 +577,12 @@ public final class TransitionController {
     private void handleCameraOrientationRequest(CameraOrientationRequest r, Camera cam) {
         cancelForNewRequest();
 
-        Vector3f lookDir = new Vector3f((float) r.lookX(), (float) r.lookY(), (float) r.lookZ());
-        Vector3f upDir = new Vector3f((float) r.upX(), (float) r.upY(), (float) r.upZ());
+        // Transform look and up vectors from the active camera frame to J2000
+        VectorIJK lookJ2000 = frameToJ2000(new VectorIJK(r.lookX(), r.lookY(), r.lookZ()));
+        VectorIJK upJ2000 = frameToJ2000(new VectorIJK(r.upX(), r.upY(), r.upZ()));
+
+        Vector3f lookDir = new Vector3f((float) lookJ2000.getI(), (float) lookJ2000.getJ(), (float) lookJ2000.getK());
+        Vector3f upDir = new Vector3f((float) upJ2000.getI(), (float) upJ2000.getJ(), (float) upJ2000.getK());
         if (lookDir.lengthSquared() < 1e-20f) return;
         lookDir.normalizeLocal();
 
@@ -788,6 +795,51 @@ public final class TransitionController {
         }
 
         active = CameraTransition.goTo(r.naifId(), startDistKm, endDistKm, r.durationSeconds());
+    }
+
+    /**
+     * Transform a vector from the active camera frame to J2000.
+     *
+     * <p>For INERTIAL, vectors pass through unchanged. For SYNODIC, the vector is expressed as a linear combination of
+     * the synodic basis vectors (which are in J2000). For BODY_FIXED, the transpose of the J2000→body-fixed rotation
+     * matrix is applied via {@link RotationMatrixIJK#mtxv}.
+     *
+     * @param v vector in frame-local coordinates
+     * @return the vector in J2000, or the original vector unchanged if the frame cannot be resolved (fallback to
+     *     inertial)
+     */
+    private VectorIJK frameToJ2000(VectorIJK v) {
+        CameraFrame frame = state.cameraFrameProperty().get();
+        double et = state.currentEtProperty().get();
+
+        if (frame == CameraFrame.SYNODIC) {
+            int synodicFocus = state.synodicFrameFocusIdProperty().get();
+            int synodicTarget = state.synodicFrameTargetIdProperty().get();
+            int focusId = (synodicFocus != -1) ? synodicFocus : state.focusedBodyIdProperty().get();
+            int targetId = (synodicTarget != -1) ? synodicTarget : state.selectedBodyIdProperty().get();
+            SynodicFrame.Basis basis = SynodicFrame.compute(focusId, targetId, et);
+            if (basis != null) {
+                RotationMatrixIJK synodicToJ2000 =
+                        new RotationMatrixIJK(basis.xAxis(), basis.yAxis(), basis.zAxis());
+                VectorIJK result = new VectorIJK();
+                synodicToJ2000.mxv(v, result);
+                return result;
+            }
+        } else if (frame == CameraFrame.BODY_FIXED) {
+            int focusId = state.focusedBodyIdProperty().get();
+            if (focusId != -1) {
+                RotationMatrixIJK rot =
+                        KEPPLRConfiguration.getInstance().getEphemeris().getJ2000ToBodyFixedRotation(focusId, et);
+                if (rot != null) {
+                    VectorIJK result = new VectorIJK();
+                    rot.mtxv(v, result);
+                    return result;
+                }
+            }
+        }
+
+        // INERTIAL or fallback
+        return v;
     }
 
     /** Get heliocentric J2000 position of a body at the current ET. Returns null if unavailable. */
