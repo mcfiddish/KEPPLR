@@ -29,12 +29,13 @@ class DefaultSimulationCommandsTest {
     static final int NEW_HORIZONS = -98;
 
     private DefaultSimulationState state;
+    private SimulationClock clock;
     private DefaultSimulationCommands commands;
 
     @BeforeEach
     void setUp() {
         state = new DefaultSimulationState();
-        SimulationClock clock = new SimulationClock(state, 0.0);
+        clock = new SimulationClock(state, 0.0);
         TransitionController tc = new TransitionController(state);
         commands = new DefaultSimulationCommands(state, clock, tc);
     }
@@ -188,20 +189,23 @@ class DefaultSimulationCommandsTest {
         }
 
         @Test
-        @DisplayName("setET updates currentEt in state")
+        @DisplayName("setET updates currentEt in state after advance()")
         void setETUpdatesState() {
+            commands.setPaused(true);
             commands.setET(489297600.0);
+            clock.advance();
             assertEquals(489297600.0, state.currentEtProperty().get(), "currentEt should reflect setET value");
         }
 
         @Test
-        @DisplayName("setUTC converts known UTC string and updates currentEt (requires SPICE kernel)")
+        @DisplayName("setUTC converts known UTC string and updates currentEt after advance() (requires SPICE kernel)")
         void setUTCUpdatesState() {
             TestHarness.resetSingleton();
             KEPPLRConfiguration.getTestTemplate();
 
             double expectedET = TestHarness.getTestEpoch();
             commands.setUTC("2015 Jul 14 07:59:00");
+            clock.advance();
 
             assertEquals(
                     expectedET,
