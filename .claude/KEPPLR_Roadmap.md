@@ -765,6 +765,28 @@ across all layers: `SimulationCommands`, `DefaultSimulationCommands`,
 `TransitionController`, `CommandRecorder`, `KepplrScript`, and all tests.
 No behavioral change — purely a naming improvement.
 
+**Additional enhancements delivered in Step 28:**
+
+- **Frame-aware `setCameraPosition` and `setCameraOrientation`.** The offset /
+  look / up vectors are now interpreted in the active camera frame (INERTIAL,
+  SYNODIC, or BODY_FIXED) and transformed to J2000 internally by
+  `TransitionController.frameToJ2000()`. In SYNODIC the three `Basis` vectors
+  form the columns of the synodic-to-J2000 rotation matrix; in BODY_FIXED the
+  transpose multiply `rot.mtxv()` converts body-fixed to J2000. (See D-045.)
+
+- **`setWindowSize(int, int)`** added to `SimulationCommands` / `KepplrScript` /
+  `CommandRecorder`. Implementation uses a `BiConsumer<Integer, Integer>` callback
+  set by `KepplrApp` that calls GLFW `glfwSetWindowSize` via `enqueue()`.
+
+- **HUD info shows selected body** instead of focused body. `KepplrHud.update()`
+  now receives `selectedBodyId` from `KepplrApp.simpleUpdate()`.
+
+- **Body show/hide toggle.** `SimulationCommands.setBodyVisible(int, boolean)` /
+  `SimulationState.bodyVisibleProperty(int)` with per-body `ConcurrentHashMap`
+  (default `true`). `BodySceneManager` skips hidden bodies before pass 1.
+  Barycenters (NAIF 0–9) default to hidden. Context menu "Visible" CheckMenuItem
+  in body tree. `KepplrScript` exposes both int and String overloads. (See D-046.)
+
 **Hard constraints:**
 - `Platform.runLater()` permitted only in `SimulationStateFxBridge` and
   `KepplrApp.destroy()`. Console output drains via the existing
@@ -774,6 +796,8 @@ No behavioral change — purely a naming improvement.
 - All new `SimulationCommands` methods (if any) must be loggable by
   `CommandRecorder`.
 - `mvn test` passes with no new failures.
+
+**Step 28 is complete.**
 
 ---
 
@@ -789,4 +813,7 @@ No behavioral change — purely a naming improvement.
 - Instrument boresight line rendering (frustum overlays implemented in Step 22; boresight as a separate line is deferred)
 - Frustum shortening when boresight intersects a body surface
 - Per-instrument frustum color configuration (hardcoded cyan for now)
-- `primary` parameter in `KEPPLRConfiguration.bodyBlock()` — needed for asteroid satellites whose NAIF IDs do not follow the planet convention (primary = x99, barycenter = x, satellites = x01–x98). Trail period computation (D-041), satellite anchoring, and decluttering all currently infer the primary from NAIF arithmetic; a configured `primary` would override that inference.
+- `primary` parameter in `KEPPLRConfiguration.bodyBlock()` — needed for asteroid satellites whose NAIF IDs do not follow
+  the planet convention (primary = x99, barycenter = x, satellites = x01–x98). Trail period computation (D-041), satellite 
+  anchoring, and decluttering all currently infer the primary from NAIF arithmetic; a configured `primary` would override 
+  that inference.
