@@ -376,7 +376,7 @@ class CameraTransitionTest {
     @Test
     @DisplayName("CAMERA_LOOK_DIRECTION with zero duration snaps camera orientation")
     void cameraLookDirectionInstantSnap() {
-        controller.requestCameraLookDirection(0, 0, 1, 0, 1, 0, 0); // look +Z, up +Y
+        controller.requestCameraOrientation(0, 0, 1, 0, 1, 0, 0); // look +Z, up +Y
         controller.update(0.016f, cam, camPos);
 
         Vector3f dir = cam.getDirection();

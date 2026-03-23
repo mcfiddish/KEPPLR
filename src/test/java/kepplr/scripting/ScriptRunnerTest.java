@@ -192,7 +192,7 @@ class ScriptRunnerTest {
         public void setCameraPosition(double x, double y, double z, int id, double dur) {}
 
         @Override
-        public void setCameraLookDirection(
+        public void setCameraOrientation(
                 double lx, double ly, double lz, double ux, double uy, double uz, double dur) {}
 
         @Override
@@ -247,5 +247,14 @@ class ScriptRunnerTest {
 
         @Override
         public void saveScreenshot(String outputPath) {}
+
+        @Override
+        public void displayMessage(String text, double durationSeconds) {}
+
+        @Override
+        public void setWindowSize(int width, int height) {}
+
+        @Override
+        public void setBodyVisible(int naifId, boolean visible) {}
     }
 }

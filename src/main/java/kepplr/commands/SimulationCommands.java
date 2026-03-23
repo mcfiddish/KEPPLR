@@ -182,10 +182,14 @@ public interface SimulationCommands {
     void roll(double degrees, double durationSeconds);
 
     /**
-     * Set the camera position relative to the current focus body in the current camera frame.
+     * Set the camera position relative to the current focus body in the active camera frame.
      *
-     * <p>Example: {@code setCameraPosition(0, 0, 10000, 2.0)} moves the camera to 10,000 km above the focus body's
-     * north pole (in body-fixed frame) over two seconds.
+     * <p>The offset vector is interpreted in the active camera frame and transformed to J2000 internally: in INERTIAL,
+     * (0,0,10000) is +Z in J2000; in BODY_FIXED, it is the body-fixed +Z axis (north pole); in SYNODIC, it is the
+     * synodic +Z axis.
+     *
+     * <p>Example: {@code setCameraPosition(0, 0, 10000, 2.0)} — in body-fixed frame, moves the camera to 10,000 km
+     * above the focus body's north pole over two seconds.
      *
      * @param x x component in km
      * @param y y component in km
@@ -195,7 +199,7 @@ public interface SimulationCommands {
     void setCameraPosition(double x, double y, double z, double durationSeconds);
 
     /**
-     * Set the camera position relative to an explicit origin body in the current camera frame.
+     * Set the camera position relative to an explicit origin body in the active camera frame.
      *
      * <p>Does not change the focused body. Useful for positioning the camera relative to a body other than the current
      * focus.
@@ -212,16 +216,20 @@ public interface SimulationCommands {
     void setCameraPosition(double x, double y, double z, int originNaifId, double durationSeconds);
 
     /**
-     * Set the camera look direction and up vector in the current camera frame.
+     * Set the camera look direction and up vector in the active camera frame.
+     *
+     * <p>Vectors are interpreted in the active camera frame and transformed to J2000 internally: in INERTIAL, (1,0,0)
+     * is the vernal equinox; in SYNODIC, (1,0,0) points toward the synodic target body; in BODY_FIXED, (1,0,0) is the
+     * body-fixed +X axis.
      *
      * <p>Vectors need not be normalized — they are normalized internally. The up vector must not be parallel to the
      * look vector.
      *
-     * <p>Example — point along the ecliptic toward vernal equinox:
+     * <p>Example — in synodic frame, look toward the target body with Z up:
      *
      * <pre>
-     *   setCameraLookDirection(1, 0, 0,   // look toward +X (vernal equinox)
-     *                          0, 0, 1,   // up toward +Z (ecliptic north)
+     *   setCameraOrientation(1, 0, 0,   // look toward synodic +X (target body)
+     *                          0, 0, 1,   // up toward synodic +Z
      *                          2.0);
      * </pre>
      *
@@ -233,7 +241,7 @@ public interface SimulationCommands {
      * @param upZ z component of up vector
      * @param durationSeconds transition duration in wall-clock seconds
      */
-    void setCameraLookDirection(
+    void setCameraOrientation(
             double lookX, double lookY, double lookZ, double upX, double upY, double upZ, double durationSeconds);
 
     /**
@@ -444,4 +452,41 @@ public interface SimulationCommands {
      * @param path file system path to the {@code .properties} configuration file
      */
     void loadConfiguration(String path);
+
+    /**
+     * Display a message on the JME HUD overlay.
+     *
+     * <p>The message appears in the lower-center of the screen for the specified duration, then fades out. Only one
+     * message is visible at a time — a new message replaces any existing one. The text may contain {@code \n} for line
+     * breaks.
+     *
+     * <pre>{@code kepplr.displayMessage("Hello, world!", 5.0) }</pre>
+     *
+     * @param text message text; may contain {@code \n} for line breaks
+     * @param durationSeconds display duration in seconds before fade-out begins
+     */
+    void displayMessage(String text, double durationSeconds);
+
+    /**
+     * Resize the JME render window.
+     *
+     * <pre>{@code kepplr.setWindowSize(1920, 1080) }</pre>
+     *
+     * @param width window width in pixels
+     * @param height window height in pixels
+     */
+    void setWindowSize(int width, int height);
+
+    /**
+     * Show or hide a body in the scene.
+     *
+     * <p>Hidden bodies are not rendered (culled before the body loop). Useful for toggling visibility of barycenters or
+     * other bodies that may clutter the scene.
+     *
+     * <pre>{@code kepplr.setBodyVisible(9, false)  // hide Pluto barycenter }</pre>
+     *
+     * @param naifId NAIF ID of the body
+     * @param visible {@code true} to show, {@code false} to hide
+     */
+    void setBodyVisible(int naifId, boolean visible);
 }

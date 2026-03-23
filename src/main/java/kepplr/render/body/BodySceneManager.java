@@ -154,6 +154,13 @@ public class BodySceneManager {
 
             int naifId = eph.getSpiceBundle().getObjectCode(bodyId).orElse(-999);
 
+            // Skip bodies hidden by the user (Step 28)
+            if (!state.bodyVisibleProperty(naifId).get()) {
+                BodySceneNode stale = bodyNodes.get(bodyId);
+                if (stale != null) stale.detach();
+                continue;
+            }
+
             float dx = (float) (helioPos.getI() - cameraHelioJ2000[0]);
             float dy = (float) (helioPos.getJ() - cameraHelioJ2000[1]);
             float dz = (float) (helioPos.getK() - cameraHelioJ2000[2]);
@@ -235,6 +242,13 @@ public class BodySceneManager {
             double dist = Math.sqrt((double) dx * dx + (double) dy * dy + (double) dz * dz);
 
             int naifId = eph2.getSpiceBundle().getObjectCode(sc.id()).orElse(-999);
+
+            if (!state.bodyVisibleProperty(naifId).get()) {
+                BodySceneNode stale = bodyNodes.get(sc.id());
+                if (stale != null) stale.detach();
+                continue;
+            }
+
             visibleThisFrame.add(sc.id());
             if (isInCameraFov(dx, dy, dz, dist, cam)) {
                 inView.add(new BodyInView(sc.id().getName(), naifId, dist));

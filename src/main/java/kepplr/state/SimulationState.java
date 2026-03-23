@@ -203,4 +203,13 @@ public interface SimulationState {
      * @param naifCode NAIF code of the instrument (e.g. −98300 for NH_LORRI)
      */
     ReadOnlyBooleanProperty frustumVisibleProperty(int naifCode);
+
+    /**
+     * Whether the given body is visible in the scene (Step 28).
+     *
+     * <p>Default: {@code true}. When set to {@code false}, the body is not rendered (culled before pass 1).
+     *
+     * @param naifId NAIF ID of the body
+     */
+    ReadOnlyBooleanProperty bodyVisibleProperty(int naifId);
 }

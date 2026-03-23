@@ -524,9 +524,8 @@ class CommandRecorderTest {
         }
 
         @Override
-        public void setCameraLookDirection(
-                double lx, double ly, double lz, double ux, double uy, double uz, double dur) {
-            lastMethod = "setCameraLookDirection";
+        public void setCameraOrientation(double lx, double ly, double lz, double ux, double uy, double uz, double dur) {
+            lastMethod = "setCameraOrientation";
         }
 
         @Override
@@ -612,6 +611,21 @@ class CommandRecorderTest {
         @Override
         public void saveScreenshot(String outputPath) {
             lastMethod = "saveScreenshot";
+        }
+
+        @Override
+        public void displayMessage(String text, double durationSeconds) {
+            lastMethod = "displayMessage";
+        }
+
+        @Override
+        public void setWindowSize(int width, int height) {
+            lastMethod = "setWindowSize";
+        }
+
+        @Override
+        public void setBodyVisible(int naifId, boolean visible) {
+            lastMethod = "setBodyVisible";
         }
     }
 }

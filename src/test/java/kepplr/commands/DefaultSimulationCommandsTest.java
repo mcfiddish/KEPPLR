@@ -268,9 +268,9 @@ class DefaultSimulationCommandsTest {
         }
 
         @Test
-        @DisplayName("setCameraLookDirection delegates to TransitionController")
-        void setCameraLookDirectionDelegates() {
-            assertDoesNotThrow(() -> commands.setCameraLookDirection(1, 0, 0, 0, 0, 1, 0));
+        @DisplayName("setCameraOrientation delegates to TransitionController")
+        void setCameraOrientationDelegates() {
+            assertDoesNotThrow(() -> commands.setCameraOrientation(1, 0, 0, 0, 0, 1, 0));
         }
 
         @Test

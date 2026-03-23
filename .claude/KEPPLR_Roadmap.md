@@ -372,7 +372,7 @@ any body and any `VectorType`; the GUI exposes the common cases only.
 
 ### 19c. Camera Scripting API
 Camera navigation commands (`zoom`, `orbit`, `tilt`, `roll`, `yaw`, `setFov`,
-`setCameraPosition`, `setCameraLookDirection`, `setSynodicFrame`) added to
+`setCameraPosition`, `setCameraOrientation`, `setSynodicFrame`) added to
 `SimulationCommands`. `CameraInputHandler` refactored to delegate to these
 commands with `durationSeconds = 0` for all mouse and keyboard navigation.
 `DEFAULT_CAMERA_TRANSITION_DURATION_SECONDS`, `FOV_MIN_DEG`, and `FOV_MAX_DEG`
@@ -728,6 +728,79 @@ pass with no architectural impact.
 
 ---
 
+### 28. Script Enhancements
+
+Four improvements to the scripting layer and its GUI integration.
+
+**(1) Interactive script console.** A text input field in the JavaFX control
+window where the user can type and execute single-line Groovy expressions
+(e.g., `kepplr.focusBody("Earth")`). Expressions are evaluated via JSR 223
+with the same `kepplr` binding as `ScriptRunner`. Execution runs on a
+dedicated daemon thread (not the FX thread). Output and errors are displayed
+in the existing script output panel. The console must not interfere with a
+running script — if a script is active, console input is rejected with a
+message in the output panel.
+
+**(2) Configuration access from scripts.** `KepplrScript.getConfiguration()`
+returns `KEPPLRConfiguration.getInstance()` directly, giving scripts full
+access to the configuration and ephemeris (e.g.,
+`config = kepplr.getConfiguration(); eph = config.getEphemeris()`). This is
+a sanctioned exception to Rule 3 for the scripting layer only — Groovy
+scripts are ephemeral and do not persist references as class fields. The
+`KepplrScript.getConfiguration()` method itself calls
+`KEPPLRConfiguration.getInstance()` at point-of-use, consistent with Rule 3
+at the Java level. No other Java class gains a stored reference.
+
+**(3) Script display messages.** `KepplrScript.displayMessage(String text)`
+and `KepplrScript.displayMessage(String text, double durationSeconds)` show
+a message on the JME HUD overlay. Messages appear in the lower-center of the
+screen with a default duration of 5 seconds and fade out. Only one message
+is visible at a time — a new message replaces any existing one. A
+`HudMessageDisplay` class in `kepplr.render` manages the lifecycle on the
+JME thread. `SCRIPT_MESSAGE_DEFAULT_DURATION_SEC` and
+`SCRIPT_MESSAGE_FADE_DURATION_SEC` added to `KepplrConstants`.
+
+**(4) Rename `setCameraOrientation` → `setCameraOrientation`.** Rename
+across all layers: `SimulationCommands`, `DefaultSimulationCommands`,
+`TransitionController`, `CommandRecorder`, `KepplrScript`, and all tests.
+No behavioral change — purely a naming improvement.
+
+**Additional enhancements delivered in Step 28:**
+
+- **Frame-aware `setCameraPosition` and `setCameraOrientation`.** The offset /
+  look / up vectors are now interpreted in the active camera frame (INERTIAL,
+  SYNODIC, or BODY_FIXED) and transformed to J2000 internally by
+  `TransitionController.frameToJ2000()`. In SYNODIC the three `Basis` vectors
+  form the columns of the synodic-to-J2000 rotation matrix; in BODY_FIXED the
+  transpose multiply `rot.mtxv()` converts body-fixed to J2000. (See D-045.)
+
+- **`setWindowSize(int, int)`** added to `SimulationCommands` / `KepplrScript` /
+  `CommandRecorder`. Implementation uses a `BiConsumer<Integer, Integer>` callback
+  set by `KepplrApp` that calls GLFW `glfwSetWindowSize` via `enqueue()`.
+
+- **HUD info shows selected body** instead of focused body. `KepplrHud.update()`
+  now receives `selectedBodyId` from `KepplrApp.simpleUpdate()`.
+
+- **Body show/hide toggle.** `SimulationCommands.setBodyVisible(int, boolean)` /
+  `SimulationState.bodyVisibleProperty(int)` with per-body `ConcurrentHashMap`
+  (default `true`). `BodySceneManager` skips hidden bodies before pass 1.
+  Barycenters (NAIF 0–9) default to hidden. Context menu "Visible" CheckMenuItem
+  in body tree. `KepplrScript` exposes both int and String overloads. (See D-046.)
+
+**Hard constraints:**
+- `Platform.runLater()` permitted only in `SimulationStateFxBridge` and
+  `KepplrApp.destroy()`. Console output drains via the existing
+  `AnimationTimer` pattern in the script output panel.
+- `KEPPLRConfiguration` and `KEPPLREphemeris` must not be stored or passed
+  as fields/parameters (Rule 3).
+- All new `SimulationCommands` methods (if any) must be loggable by
+  `CommandRecorder`.
+- `mvn test` passes with no new failures.
+
+**Step 28 is complete.**
+
+---
+
 ## Backlog (unsequenced, post-v0.2)
 
 - Camera navigation inertia and damping (§16.2)
@@ -740,4 +813,7 @@ pass with no architectural impact.
 - Instrument boresight line rendering (frustum overlays implemented in Step 22; boresight as a separate line is deferred)
 - Frustum shortening when boresight intersects a body surface
 - Per-instrument frustum color configuration (hardcoded cyan for now)
-- `primary` parameter in `KEPPLRConfiguration.bodyBlock()` — needed for asteroid satellites whose NAIF IDs do not follow the planet convention (primary = x99, barycenter = x, satellites = x01–x98). Trail period computation (D-041), satellite anchoring, and decluttering all currently infer the primary from NAIF arithmetic; a configured `primary` would override that inference.
+- `primary` parameter in `KEPPLRConfiguration.bodyBlock()` — needed for asteroid satellites whose NAIF IDs do not follow
+  the planet convention (primary = x99, barycenter = x, satellites = x01–x98). Trail period computation (D-041), satellite 
+  anchoring, and decluttering all currently infer the primary from NAIF arithmetic; a configured `primary` would override 
+  that inference.

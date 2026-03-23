@@ -6,12 +6,12 @@ import kepplr.config.KEPPLRConfiguration;
 import kepplr.ephemeris.BodyLookupService;
 import kepplr.ephemeris.KEPPLREphemeris;
 import kepplr.render.RenderQuality;
-import picante.mechanics.EphemerisID;
 import kepplr.render.vector.VectorType;
 import kepplr.state.SimulationState;
 import kepplr.util.KepplrConstants;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import picante.mechanics.EphemerisID;
 
 /**
  * Groovy-friendly scripting API object (REDESIGN.md §11, Step 20).
@@ -56,6 +56,29 @@ public final class KepplrScript {
         this.commands = commands;
         this.state = state;
         this.waitTransition = new WaitTransition(state);
+    }
+
+    // ── Configuration access (Step 28) ────────────────────────────────────────────
+
+    /**
+     * Return the current KEPPLR configuration.
+     *
+     * <p>Acquires the singleton at point-of-use (CLAUDE.md Rule 3). Scripts may call any method on the returned object,
+     * including {@code getEphemeris()}.
+     *
+     * <p>Example:
+     *
+     * <pre>{@code
+     * config = kepplr.getConfiguration()
+     * eph = config.getEphemeris()
+     * pos = eph.getHeliocentricPositionJ2000(399, config.getTimeConversion().utcStringToTDB("2015 Jul 14 08:00:00"))
+     * println pos
+     * }</pre>
+     *
+     * @return the current {@link KEPPLRConfiguration} instance
+     */
+    public KEPPLRConfiguration getConfiguration() {
+        return KEPPLRConfiguration.getInstance();
     }
 
     // ── Name resolution helper ──────────────────────────────────────────────────
@@ -367,7 +390,7 @@ public final class KepplrScript {
     /**
      * Set the camera look direction and up vector.
      *
-     * <p>Example: {@code kepplr.setCameraLookDirection(1, 0, 0, 0, 0, 1, 2.0)}
+     * <p>Example: {@code kepplr.setCameraOrientation(1, 0, 0, 0, 0, 1, 2.0)}
      *
      * @param lookX x component of look direction
      * @param lookY y component of look direction
@@ -377,9 +400,9 @@ public final class KepplrScript {
      * @param upZ z component of up vector
      * @param durationSeconds transition duration in seconds
      */
-    public void setCameraLookDirection(
+    public void setCameraOrientation(
             double lookX, double lookY, double lookZ, double upX, double upY, double upZ, double durationSeconds) {
-        commands.setCameraLookDirection(lookX, lookY, lookZ, upX, upY, upZ, durationSeconds);
+        commands.setCameraOrientation(lookX, lookY, lookZ, upX, upY, upZ, durationSeconds);
     }
 
     // ── Cinematic camera commands (Step 24) ──────────────────────────────────────
@@ -680,6 +703,33 @@ public final class KepplrScript {
         commands.setFrustumVisible(resolve(instrumentName), visible);
     }
 
+    // ── Body visibility (Step 28) ──────────────────────────────────────────────
+
+    /**
+     * Show or hide a body in the scene by NAIF ID.
+     *
+     * <p>Example: {@code kepplr.setBodyVisible(9, false)} — hide Pluto barycenter
+     *
+     * @param naifId NAIF ID of the body
+     * @param visible {@code true} to show, {@code false} to hide
+     */
+    public void setBodyVisible(int naifId, boolean visible) {
+        commands.setBodyVisible(naifId, visible);
+    }
+
+    /**
+     * Show or hide a body in the scene by name.
+     *
+     * <p>Example: {@code kepplr.setBodyVisible("Pluto Barycenter", false)}
+     *
+     * @param bodyName body name; case-insensitive
+     * @param visible {@code true} to show, {@code false} to hide
+     * @throws IllegalArgumentException if the name cannot be resolved
+     */
+    public void setBodyVisible(String bodyName, boolean visible) {
+        commands.setBodyVisible(resolve(bodyName), visible);
+    }
+
     // ── Screenshot and capture (Step 25) ────────────────────────────────────────
 
     /**
@@ -747,6 +797,52 @@ public final class KepplrScript {
      */
     public void loadConfiguration(String path) {
         commands.loadConfiguration(path);
+    }
+
+    // ── HUD messages (Step 28) ──────────────────────────────────────────────────
+
+    /**
+     * Display a message on the JME HUD overlay with the default duration.
+     *
+     * <p>The message appears in the lower-center of the screen for
+     * {@value KepplrConstants#SCRIPT_MESSAGE_DEFAULT_DURATION_SEC} seconds, then fades out. Use {@code \n} in the text
+     * for line breaks.
+     *
+     * <p>Example: {@code kepplr.displayMessage("Hello, world!")}
+     *
+     * @param text message text; may contain {@code \n} for line breaks
+     */
+    public void displayMessage(String text) {
+        commands.displayMessage(text, KepplrConstants.SCRIPT_MESSAGE_DEFAULT_DURATION_SEC);
+    }
+
+    /**
+     * Display a message on the JME HUD overlay with a specified duration.
+     *
+     * <p>The message appears in the lower-center of the screen for the given duration, then fades out. Only one message
+     * is visible at a time — a new message replaces any existing one. Use {@code \n} for line breaks.
+     *
+     * <p>Example: {@code kepplr.displayMessage("Line 1\nLine 2", 3.0)}
+     *
+     * @param text message text; may contain {@code \n} for line breaks
+     * @param durationSeconds display duration in seconds before fade-out begins
+     */
+    public void displayMessage(String text, double durationSeconds) {
+        commands.displayMessage(text, durationSeconds);
+    }
+
+    // ── Window (Step 28) ──────────────────────────────────────────────────────
+
+    /**
+     * Resize the JME render window.
+     *
+     * <p>Example: {@code kepplr.setWindowSize(1920, 1080)}
+     *
+     * @param width window width in pixels
+     * @param height window height in pixels
+     */
+    public void setWindowSize(int width, int height) {
+        commands.setWindowSize(width, height);
     }
 
     // ── Transition control ──────────────────────────────────────────────────────

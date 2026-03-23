@@ -546,7 +546,7 @@ script primitives is unnatural and unhelpful.
 
 **Decision:** A selective set of camera commands is added to SimulationCommands
 covering the actions a script author would genuinely want: zoom, orbit, tilt,
-roll, setFov, setCameraPosition, setCameraLookDirection, and setSynodicFrame.
+roll, setFov, setCameraPosition, setCameraOrientation, and setSynodicFrame.
 All are non-blocking and use the existing TransitionController infrastructure
 from step 18. Fine-grained mouse drag navigation remains in CameraInputHandler
 and is intentionally unscriptable.
@@ -589,7 +589,7 @@ wraps the live implementation. Instant same-type camera commands are coalesced w
 a 250ms window. A pose snapshot is taken on the first instant command after a flush
 to detect gesture boundaries; accumulated deltas are combined using type-appropriate
 math (sum degrees for orbit/tilt/roll/yaw; multiply factors for zoom; last-value-wins
-for setFov/setCameraPosition/setCameraLookDirection). The coalesced result is flushed
+for setFov/setCameraPosition/setCameraOrientation). The coalesced result is flushed
 as a single relative command when the window expires, a different command type arrives,
 or any command with `durationSeconds > 0` arrives. Commands with `durationSeconds > 0`
 are always recorded verbatim. The coalescing window constant
@@ -920,7 +920,35 @@ would cause a compilation error since `toScript()` has no default implementation
 
 ---
 
-*Last updated: Step 25 (complete)*
+## D-045: Frame-relative camera position and orientation commands
+**Status:** Accepted
+**Roadmap step:** 28
+
+**Context:** `setCameraPosition` and `setCameraOrientation` interpreted their vector arguments in J2000 regardless of the active camera frame. A user who set up a synodic frame and then called `setCameraOrientation(1,0,0, 0,0,1, 5)` expected to look along the synodic +X axis (toward the target body), but instead got J2000 +X (vernal equinox).
+
+**Decision:** `TransitionController.frameToJ2000(VectorIJK)` transforms vectors from the active camera frame to J2000 before applying them. For SYNODIC, the three `SynodicFrame.Basis` vectors are the columns of the synodic-to-J2000 rotation matrix: `new RotationMatrixIJK(basis.xAxis(), basis.yAxis(), basis.zAxis())` then `mxv`. For BODY_FIXED, the J2000-to-body-fixed rotation is transposed via `rot.mtxv()`. INERTIAL is the identity (no transform). Both `handleCameraPositionRequest` and `handleCameraOrientationRequest` pass their end vectors through `frameToJ2000`.
+
+**Alternatives considered:** Leaving commands always in J2000 and requiring scripts to do the math — rejected because the whole point of camera frames is to simplify spatial reasoning.
+
+**Consequences:** Scripts can now reason about camera positioning in the natural frame of the scene. The transform uses the frame/focus/target state at the moment the request is processed (first JME frame), not when it was issued.
+
+---
+
+## D-046: Body visibility toggle with barycenters hidden by default
+**Status:** Accepted
+**Roadmap step:** 28
+
+**Context:** Barycenters (NAIF IDs 0–9) are rendered as point sprites that often overlap with or obscure the planet they represent (e.g., Pluto barycenter vs. Pluto). The user wanted a way to show/hide individual bodies, with barycenters hidden by default.
+
+**Decision:** `SimulationState.bodyVisibleProperty(int)` returns a `ReadOnlyBooleanProperty` backed by a `ConcurrentHashMap<Integer, SimpleBooleanProperty>` in `DefaultSimulationState`, defaulting to `true`. An instance initializer pre-populates NAIF IDs 0–9 with `false`. `BodySceneManager.update()` checks the flag before pass 1 for natural bodies and before the spacecraft loop; hidden bodies are skipped and any stale scene node is detached. `SimulationCommands.setBodyVisible(int, boolean)` is the command; `KepplrScript` exposes both int and String overloads. The body tree context menu in `KepplrStatusWindow` includes a "Visible" `CheckMenuItem`.
+
+**Alternatives considered:** Filtering barycenters unconditionally in the render loop — rejected because the user sometimes wants to see them. Using a configuration file list — rejected because this is a runtime toggle, not a persistent setting.
+
+**Consequences:** Barycenters are hidden on startup but can be toggled from the context menu or via `kepplr.setBodyVisible(9, true)`. The visibility map is per-session (not persisted across restarts).
+
+---
+
+*Last updated: Step 28 (complete)*
 *Backfill note: Entries D-001 through D-009 were reconstructed retrospectively.
 D-010 onwards recorded in real time.*
 

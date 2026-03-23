@@ -4,6 +4,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import kepplr.camera.CameraFrame;
 import kepplr.camera.TransitionController;
@@ -161,9 +162,9 @@ public final class DefaultSimulationCommands implements SimulationCommands {
     }
 
     @Override
-    public void setCameraLookDirection(
+    public void setCameraOrientation(
             double lookX, double lookY, double lookZ, double upX, double upY, double upZ, double durationSeconds) {
-        transitionController.requestCameraLookDirection(lookX, lookY, lookZ, upX, upY, upZ, durationSeconds);
+        transitionController.requestCameraOrientation(lookX, lookY, lookZ, upX, upY, upZ, durationSeconds);
     }
 
     // ── Cinematic camera commands (Step 24) ──
@@ -397,5 +398,39 @@ public final class DefaultSimulationCommands implements SimulationCommands {
             Thread.currentThread().interrupt();
             logger.warn("loadConfiguration: interrupted while waiting for scene rebuild");
         }
+    }
+
+    // ── HUD message (Step 28) ────────────────────────────────────────────────
+
+    @Override
+    public void displayMessage(String text, double durationSeconds) {
+        state.setHudMessage(text, durationSeconds);
+    }
+
+    // ── Window resize (Step 28) ──────────────────────────────────────────────
+
+    private BiConsumer<Integer, Integer> windowResizeCallback;
+
+    /**
+     * Set the callback that resizes the JME render window.
+     *
+     * @param callback accepts (width, height) in pixels; called by {@link #setWindowSize}
+     */
+    public void setWindowResizeCallback(BiConsumer<Integer, Integer> callback) {
+        this.windowResizeCallback = callback;
+    }
+
+    @Override
+    public void setWindowSize(int width, int height) {
+        if (windowResizeCallback != null) {
+            windowResizeCallback.accept(width, height);
+        } else {
+            logger.warn("setWindowSize: no resize callback set (unit test mode)");
+        }
+    }
+
+    @Override
+    public void setBodyVisible(int naifId, boolean visible) {
+        state.setBodyVisible(naifId, visible);
     }
 }

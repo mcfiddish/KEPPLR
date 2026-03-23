@@ -204,6 +204,12 @@ public class KepplrApp extends SimpleApplication {
         // render pass completes (see update() override). This ensures the framebuffer reflects the
         // current frame's scene graph, including focus-body tracking from simpleUpdate().
         commands.setScreenshotCallback((outputPath, latch) -> pendingCapture = new PendingCapture(outputPath, latch));
+        commands.setWindowResizeCallback((w, h) -> enqueue(() -> {
+            long glfwWindowHandle = getGlfwWindowHandle();
+            if (glfwWindowHandle != 0) {
+                GLFW.glfwSetWindowSize(glfwWindowHandle, w, h);
+            }
+        }));
         CommandRecorder recorder = new CommandRecorder(commands);
         ScriptRunner scriptRunner = new ScriptRunner(commands, simulationState);
 
@@ -449,9 +455,13 @@ public class KepplrApp extends SimpleApplication {
         syncLabels();
         syncFrustums();
 
-        // ── HUD visibility ────────────────────────────────────────────────────────────────────
+        // ── HUD visibility and messages ──────────────────────────────────────────────────────
         hud.setTimeVisible(simulationState.hudTimeVisibleProperty().get());
         hud.setInfoVisible(simulationState.hudInfoVisibleProperty().get());
+        var pendingMsg = simulationState.consumeHudMessage();
+        if (pendingMsg != null) {
+            hud.showMessage(pendingMsg.text(), pendingMsg.durationSeconds());
+        }
 
         trailManager.update(currentEt, cameraHelioJ2000);
         vectorManager.update(
@@ -466,7 +476,8 @@ public class KepplrApp extends SimpleApplication {
         }
         labelManager.update(cam, nearNode, midNode, farNode);
         simulationState.setBodiesInView(inView);
-        hud.update(currentEt, focusedBodyId, cameraHelioJ2000);
+        int selectedBodyId = simulationState.selectedBodyIdProperty().get();
+        hud.update(currentEt, selectedBodyId, cameraHelioJ2000);
 
         // JME calls updateGeometricState() only on rootNode and guiNode (SimpleApplication source).
         // Our frustum layer roots are custom viewport scenes and must be updated manually;
