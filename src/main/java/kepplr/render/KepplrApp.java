@@ -476,7 +476,8 @@ public class KepplrApp extends SimpleApplication {
         }
         labelManager.update(cam, nearNode, midNode, farNode);
         simulationState.setBodiesInView(inView);
-        hud.update(currentEt, focusedBodyId, cameraHelioJ2000);
+        int selectedBodyId = simulationState.selectedBodyIdProperty().get();
+        hud.update(currentEt, selectedBodyId, cameraHelioJ2000);
 
         // JME calls updateGeometricState() only on rootNode and guiNode (SimpleApplication source).
         // Our frustum layer roots are custom viewport scenes and must be updated manually;

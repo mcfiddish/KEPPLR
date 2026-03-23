@@ -25,7 +25,7 @@ import picante.math.vectorspace.VectorIJK;
  *
  * <ul>
  *   <li><b>Time display</b> (upper-right): current UTC time
- *   <li><b>Info display</b> (upper-left): focused body name and distance from camera
+ *   <li><b>Info display</b> (upper-left): selected body name and distance from camera
  * </ul>
  *
  * <p>Never calls {@link javafx.application.Platform#runLater} (CLAUDE.md Rule 2). Acquires
@@ -120,10 +120,10 @@ public final class KepplrHud {
      * <p>Must be called on the JME render thread. Acquires ephemeris at point-of-use (CLAUDE.md Rule 3).
      *
      * @param currentEt current simulation ET (TDB seconds past J2000)
-     * @param focusedBodyId NAIF ID of the focused body, or -1 if none
+     * @param selectedBodyId NAIF ID of the selected body, or -1 if none
      * @param cameraHelioJ2000 camera heliocentric position in J2000 [x,y,z] km, or null
      */
-    public void update(double currentEt, int focusedBodyId, double[] cameraHelioJ2000) {
+    public void update(double currentEt, int selectedBodyId, double[] cameraHelioJ2000) {
         repositionLabels();
 
         if (timeVisible) {
@@ -131,9 +131,9 @@ public final class KepplrHud {
             utcLabel.setText("UTC: " + utc);
         }
 
-        if (infoVisible && focusedBodyId != -1 && cameraHelioJ2000 != null) {
-            String name = BodyLookupService.formatName(focusedBodyId);
-            double distKm = computeDistance(focusedBodyId, currentEt, cameraHelioJ2000);
+        if (infoVisible && selectedBodyId != -1 && cameraHelioJ2000 != null) {
+            String name = BodyLookupService.formatName(selectedBodyId);
+            double distKm = computeDistance(selectedBodyId, currentEt, cameraHelioJ2000);
             String distStr = distKm >= 0 ? formatDistance(distKm) : "—";
             infoLabel.setText(name + "  " + distStr);
             infoLabel.setCullHint(Spatial.CullHint.Inherit);
