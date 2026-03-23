@@ -489,12 +489,16 @@ public class KepplrApp extends SimpleApplication {
 
     @Override
     public void update() {
-        super.update(); // runs enqueued tasks → simpleUpdate() → render pass
-        // Process pending screenshot capture AFTER the render pass so the framebuffer
-        // contains the fully rendered scene at the current ET with focus tracking applied.
+        // Read pending capture BEFORE super.update() so that advance() (inside
+        // super.update → simpleUpdate) reads the latest atomic anchor set by
+        // setET() from the script thread.  The capture still happens AFTER the
+        // render pass so the framebuffer contains the fully rendered scene.
         PendingCapture capture = pendingCapture;
         if (capture != null) {
             pendingCapture = null;
+        }
+        super.update(); // runs enqueued tasks → simpleUpdate() → render pass
+        if (capture != null) {
             captureFramebufferToPng(capture.outputPath());
             capture.latch().countDown();
         }
