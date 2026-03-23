@@ -948,7 +948,35 @@ would cause a compilation error since `toScript()` has no default implementation
 
 ---
 
-*Last updated: Step 28 (complete)*
+## D-047: SimulationClock.setET() must not mutate state directly
+**Status:** Accepted
+**Roadmap step:** Bug fix (branch 50-clock-update-bug)
+
+**Context:** `SimulationClock.setET()` both updated the atomic `TimeAnchor` and called `state.setCurrentEt(et)`. When `CaptureService` called `commands.setET()` from the script thread while the JME thread was mid-`simpleUpdate()`, `applyFocusTracking()` and `SynodicFrameApplier` could see different ETs within the same frame — one read the old state value, the other read the new one. This caused a camera offset error proportional to `etStep × bodyVelocity` (e.g., ~84 km for New Horizons at 14 km/s with a 6-second step).
+
+**Decision:** `setET()` only updates the atomic `TimeAnchor`. It no longer calls `state.setCurrentEt()`. The JME thread's `advance()` reads the anchor and sets state consistently at the start of the next frame. Tests that relied on immediate state update now call `clock.advance()` after `setET()`.
+
+**Alternatives considered:** Synchronizing `simpleUpdate()` with `setET()` via a lock — rejected because adding locks between the JME and script threads risks deadlocks and frame drops.
+
+**Consequences:** All state mutations from ET changes are serialised on the JME thread. Scripts that call `setET()` see the effect after the next `advance()` cycle, which is the correct behavior for frame-consistent rendering.
+
+---
+
+## D-048: Capture reads pendingCapture before super.update()
+**Status:** Accepted
+**Roadmap step:** Bug fix (branch 50-clock-update-bug)
+
+**Context:** `KepplrApp.update()` read `pendingCapture` after `super.update()`. When `CaptureService` set the ET anchor and then set `pendingCapture` from the script thread, the JME thread might already have started `super.update()` with the old anchor. The first frame of `captureSequence` would render at the stale ET (e.g., 07:00:08.586 instead of 07:00:00.000).
+
+**Decision:** `update()` now reads and clears `pendingCapture` *before* `super.update()`. This ensures `advance()` (inside `super.update() → simpleUpdate()`) picks up the latest anchor. The framebuffer capture still runs *after* `super.update()` so the rendered scene is complete. This supersedes the "post-render" framing in D-043 — the capture is still post-render, but the pending-capture read is now pre-advance.
+
+**Alternatives considered:** Having `CaptureService` use `enqueue()` to set ET on the JME thread before capture — rejected because it would add a full frame of latency per capture and complicate the latch handshake.
+
+**Consequences:** The first frame of `captureSequence` now renders at the exact requested start ET. The two-phase read (clear before, capture after) is slightly more nuanced than the original single block, but the comment in `update()` explains the rationale.
+
+---
+
+*Last updated: Step 28 + bug fix (branch 50-clock-update-bug)*
 *Backfill note: Entries D-001 through D-009 were reconstructed retrospectively.
 D-010 onwards recorded in real time.*
 

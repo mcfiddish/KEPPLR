@@ -801,6 +801,41 @@ No behavioral change — purely a naming improvement.
 
 ---
 
+### Bug Fix: Cross-thread capture timing (branch 50-clock-update-bug)
+
+Two race conditions in the capture path caused incorrect camera positioning
+and wrong first-frame timing during `captureSequence()` on Linux (macOS
+masked the issue due to different thread scheduling).
+
+**(1) SimulationClock.setET() cross-thread state mutation (D-047).**
+`setET()` updated both the atomic `TimeAnchor` and called
+`state.setCurrentEt(et)` directly. When the script thread called `setET()`
+while the JME thread was mid-`simpleUpdate()`, focus tracking and the
+synodic frame applier saw different ETs within the same frame — one read
+the old state, the other the new. This produced a camera offset of
+`etStep × bodyVelocity` (≈84 km for New Horizons at 6-second steps).
+**Fix:** `setET()` now only updates the atomic anchor. `advance()` on the
+JME thread reads the anchor and sets state consistently at the start of
+each frame.
+
+**(2) pendingCapture read after super.update() (D-048).** `KepplrApp.update()`
+read the `pendingCapture` volatile after `super.update()`. If the JME thread
+had already started `advance()` before the script thread set the new ET
+anchor, the first capture frame rendered at the stale ET (e.g., 07:00:08
+instead of 07:00:00). **Fix:** `update()` now reads and clears
+`pendingCapture` *before* `super.update()`, ensuring `advance()` picks up
+the latest anchor. The framebuffer capture still runs after the render pass.
+
+**Files changed:**
+- `SimulationClock.java` — removed `state.setCurrentEt(et)` from `setET()`
+- `KepplrApp.java` — moved `pendingCapture` read before `super.update()`
+- `SimulationClockTest.java` — added `clock.advance()` after `setET()`/`setUTC()`
+- `DefaultSimulationCommandsTest.java` — added `clock.advance()` and pause
+
+**Bug fix is complete.**
+
+---
+
 ## Backlog (unsequenced, post-v0.2)
 
 - Camera navigation inertia and damping (§16.2)

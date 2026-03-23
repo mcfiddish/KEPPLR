@@ -313,10 +313,11 @@ class SimulationClockTest {
     class SetET {
 
         @Test
-        @DisplayName("setET jumps currentEt in state immediately")
+        @DisplayName("setET updates currentEt in state after advance()")
         void setETUpdatesState() {
             double target = 999_999.0;
             clock.setET(target);
+            clock.advance();
             assertEquals(target, state.currentEtProperty().get(), TOLERANCE);
         }
 
@@ -367,12 +368,13 @@ class SimulationClockTest {
         }
 
         @Test
-        @DisplayName("setUTC converts UTC string to expected ET")
+        @DisplayName("setUTC converts UTC string to expected ET after advance()")
         void setUTCConvertsCorrectly() {
             // Known epoch: 2015 Jul 14 07:59:00 UTC (New Horizons Pluto flyby)
             double expectedET = TestHarness.getTestEpoch();
 
             clock.setUTC("2015 Jul 14 07:59:00");
+            clock.advance();
 
             assertEquals(
                     expectedET,

@@ -169,7 +169,13 @@ public final class SimulationClock {
         double wn = wallNow();
         TimeAnchor old = anchor.get();
         anchor.set(new TimeAnchor(et, wn, old.timeRate()));
-        state.setCurrentEt(et);
+        // Do NOT call state.setCurrentEt(et) here — this method is called from the script
+        // thread, and mutating state mid-frame creates a race with simpleUpdate() on the JME
+        // thread: applyFocusTracking() and the synodic frame applier would see different ETs
+        // within the same frame, causing the camera offset from the focus body to be computed
+        // against the wrong epoch (off by etStep × body velocity).  The atomic anchor update
+        // above is sufficient — advance() on the JME thread will read it and set state
+        // consistently at the start of the next frame.
     }
 
     /**
