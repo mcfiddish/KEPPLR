@@ -253,5 +253,8 @@ class ScriptRunnerTest {
 
         @Override
         public void setWindowSize(int width, int height) {}
+
+        @Override
+        public void setBodyVisible(int naifId, boolean visible) {}
     }
 }

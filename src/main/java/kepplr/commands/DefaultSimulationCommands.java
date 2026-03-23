@@ -428,4 +428,9 @@ public final class DefaultSimulationCommands implements SimulationCommands {
             logger.warn("setWindowSize: no resize callback set (unit test mode)");
         }
     }
+
+    @Override
+    public void setBodyVisible(int naifId, boolean visible) {
+        state.setBodyVisible(naifId, visible);
+    }
 }

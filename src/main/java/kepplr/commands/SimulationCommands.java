@@ -476,4 +476,17 @@ public interface SimulationCommands {
      * @param height window height in pixels
      */
     void setWindowSize(int width, int height);
+
+    /**
+     * Show or hide a body in the scene.
+     *
+     * <p>Hidden bodies are not rendered (culled before the body loop). Useful for toggling visibility of barycenters or
+     * other bodies that may clutter the scene.
+     *
+     * <pre>{@code kepplr.setBodyVisible(9, false)  // hide Pluto barycenter }</pre>
+     *
+     * @param naifId NAIF ID of the body
+     * @param visible {@code true} to show, {@code false} to hide
+     */
+    void setBodyVisible(int naifId, boolean visible);
 }

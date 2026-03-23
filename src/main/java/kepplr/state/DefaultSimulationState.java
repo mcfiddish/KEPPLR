@@ -82,6 +82,14 @@ public final class DefaultSimulationState implements SimulationState {
     private final ConcurrentHashMap<Integer, SimpleDoubleProperty> trailDuration = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<VectorKey, SimpleBooleanProperty> vectorVisibility = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<Integer, SimpleBooleanProperty> frustumVisibility = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<Integer, SimpleBooleanProperty> bodyVisibility = new ConcurrentHashMap<>();
+
+    {
+        // Barycenters (NAIF 0–9) hidden by default
+        for (int i = 0; i <= 9; i++) {
+            bodyVisibility.put(i, new SimpleBooleanProperty(false));
+        }
+    }
 
     // ── HUD message (Step 28) ──
 
@@ -437,5 +445,21 @@ public final class DefaultSimulationState implements SimulationState {
     /** Returns the frustum visibility map. Package-private for render-loop and bridge access. */
     public ConcurrentHashMap<Integer, SimpleBooleanProperty> getFrustumVisibilityMap() {
         return frustumVisibility;
+    }
+
+    @Override
+    public ReadOnlyBooleanProperty bodyVisibleProperty(int naifId) {
+        return bodyVisibility.computeIfAbsent(naifId, id -> new SimpleBooleanProperty(true));
+    }
+
+    public void setBodyVisible(int naifId, boolean visible) {
+        bodyVisibility
+                .computeIfAbsent(naifId, id -> new SimpleBooleanProperty(true))
+                .set(visible);
+    }
+
+    /** Returns the body visibility map. */
+    public ConcurrentHashMap<Integer, SimpleBooleanProperty> getBodyVisibilityMap() {
+        return bodyVisibility;
     }
 }

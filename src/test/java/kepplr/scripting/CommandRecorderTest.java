@@ -622,5 +622,10 @@ class CommandRecorderTest {
         public void setWindowSize(int width, int height) {
             lastMethod = "setWindowSize";
         }
+
+        @Override
+        public void setBodyVisible(int naifId, boolean visible) {
+            lastMethod = "setBodyVisible";
+        }
     }
 }

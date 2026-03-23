@@ -556,4 +556,10 @@ public final class CommandRecorder implements SimulationCommands {
         recordCommand("kepplr.setWindowSize(" + width + ", " + height + ")");
         delegate.setWindowSize(width, height);
     }
+
+    @Override
+    public void setBodyVisible(int naifId, boolean visible) {
+        recordCommand("kepplr.setBodyVisible(" + naifId + ", " + fmtBool(visible) + ")");
+        delegate.setBodyVisible(naifId, visible);
+    }
 }

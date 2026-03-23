@@ -703,6 +703,33 @@ public final class KepplrScript {
         commands.setFrustumVisible(resolve(instrumentName), visible);
     }
 
+    // ── Body visibility (Step 28) ──────────────────────────────────────────────
+
+    /**
+     * Show or hide a body in the scene by NAIF ID.
+     *
+     * <p>Example: {@code kepplr.setBodyVisible(9, false)} — hide Pluto barycenter
+     *
+     * @param naifId NAIF ID of the body
+     * @param visible {@code true} to show, {@code false} to hide
+     */
+    public void setBodyVisible(int naifId, boolean visible) {
+        commands.setBodyVisible(naifId, visible);
+    }
+
+    /**
+     * Show or hide a body in the scene by name.
+     *
+     * <p>Example: {@code kepplr.setBodyVisible("Pluto Barycenter", false)}
+     *
+     * @param bodyName body name; case-insensitive
+     * @param visible {@code true} to show, {@code false} to hide
+     * @throws IllegalArgumentException if the name cannot be resolved
+     */
+    public void setBodyVisible(String bodyName, boolean visible) {
+        commands.setBodyVisible(resolve(bodyName), visible);
+    }
+
     // ── Screenshot and capture (Step 25) ────────────────────────────────────────
 
     /**

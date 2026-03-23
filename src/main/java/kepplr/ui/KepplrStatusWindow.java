@@ -444,6 +444,10 @@ public final class KepplrStatusWindow {
             commands.setVectorVisible(naifId, VectorTypes.bodyAxisZ(), show);
         });
 
+        CheckMenuItem visibleItem = new CheckMenuItem("Visible");
+        visibleItem.setSelected(bridge.getState().bodyVisibleProperty(naifId).get());
+        visibleItem.setOnAction(e -> commands.setBodyVisible(naifId, visibleItem.isSelected()));
+
         menu.getItems()
                 .addAll(
                         focusItem,
@@ -452,7 +456,8 @@ public final class KepplrStatusWindow {
                         trailItem,
                         labelItem,
                         new SeparatorMenuItem(),
-                        axesItem);
+                        axesItem,
+                        visibleItem);
     }
 
     private int getSelectedTreeNaifId() {
