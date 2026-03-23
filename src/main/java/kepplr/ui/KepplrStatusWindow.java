@@ -57,8 +57,13 @@ import kepplr.ephemeris.BodyLookupService;
 import kepplr.ephemeris.Instrument;
 import kepplr.ephemeris.KEPPLREphemeris;
 import kepplr.ephemeris.spice.SpiceBundle;
+import kepplr.render.RenderQuality;
 import kepplr.render.vector.VectorTypes;
+import java.io.StringWriter;
+import javax.script.ScriptEngine;
+import javax.script.ScriptEngineManager;
 import kepplr.scripting.CommandRecorder;
+import kepplr.scripting.KepplrScript;
 import kepplr.scripting.ScriptRunner;
 import kepplr.state.SimulationState;
 import kepplr.util.KepplrConstants;
@@ -107,6 +112,8 @@ public final class KepplrStatusWindow {
     private CustomMenuItem captureSeqItem;
     private CustomMenuItem saveScreenshotItem;
     private volatile Thread captureSequenceThread;
+    private volatile Thread consoleThread;
+    private TextArea consoleInput;
     private LogWindow logWindow;
 
     /**
@@ -679,8 +686,36 @@ public final class KepplrStatusWindow {
     // ── Script Output Panel ────────────────────────────────────────────────
 
     private VBox buildScriptOutputPanel() {
-        Label header = boldLabel("Script Output");
+        Label header = boldLabel("Script Console");
         header.setPadding(new Insets(4, 10, 2, 10));
+
+        consoleInput = new TextArea();
+        consoleInput.setPromptText("Enter Groovy commands... (Enter to run, Shift+Enter for newline)");
+        consoleInput.setStyle("-fx-font-family: monospace; -fx-font-size: 11px;");
+        consoleInput.setPrefRowCount(4);
+        consoleInput.setWrapText(true);
+        // Enter runs the console; Shift+Enter inserts a newline
+        consoleInput.addEventFilter(KeyEvent.KEY_PRESSED, e -> {
+            if (e.getCode() == KeyCode.ENTER) {
+                e.consume();
+                if (e.isShiftDown()) {
+                    consoleInput.insertText(consoleInput.getCaretPosition(), "\n");
+                } else {
+                    evaluateConsoleInput();
+                }
+            }
+        });
+
+        Button runButton = new Button("Run");
+        runButton.setOnAction(e -> evaluateConsoleInput());
+        runButton.setStyle("-fx-font-size: 10px;");
+
+        Button clearButton = new Button("Clear");
+        clearButton.setOnAction(e -> consoleInput.clear());
+        clearButton.setStyle("-fx-font-size: 10px;");
+
+        HBox buttonBar = new HBox(6, runButton, clearButton);
+        buttonBar.setPadding(new Insets(0, 10, 0, 10));
 
         scriptOutputArea = new TextArea();
         scriptOutputArea.setEditable(false);
@@ -688,8 +723,82 @@ public final class KepplrStatusWindow {
         scriptOutputArea.setStyle("-fx-font-family: monospace; -fx-font-size: 10px;");
         VBox.setVgrow(scriptOutputArea, Priority.ALWAYS);
 
-        VBox box = new VBox(4, header, scriptOutputArea);
+        VBox box = new VBox(4, header, consoleInput, buttonBar, scriptOutputArea);
         return box;
+    }
+
+    private void evaluateConsoleInput() {
+        String code = consoleInput.getText().trim();
+        if (code.isEmpty()) return;
+
+        if (scriptRunner != null && scriptRunner.isRunning()) {
+            scriptOutputQueue.add("⚠ Cannot evaluate: a script is running");
+            return;
+        }
+
+        Thread ct = consoleThread;
+        if (ct != null && ct.isAlive()) {
+            scriptOutputQueue.add("⚠ Previous console command still running");
+            return;
+        }
+
+        // Echo the input (abbreviated if multi-line)
+        String[] lines = code.split("\n");
+        if (lines.length == 1) {
+            scriptOutputQueue.add("› " + code);
+        } else {
+            scriptOutputQueue.add("› " + lines[0] + " ... (" + lines.length + " lines)");
+        }
+
+        // Wrap in kepplr.with { ... } so the "kepplr." prefix is optional
+        String wrappedCode = "kepplr.with {\n" + code + "\n}";
+
+        Thread thread = new Thread(() -> {
+            try {
+                ScriptEngineManager manager = new ScriptEngineManager();
+                ScriptEngine engine = manager.getEngineByName("groovy");
+                if (engine == null) {
+                    scriptOutputQueue.add("ERROR: Groovy engine not available");
+                    return;
+                }
+
+                StringWriter outputWriter = new StringWriter();
+                engine.getContext().setWriter(outputWriter);
+                engine.getContext().setErrorWriter(outputWriter);
+
+                KepplrScript api = new KepplrScript(commands, bridge.getState());
+                javax.script.Bindings bindings = engine.createBindings();
+                bindings.put("kepplr", api);
+                bindings.put("VectorTypes", VectorTypes.class);
+                bindings.put("CameraFrame", CameraFrame.class);
+                bindings.put("RenderQuality", RenderQuality.class);
+
+                Object result = engine.eval(wrappedCode, bindings);
+
+                // Flush any print output from the script
+                String printed = outputWriter.toString();
+                if (!printed.isEmpty()) {
+                    for (String line : printed.split("\n")) {
+                        scriptOutputQueue.add(line);
+                    }
+                }
+
+                if (result != null) {
+                    scriptOutputQueue.add("= " + result);
+                }
+                scriptOutputQueue.add("✓ Done");
+            } catch (Exception ex) {
+                Throwable cause = ex;
+                while (cause.getCause() != null && cause.getCause() != cause) {
+                    cause = cause.getCause();
+                }
+                String msg = cause.getMessage();
+                scriptOutputQueue.add("✗ " + (msg != null ? msg : cause.getClass().getSimpleName()));
+            }
+        }, "kepplr-console");
+        thread.setDaemon(true);
+        consoleThread = thread;
+        thread.start();
     }
 
     private void drainScriptOutput() {
