@@ -58,6 +58,29 @@ public final class KepplrScript {
         this.waitTransition = new WaitTransition(state);
     }
 
+    // ── Configuration access (Step 28) ────────────────────────────────────────────
+
+    /**
+     * Return the current KEPPLR configuration.
+     *
+     * <p>Acquires the singleton at point-of-use (CLAUDE.md Rule 3). Scripts may call any method on the returned object,
+     * including {@code getEphemeris()}.
+     *
+     * <p>Example:
+     *
+     * <pre>{@code
+     * config = kepplr.getConfiguration()
+     * eph = config.getEphemeris()
+     * pos = eph.getHeliocentricPositionJ2000(399, config.getTimeConversion().utcStringToTDB("2015 Jul 14 08:00:00"))
+     * println pos
+     * }</pre>
+     *
+     * @return the current {@link KEPPLRConfiguration} instance
+     */
+    public KEPPLRConfiguration getConfiguration() {
+        return KEPPLRConfiguration.getInstance();
+    }
+
     // ── Name resolution helper ──────────────────────────────────────────────────
 
     /**
