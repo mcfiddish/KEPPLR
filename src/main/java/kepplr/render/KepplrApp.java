@@ -856,6 +856,12 @@ public class KepplrApp extends SimpleApplication {
     }
 
     public static void main(String[] args) {
+        KEPPLRConfiguration.getTemplate();
+
+        run();
+    }
+
+    public static void run() {
         String os = System.getProperty("os.name", "").toLowerCase();
 
         if (os.contains("linux")) {
@@ -881,8 +887,6 @@ public class KepplrApp extends SimpleApplication {
         // install its own NSApplication delegate; when GLFW then also tries to configure
         // NSApplication the result is a conflict that silently prevents the JME window from
         // appearing.
-
-        KEPPLRConfiguration.getTemplate();
 
         KepplrApp app = new KepplrApp();
         AppSettings settings = new AppSettings(true);
