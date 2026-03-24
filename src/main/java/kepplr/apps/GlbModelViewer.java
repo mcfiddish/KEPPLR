@@ -146,6 +146,10 @@ public class GlbModelViewer implements KEPPLRTool {
     }
 
     private static final class ViewerApp extends SimpleApplication implements AnalogListener, ActionListener {
+        // JME 3.9.0 adds a protected j.u.l.Logger field to Application; redeclare here
+        // so that the Log4j2 logger is used instead of the inherited JUL one.
+        private static final Logger logger = LogManager.getLogger();
+
         private static final String ROTATE_LEFT = "RotateLeft";
         private static final String ROTATE_RIGHT = "RotateRight";
         private static final String ROTATE_UP = "RotateUp";

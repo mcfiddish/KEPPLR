@@ -19,20 +19,20 @@ public class KEPPLR implements KEPPLRTool {
 
     @Override
     public String shortDescription() {
-        return "SHORT DESCRIPTION.";
+        return "Command to run KEPPLR GUI.";
     }
 
     @Override
     public String fullDescription(Options options) {
-        String header = "TEXT APPEARING BEFORE COMMAND LINE OPTION SUMMARY";
-        String footer = "\nTEXT APPENDED TO COMMAND LINE OPTION SUMMARY.\n";
+        String header = "";
+        String footer = "\nThis program launches the GUI.\n";
         return KEPPLRTool.super.fullDescription(options, header, footer);
     }
 
     private static Options defineOptions() {
         Options options = KEPPLRTool.defineOptions();
         options.addOption(Option.builder("config")
-                .hasArgs()
+                .hasArg()
                 .required()
                 .desc("Configuration file to load")
                 .get());
