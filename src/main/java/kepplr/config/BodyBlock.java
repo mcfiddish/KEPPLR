@@ -18,7 +18,9 @@ public interface BodyBlock {
     @DefaultValue("")
     String name();
 
-    @Comment("Body color as a hexadecimal number.  Ignored if textureMap is specified.")
+    @Comment("""
+    Body color as a hexadecimal number.  Ignored if textureMap is specified but it will be applied to a shape model
+    without a built-in color.""")
     @DefaultValue("#FFFFFF")
     String hexColor();
 
@@ -26,14 +28,11 @@ public interface BodyBlock {
         return Color.decode(hexColor());
     }
 
-    @Comment("Scale dayside color by this fraction when drawing night side")
-    @DefaultValue("0.01")
-    double nightShade();
-
     @Comment("""
 Path under resourcesFolder() for this body's texture map.  These should be in
 simple cylindrical projection, with +90 at the top and -90 at the bottom.
-If blank or can't be loaded, specified color will be used.""")
+If blank or can't be loaded, specified color will be used.  The texture map
+is ignored if a shapeModel exists and can be loaded.""")
     @DefaultValue("")
     String textureMap();
 
