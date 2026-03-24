@@ -318,7 +318,7 @@ public class KepplrApp extends SimpleApplication {
         vectorManager = new VectorManager(nearNode, midNode, farNode, assetManager);
 
         // ── Star field ────────────────────────────────────────────────────────────────────────
-        starCatalog = YaleBrightStarCatalog.loadFromResource("/resources/kepplr/stars/catalogs/yaleBSC/ybsc5.gz");
+        starCatalog = YaleBrightStarCatalog.loadFromResource("/kepplr/stars/catalogs/yaleBSC/ybsc5.gz");
         starFieldManager = new StarFieldManager(farNode, assetManager, simulationState);
         starFieldManager.setCatalog(starCatalog);
 
