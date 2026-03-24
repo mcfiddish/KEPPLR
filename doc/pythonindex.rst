@@ -2,7 +2,7 @@
 Python Tools
 ============
 
-The script `convert_to_normalized_glb` can convert common spacecraft model formats into glTF Binary (.glb) for use
+The script `convert_to_normalized_glb` can convert common model formats into glTF Binary (.glb) for use
 with KEPPLR.
 
 Dependencies
