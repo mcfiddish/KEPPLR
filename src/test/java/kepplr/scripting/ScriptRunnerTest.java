@@ -256,5 +256,13 @@ class ScriptRunnerTest {
 
         @Override
         public void setBodyVisible(int naifId, boolean visible) {}
+
+        @Override
+        public String getStateString() {
+            return "";
+        }
+
+        @Override
+        public void setStateString(String s) {}
     }
 }

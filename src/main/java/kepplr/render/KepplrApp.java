@@ -363,6 +363,20 @@ public class KepplrApp extends SimpleApplication {
         }
 
         simulationClock.advance();
+
+        // Apply pending camera restore from setStateString() (Step 26)
+        DefaultSimulationState.PendingCameraRestore restore = simulationState.consumePendingCameraRestore();
+        if (restore != null) {
+            cameraHelioJ2000[0] = restore.posJ2000()[0];
+            cameraHelioJ2000[1] = restore.posJ2000()[1];
+            cameraHelioJ2000[2] = restore.posJ2000()[2];
+            cam.setRotation(new com.jme3.math.Quaternion(
+                    restore.orientJ2000()[0], restore.orientJ2000()[1],
+                    restore.orientJ2000()[2], restore.orientJ2000()[3]));
+            cam.setFov((float)
+                    Math.max(KepplrConstants.FOV_MIN_DEG, Math.min(restore.fovDeg(), KepplrConstants.FOV_MAX_DEG)));
+        }
+
         try {
             cameraInputHandler.update();
         } catch (Exception e) {
@@ -425,6 +439,8 @@ public class KepplrApp extends SimpleApplication {
                 cameraHelioJ2000,
                 simulationState.currentEtProperty().get()));
         simulationState.setFovDeg(cam.getFov());
+        com.jme3.math.Quaternion rot = cam.getRotation();
+        simulationState.setCameraOrientationJ2000(new float[] {rot.getX(), rot.getY(), rot.getZ(), rot.getW()});
 
         // Sync slave cameras to master orientation, aspect ratio, and FOV (position is always ZERO
         // in floating-origin). FOV sync is required because TransitionController calls cam.setFov()

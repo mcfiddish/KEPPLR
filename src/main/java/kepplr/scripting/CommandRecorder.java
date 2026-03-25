@@ -524,6 +524,19 @@ public final class CommandRecorder implements SimulationCommands {
         delegate.setFrustumVisible(instrumentName, visible);
     }
 
+    // ── State snapshot (Step 26) ──
+
+    @Override
+    public String getStateString() {
+        return delegate.getStateString();
+    }
+
+    @Override
+    public void setStateString(String stateString) {
+        recordCommand("kepplr.setStateString(\"" + stateString + "\")");
+        delegate.setStateString(stateString);
+    }
+
     // ── Screenshot capture (Step 25) ──
 
     @Override

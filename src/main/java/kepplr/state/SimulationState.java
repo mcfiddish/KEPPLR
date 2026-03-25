@@ -155,6 +155,14 @@ public interface SimulationState {
      */
     ReadOnlyDoubleProperty fovDegProperty();
 
+    /**
+     * Camera orientation in J2000 as a unit quaternion {@code [x, y, z, w]} (Step 26).
+     *
+     * <p>Updated each frame from the JME camera on the JME render thread. The quaternion describes the rotation from
+     * J2000 axes to camera-local axes (camera look = −Z, up = +Y in camera space). The array is always length 4.
+     */
+    ReadOnlyObjectProperty<float[]> cameraOrientationJ2000Property();
+
     // ── Overlay state (REDESIGN.md §7.8, §7.9, §7.5, §7.6, Step 19b) ──
 
     /**

@@ -507,5 +507,16 @@ class KepplrScriptTest {
             lastIntArg = naifId;
             lastBoolArg = visible;
         }
+
+        @Override
+        public String getStateString() {
+            lastMethod = "getStateString";
+            return "";
+        }
+
+        @Override
+        public void setStateString(String s) {
+            lastMethod = "setStateString";
+        }
     }
 }

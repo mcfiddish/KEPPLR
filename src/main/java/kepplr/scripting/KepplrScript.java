@@ -746,6 +746,30 @@ public final class KepplrScript {
     }
 
     /**
+     * Capture the current simulation state as a compact, copy-pasteable string (Step 26).
+     *
+     * <p>Example: {@code def s = kepplr.getStateString()}
+     *
+     * @return the encoded state string
+     */
+    public String getStateString() {
+        return commands.getStateString();
+    }
+
+    /**
+     * Restore simulation state from a state string (Step 26).
+     *
+     * <p>All fields are applied instantly (no transition animation).
+     *
+     * <p>Example: {@code kepplr.setStateString("AQA...")}
+     *
+     * @param stateString the encoded state string
+     */
+    public void setStateString(String stateString) {
+        commands.setStateString(stateString);
+    }
+
+    /**
      * Capture a sequence of frames as PNG files (Step 25).
      *
      * <p>Sets ET to {@code startET}, pauses the simulation, then loops {@code frameCount} times: captures a screenshot,
