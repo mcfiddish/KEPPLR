@@ -169,17 +169,15 @@ void main() {
     diffuse.rgb *= m_DiffuseColor.rgb;
 #else
     diffuse = m_DiffuseColor;
-    // DiffuseColor is assumed already linear (engine-set fallback colors are typically linear).
+    // DiffuseColor is in linear space: hexColor values are linearised by toLinearColorRGBA(),
+    // and glTF BaseColor factors are linear by spec.
 #endif
 
     // Sun direction from fragment
     vec3 toSun = m_SunPosition - vWorldPos;
     float dSun = length(toSun);
     if (!(dSun > 0.0)) {
-        vec3 ambient = diffuse.rgb * AMBIENT;
-#ifdef DIFFUSE_MAP
-        ambient = linearToSrgb(ambient);
-#endif
+        vec3 ambient = linearToSrgb(diffuse.rgb * AMBIENT);
         fragColor = vec4(ambient, diffuse.a);
         return;
     }
@@ -240,9 +238,10 @@ void main() {
     float lit = AMBIENT + (1.0 - AMBIENT) * day * eclipseFactor * rsf;
     vec3 result = diffuse.rgb * lit;
 
-    // Linear → sRGB for display output (only when input was converted from sRGB)
-#ifdef DIFFUSE_MAP
+    // Linear → sRGB for display output. All lighting math is in linear space regardless of
+    // whether the input came from a texture (sRGB-authored, converted on input) or a flat
+    // DiffuseColor (already linear). The output conversion must be unconditional so that
+    // shape models and ellipsoids have consistent nightside shading.
     result = linearToSrgb(result);
-#endif
     fragColor = vec4(result, diffuse.a);
 }

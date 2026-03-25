@@ -462,15 +462,15 @@ public final class BodyNodeFactory {
                         tex.getImage().setColorSpace(ColorSpace.sRGB);
                     }
                     eclipseMat.setTexture("DiffuseMap", tex);
+                    // When a texture is present, apply BaseColor factor as a tint multiplier
+                    // (per glTF spec: baseColorFactor × baseColorTexture).
+                    var colorVal = oldMat.getParam("BaseColor");
+                    if (colorVal != null && colorVal.getValue() instanceof ColorRGBA c) {
+                        eclipseMat.setColor("DiffuseColor", c);
+                    }
                 }
-                // Extract BaseColor factor (if any) → DiffuseColor.
-                // In glTF, baseColorFactor is in linear space and multiplies the texture sample.
-                // Setting DiffuseColor here allows the shader to apply the tint even when a
-                // texture is also present (the shader multiplies DiffuseMap × DiffuseColor).
-                var colorVal = oldMat.getParam("BaseColor");
-                if (colorVal != null && colorVal.getValue() instanceof ColorRGBA c) {
-                    eclipseMat.setColor("DiffuseColor", c);
-                }
+                // When no texture is present, DiffuseColor is left as-is — the hexColor set
+                // by createEclipseMaterial is the intended surface color for untextured GLBs.
             }
             geometry.setMaterial(eclipseMat);
             return;
@@ -590,11 +590,11 @@ public final class BodyNodeFactory {
                 } catch (Exception e) {
                     logger.warn("Could not load texture for {}: {}", bodyName, e.getMessage());
                     if (block.color() != null) {
-                        mat.setColor("DiffuseColor", toColorRGBA(block.color()));
+                        mat.setColor("DiffuseColor", toLinearColorRGBA(block.color()));
                     }
                 }
             } else if (block.color() != null) {
-                mat.setColor("DiffuseColor", toColorRGBA(block.color()));
+                mat.setColor("DiffuseColor", toLinearColorRGBA(block.color()));
             }
         }
 
@@ -696,6 +696,23 @@ public final class BodyNodeFactory {
 
     private static ColorRGBA toColorRGBA(Color awtColor) {
         return new ColorRGBA(awtColor.getRed() / 255f, awtColor.getGreen() / 255f, awtColor.getBlue() / 255f, 1f);
+    }
+
+    /**
+     * Convert an AWT sRGB color to a linear-space ColorRGBA for use with EclipseLighting.
+     *
+     * <p>The EclipseLighting shader applies linearToSrgb unconditionally on output, so DiffuseColor must be in linear
+     * space to avoid double-gamma.
+     */
+    private static ColorRGBA toLinearColorRGBA(Color awtColor) {
+        float r = srgbToLinear(awtColor.getRed() / 255f);
+        float g = srgbToLinear(awtColor.getGreen() / 255f);
+        float b = srgbToLinear(awtColor.getBlue() / 255f);
+        return new ColorRGBA(r, g, b, 1f);
+    }
+
+    private static float srgbToLinear(float c) {
+        return (float) Math.pow(c, 2.2);
     }
 
     /**
