@@ -2,7 +2,7 @@
 Configuration Files
 ===================
 
-Run :doc:`DumpConfig` to generate a sample configuration file.  This creates a configuration file and resource directory in
+Run :doc:`tools/DumpConfig` to generate a sample configuration file.  This creates a configuration file and resource directory in
 `tmp`.  Move them to your working directory.
 
 ::

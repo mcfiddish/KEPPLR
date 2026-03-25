@@ -2,6 +2,9 @@
 User's Guide
 ============
 
+Quick Start
+-----------
+
 Unpack the archive in your desired working directory:
 
 ::
@@ -11,11 +14,26 @@ Unpack the archive in your desired working directory:
 The directory `KEPPLR-YYYY.MM.DD/scripts` contains all of the command-line utilities.  Run them without arguments to get a 
 usage description.
 
-See :doc:`configuration` for instructions on creating a configuration file.
+Create a configuration file and move it to your working directory:
 
-See :doc:`gui` for instructions on running the GUI application.
+::
 
-See :doc:`scripting` for instructions on running a `Groovy <https://groovy-lang.org/>`__ script.
+    ./KEPPLR-YYYY.MM.DD/scripts/DumpConfig tmp
+    mv tmp/* .
+
+Edit KEPPLR.config and resources/spice/kepplr.tm as needed to set correct paths.
+
+Run KEPPLR:
+
+::
+
+    ./KEPPLR-YYYY.MM.DD/scripts/KEPPLR -config KEPPLR.config
+
+See:
+
+    * :doc:`configuration` for details on the configuration file.
+    * :doc:`gui` for details on the GUI application.
+    * :doc:`scripting` for details on running a `Groovy <https://groovy-lang.org/>`__ script with KEPPLR.
 
 .. toctree::
    :hidden:

@@ -2,7 +2,7 @@
 Running the GUI
 ===============
 
-The main :doc:`KEPPLR` launches a graphical user interface (GUI):
+The main :doc:`tools/KEPPLR` launches a graphical user interface (GUI):
 
 ::
 
