@@ -15,8 +15,11 @@ See :doc:`configuration` for instructions on creating a configuration file.
 
 See :doc:`gui` for instructions on running the GUI application.
 
+See :doc:`scripting` for instructions on running a `Groovy <https://groovy-lang.org/>`__ script.
+
 .. toctree::
    :hidden:
 
    configuration
    gui
+   scripting
