@@ -976,7 +976,47 @@ would cause a compilation error since `toScript()` has no default implementation
 
 ---
 
-*Last updated: Step 28 + bug fix (branch 50-clock-update-bug)*
+## D-049: State snapshot uses packed binary, not JSON
+**Status:** Accepted
+**Roadmap step:** 26 (State Snapshot Strings)
+
+**Context:** The roadmap left the internal representation TBD — "JSON for readability during development, packed binary if string length becomes a concern." The snapshot encodes 10 fields (ET, timeRate, paused, camPos[3], camOrient[4], cameraFrame, focus/target/selected IDs, FOV).
+
+**Decision:** Packed binary from the start. A `DataOutputStream` writes a version byte (1) followed by the fields in fixed order (74 bytes total), then Base64url-encodes without padding. This produces ~100-character strings — short enough to paste into chat, email, or script comments. JSON would produce ~300+ characters for the same data and add a JSON library dependency or manual string building.
+
+**Alternatives considered:** JSON was considered for debuggability, but the version byte + known layout means any future tooling can decode the binary trivially. A hex dump of the Base64-decoded bytes is equally readable for debugging.
+
+**Consequences:** Compact strings. Version byte allows future format extensions (add fields after the current layout in version 2, decode version 1 strings with defaults for missing fields). `StateSnapshotCodec` is the single encode/decode authority.
+
+---
+
+## D-050: Camera orientation exposed via SimulationState for snapshot capture
+**Status:** Accepted
+**Roadmap step:** 26 (State Snapshot Strings)
+
+**Context:** The state snapshot needs camera orientation in J2000, but `SimulationState` only exposed `cameraPositionJ2000Property()`. The JME camera rotation quaternion is the J2000 orientation (scene frame = J2000, translated to floating origin).
+
+**Decision:** Added `cameraOrientationJ2000Property()` returning `ReadOnlyObjectProperty<float[]>` (xyzw quaternion) to `SimulationState`. `KepplrApp` sets it each frame alongside position. `float[]` rather than `double[]` because JME quaternions are single-precision — no false precision.
+
+**Consequences:** Snapshot capture reads orientation from state like any other field. The property is also available for future HUD displays (e.g., camera Euler angles).
+
+---
+
+## D-051: State restore uses PendingCameraRestore consumed on JME thread
+**Status:** Accepted
+**Roadmap step:** 26 (State Snapshot Strings)
+
+**Context:** `setStateString()` must restore camera position, orientation, and FOV. These live in the JME `cam` object and `cameraHelioJ2000` array, which are only safe to mutate on the JME render thread. The command may be called from any thread (script thread, FX thread).
+
+**Decision:** `DefaultSimulationState` holds an `AtomicReference<PendingCameraRestore>` (same pattern as `HudMessage`). `setStateString()` posts a restore record; `KepplrApp.simpleUpdate()` consumes it at the top of the frame — after `clock.advance()` but before `cameraInputHandler.update()` — so the restored pose takes effect before any user input processing or frame co-rotation.
+
+**Alternatives considered:** Using `TransitionController.requestCameraPosition()` with duration 0 — rejected because that interprets position relative to a focus body in the active camera frame, whereas the snapshot stores absolute J2000 coordinates.
+
+**Consequences:** Thread-safe, instant restore. Any in-progress transition is cancelled before the restore is posted.
+
+---
+
+*Last updated: Step 28 + bug fix (branch 50-clock-update-bug), Step 26*
 *Backfill note: Entries D-001 through D-009 were reconstructed retrospectively.
 D-010 onwards recorded in real time.*
 

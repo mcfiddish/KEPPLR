@@ -621,10 +621,9 @@ on `KepplrScript`. Synodic frame javadoc corrected from "targeted" to
 A compact serialized encoding of the current simulation state as a single
 copy-pasteable string.
 
-**Format:** Base64-encoded (URL-safe variant), versioned with a leading
-version byte so future field additions don't break older strings. Internal
-representation TBD — JSON for readability during development, packed binary
-if string length becomes a concern.
+**Format:** Base64url-encoded (no padding), versioned with a leading
+version byte so future field additions don't break older strings. Packed
+binary layout chosen for compactness (~100-character strings). See D-049.
 
 **Minimal field set:** ET, time rate, paused flag, camera position and
 orientation in heliocentric J2000 (the canonical frame per §1.4), camera
