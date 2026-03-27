@@ -1016,6 +1016,20 @@ would cause a compilation error since `toScript()` has no default implementation
 
 ---
 
+## D-052: CLI -script and -state options applied at end of simpleInitApp
+**Status:** Accepted
+**Roadmap step:** 26 (State Snapshot Strings — CLI extension)
+
+**Context:** Users need to launch KEPPLR pre-configured to a specific state or with a script running, e.g. for automated rendering or sharing views via command line.
+
+**Decision:** Two optional CLI flags added to `KEPPLR.main()`: `-state <string>` and `-script <path>`. Both are passed to `KepplrApp.run()` and applied at the very end of `simpleInitApp()`, after all managers, cameras, and input handlers are fully initialised. State is applied before script so the script sees the restored state. `ScriptRunner` and `CommandRecorder` promoted from local variables to fields to support this. The state string is routed through `CommandRecorder.setStateString()` so it is loggable if recording is later started.
+
+**Alternatives considered:** Applying via `enqueue()` on the first `simpleUpdate()` frame — rejected because that adds a visible frame at the default state before the restore takes effect. Applying in `simpleInitApp()` means the very first rendered frame already reflects the restored state.
+
+**Consequences:** `-state` errors are logged and skipped (non-fatal). `-script` launches on a daemon thread as usual. No new classes; ~15 lines of new code across `KEPPLR.java` and `KepplrApp.java`.
+
+---
+
 *Last updated: Step 28 + bug fix (branch 50-clock-update-bug), Step 26*
 *Backfill note: Entries D-001 through D-009 were reconstructed retrospectively.
 D-010 onwards recorded in real time.*

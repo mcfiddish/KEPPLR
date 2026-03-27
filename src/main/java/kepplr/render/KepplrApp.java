@@ -12,6 +12,7 @@ import com.jme3.renderer.ViewPort;
 import com.jme3.scene.Node;
 import com.jme3.scene.plugins.gltf.GlbLoader;
 import com.jme3.system.AppSettings;
+import java.nio.file.Path;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -89,10 +90,16 @@ public class KepplrApp extends SimpleApplication {
     /** Camera heliocentric J2000 position in km. Scene positions are {@code helioPos − this}, cast to float for JME. */
     private final double[] cameraHelioJ2000 = new double[3];
 
+    // ── Command-line startup options ────────────────────────────────────────────────────────────
+    private String startupScript;
+    private String startupState;
+
     // ── Simulation model ──────────────────────────────────────────────────────────────────────
     private DefaultSimulationState simulationState;
     private SimulationClock simulationClock;
     private TransitionController transitionController;
+    private ScriptRunner scriptRunner;
+    private CommandRecorder recorder;
     private KepplrHud hud;
     private CameraInputHandler cameraInputHandler;
     private final BodyFixedFrame bodyFixedFrame = new BodyFixedFrame();
@@ -210,8 +217,8 @@ public class KepplrApp extends SimpleApplication {
                 GLFW.glfwSetWindowSize(glfwWindowHandle, w, h);
             }
         }));
-        CommandRecorder recorder = new CommandRecorder(commands);
-        ScriptRunner scriptRunner = new ScriptRunner(commands, simulationState);
+        recorder = new CommandRecorder(commands);
+        scriptRunner = new ScriptRunner(commands, simulationState);
 
         SimulationStateFxBridge bridge = new SimulationStateFxBridge(simulationState);
         // On macOS, JavaFX is started here (after GLFW has claimed NSApplication) rather than in
@@ -340,6 +347,19 @@ public class KepplrApp extends SimpleApplication {
         // NOTE: Auto-focus JME window on cursor enter is deferred — macOS does not
         // honour glfwFocusWindow() or Cocoa makeKeyAndOrderFront: from a render loop.
         // Works on Linux. Users must click the JME window to give it focus on macOS.
+
+        // ── Command-line startup actions (state before script, so script sees restored state) ──
+        if (startupState != null) {
+            try {
+                recorder.setStateString(startupState);
+                logger.info("Applied startup state string");
+            } catch (IllegalArgumentException e) {
+                logger.error("Invalid -state argument: {}", e.getMessage());
+            }
+        }
+        if (startupScript != null) {
+            scriptRunner.runScript(Path.of(startupScript));
+        }
     }
 
     @Override
@@ -874,10 +894,16 @@ public class KepplrApp extends SimpleApplication {
     public static void main(String[] args) {
         KEPPLRConfiguration.getTemplate();
 
-        run();
+        run(null, null);
     }
 
-    public static void run() {
+    /**
+     * Launch the KEPPLR JME application.
+     *
+     * @param scriptPath path to a Groovy script to run on startup, or {@code null} to skip
+     * @param stateString state string to restore on startup, or {@code null} to skip
+     */
+    public static void run(String scriptPath, String stateString) {
         String os = System.getProperty("os.name", "").toLowerCase();
 
         if (os.contains("linux")) {
@@ -905,6 +931,8 @@ public class KepplrApp extends SimpleApplication {
         // appearing.
 
         KepplrApp app = new KepplrApp();
+        app.startupScript = scriptPath;
+        app.startupState = stateString;
         AppSettings settings = new AppSettings(true);
         settings.setTitle("KEPPLR");
         settings.setWidth(1280);

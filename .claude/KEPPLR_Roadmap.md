@@ -638,6 +638,10 @@ extension.
   `setStateStringAnimated` could be added if smooth restoration is wanted.
 - GUI: `Edit → Copy State` copies to clipboard; `Edit → Paste State` reads
   from clipboard and applies. Both are loggable by `CommandRecorder`.
+- CLI: `-state <string>` restores state on startup (applied at the end of
+  `simpleInitApp()` before any script runs). `-script <path>` runs a Groovy
+  script on startup (equivalent to File → Run Script). Both are optional.
+  State is applied first so the script sees the restored state. See D-052.
 
 ---
 

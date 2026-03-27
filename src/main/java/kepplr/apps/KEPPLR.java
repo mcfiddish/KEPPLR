@@ -36,6 +36,14 @@ public class KEPPLR implements KEPPLRTool {
                 .required()
                 .desc("Configuration file to load")
                 .get());
+        options.addOption(Option.builder("script")
+                .hasArg()
+                .desc("Groovy script to run on startup")
+                .get());
+        options.addOption(Option.builder("state")
+                .hasArg()
+                .desc("State string to restore on startup")
+                .get());
         return options;
     }
 
@@ -51,7 +59,7 @@ public class KEPPLR implements KEPPLRTool {
 
         KEPPLRConfiguration.load(Paths.get(cl.getOptionValue("config")));
 
-        KepplrApp.run();
+        KepplrApp.run(cl.getOptionValue("script"), cl.getOptionValue("state"));
 
         logger.info("Finished");
     }
