@@ -1,5 +1,9 @@
+============
 User's Guide
 ============
+
+Quick Start
+-----------
 
 Unpack the archive in your desired working directory:
 
@@ -10,20 +14,30 @@ Unpack the archive in your desired working directory:
 The directory `KEPPLR-YYYY.MM.DD/scripts` contains all of the command-line utilities.  Run them without arguments to get a 
 usage description.
 
-Run `DumpConfig` to generate a sample configuration file.  This creates a configuration file and resource directory in 
-`tmp`.  Move them to your working directory.
+Create a configuration file and move it to your working directory:
 
 ::
 
     ./KEPPLR-YYYY.MM.DD/scripts/DumpConfig tmp
     mv tmp/* .
 
-The configuration file is a text file in `Apache Commons Configuration <https://commons.apache.org/proper/commons-configuration>`__
-format.  Change the `spice.metakernel` to your existing metakernel(s).  For example:
+Edit KEPPLR.config and resources/spice/kepplr.tm as needed to set correct paths.
+
+Run KEPPLR:
 
 ::
 
-    # SPICE metakernel to read.  This may be specified more than once for multiple metakernels.
-    spice.metakernel = /project/spice/voyager.tm
+    ./KEPPLR-YYYY.MM.DD/scripts/KEPPLR -config KEPPLR.config
 
+See:
 
+    * :doc:`configuration` for details on the configuration file.
+    * :doc:`gui` for details on the GUI application.
+    * :doc:`scripting` for details on running a `Groovy <https://groovy-lang.org/>`__ script with KEPPLR.
+
+.. toctree::
+   :hidden:
+
+   configuration
+   gui
+   scripting

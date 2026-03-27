@@ -163,7 +163,7 @@ public class KEPPLRConfiguration implements KEPPLRConfigBlock {
             pc.setProperty(prefix + "naifID", code);
             pc.setProperty(prefix + "name", s);
             pc.setProperty(prefix + "frame", "NH_SPACECRAFT");
-            pc.setProperty(prefix + "shapeModel", "spacecraft/new_horizons_dds.glb");
+            pc.setProperty(prefix + "shapeModel", "shapes/new_horizons_dds.glb");
             pc.setProperty(prefix + "scale", "1.0");
             SpacecraftBlockFactory sbf = new SpacecraftBlockFactory(prefix);
             instance.spacecraftBlocks.put(code, sbf.fromConfig(pc));

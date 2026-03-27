@@ -20,7 +20,7 @@ Print a table of positions and velocities at 2025 November 30 00:00:00 UTC
 
 ::
 
-    ./KEPPLR-2025.11.30/scripts/PrintEphemeris -config KEPPLR.config -date 2025 Nov 30
+    ./KEPPLR-YYYY.MM.DD/scripts/PrintEphemeris -config KEPPLR.config -date 2025 Nov 30
 
 Output:
 

@@ -72,6 +72,8 @@ public final class DefaultSimulationState implements SimulationState {
     private final SimpleBooleanProperty transitionActive = new SimpleBooleanProperty(false);
     private final SimpleDoubleProperty transitionProgress = new SimpleDoubleProperty(0.0);
     private final SimpleDoubleProperty fovDeg = new SimpleDoubleProperty(KepplrConstants.CAMERA_FOV_Y_DEG);
+    private final SimpleObjectProperty<float[]> cameraOrientationJ2000 =
+            new SimpleObjectProperty<>(new float[] {0f, 0f, 0f, 1f});
 
     // ── Overlay state (Step 19b) ──
 
@@ -92,6 +94,21 @@ public final class DefaultSimulationState implements SimulationState {
     }
 
     // ── HUD message (Step 28) ──
+
+    /** An immutable snapshot of a pending camera restore from a state string (Step 26). */
+    public record PendingCameraRestore(double[] posJ2000, float[] orientJ2000, double fovDeg) {}
+
+    private final AtomicReference<PendingCameraRestore> pendingCameraRestore = new AtomicReference<>();
+
+    /** Post a camera restore to be applied on the next JME render frame. Thread-safe. */
+    public void setPendingCameraRestore(PendingCameraRestore restore) {
+        pendingCameraRestore.set(restore);
+    }
+
+    /** Atomically retrieve and clear the pending camera restore. Returns null if none pending. */
+    public PendingCameraRestore consumePendingCameraRestore() {
+        return pendingCameraRestore.getAndSet(null);
+    }
 
     /** An immutable snapshot of a pending HUD message. */
     public record HudMessage(String text, double durationSeconds) {}
@@ -216,6 +233,11 @@ public final class DefaultSimulationState implements SimulationState {
     @Override
     public ReadOnlyDoubleProperty fovDegProperty() {
         return fovDeg;
+    }
+
+    @Override
+    public ReadOnlyObjectProperty<float[]> cameraOrientationJ2000Property() {
+        return cameraOrientationJ2000;
     }
 
     // ── Setters (used by DefaultSimulationCommands and the simulation core) ──
@@ -343,6 +365,15 @@ public final class DefaultSimulationState implements SimulationState {
     /** Set the current camera field of view in degrees. Called each frame by KepplrApp on the JME render thread. */
     public void setFovDeg(double degrees) {
         fovDeg.set(degrees);
+    }
+
+    /**
+     * Set the camera orientation in J2000 as a unit quaternion {@code [x, y, z, w]} (Step 26).
+     *
+     * @param orientation length-4 array; must not be null
+     */
+    public void setCameraOrientationJ2000(float[] orientation) {
+        cameraOrientationJ2000.set(orientation);
     }
 
     // ── Overlay property accessors (Step 19b) ──

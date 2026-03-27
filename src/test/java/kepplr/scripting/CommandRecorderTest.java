@@ -627,5 +627,16 @@ class CommandRecorderTest {
         public void setBodyVisible(int naifId, boolean visible) {
             lastMethod = "setBodyVisible";
         }
+
+        @Override
+        public String getStateString() {
+            lastMethod = "getStateString";
+            return "AQAAAAAAAAAAAAAAAPA_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP8AAAAAAP_____________________AAAAAEZGAAA";
+        }
+
+        @Override
+        public void setStateString(String s) {
+            lastMethod = "setStateString";
+        }
     }
 }

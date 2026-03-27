@@ -116,6 +116,14 @@ public final class BodyNodeFactory {
 
         float radiusKm = meanRadius(shape, bodyId.getName());
 
+        // Body-fixed node: updated each frame with J2000 → body-fixed rotation.
+        Node bodyFixedNode = new Node(bodyId.getName() + "-body-fixed");
+
+        // Attempt to load a GLB shape model before creating the material, so we know whether
+        // to skip the equirectangular textureMap (incompatible with GLB UVs).
+        Node glbModelRoot = tryLoadBodyGlb(bodyId.getName(), bodyFixedNode, assetManager);
+        boolean hasGlb = glbModelRoot != null;
+
         // Full-geometry ellipsoid (unit sphere scaled to body radius)
         Sphere mesh =
                 new Sphere(KepplrConstants.BODY_SPHERE_TESSELLATION, KepplrConstants.BODY_SPHERE_TESSELLATION, 1f);
@@ -128,7 +136,7 @@ public final class BodyNodeFactory {
         } else {
             fullGeom.setLocalScale(radiusKm);
         }
-        fullGeom.setMaterial(createBodyMaterial(naifId, bodyId.getName(), assetManager));
+        fullGeom.setMaterial(createBodyMaterial(naifId, bodyId.getName(), hasGlb, assetManager));
         fullGeom.setCullHint(Spatial.CullHint.Inherit);
         fullGeom.setUserData("naifId", naifId);
         if (naifId != KepplrConstants.SUN_NAIF_ID) {
@@ -146,13 +154,7 @@ public final class BodyNodeFactory {
         textureAlignNode.setLocalRotation(texRot);
         textureAlignNode.attachChild(fullGeom);
 
-        // Body-fixed node: updated each frame with J2000 → body-fixed rotation.
-        Node bodyFixedNode = new Node(bodyId.getName() + "-body-fixed");
-
-        // Attempt to load a GLB shape model if configured.
-        Node glbModelRoot = tryLoadBodyGlb(bodyId.getName(), bodyFixedNode, assetManager);
-
-        if (glbModelRoot == null) {
+        if (!hasGlb) {
             // No GLB (or load failed): use the standard ellipsoid branch.
             bodyFixedNode.attachChild(textureAlignNode);
         } else {
@@ -160,9 +162,6 @@ public final class BodyNodeFactory {
             // Sharing the same instance means EclipseShadowManager's per-frame uniform updates
             // (SunPosition, OccluderPositions, etc.) on fullGeom.getMaterial() automatically
             // propagate to all GLB geometry nodes — no changes to EclipseShadowManager needed.
-            // If the GLB has an embedded BaseColorMap, it overrides the DiffuseMap on the shared
-            // material so the shape-model texture is used in preference to any external texture
-            // configured in the body block.
             applyEclipseLightingToGlb(glbModelRoot, fullGeom.getMaterial());
         }
         // When glbModelRoot != null, textureAlignNode is intentionally NOT attached to
@@ -463,15 +462,15 @@ public final class BodyNodeFactory {
                         tex.getImage().setColorSpace(ColorSpace.sRGB);
                     }
                     eclipseMat.setTexture("DiffuseMap", tex);
+                    // When a texture is present, apply BaseColor factor as a tint multiplier
+                    // (per glTF spec: baseColorFactor × baseColorTexture).
+                    var colorVal = oldMat.getParam("BaseColor");
+                    if (colorVal != null && colorVal.getValue() instanceof ColorRGBA c) {
+                        eclipseMat.setColor("DiffuseColor", c);
+                    }
                 }
-                // Extract BaseColor factor (if any) → DiffuseColor.
-                // In glTF, baseColorFactor is in linear space and multiplies the texture sample.
-                // Setting DiffuseColor here allows the shader to apply the tint even when a
-                // texture is also present (the shader multiplies DiffuseMap × DiffuseColor).
-                var colorVal = oldMat.getParam("BaseColor");
-                if (colorVal != null && colorVal.getValue() instanceof ColorRGBA c) {
-                    eclipseMat.setColor("DiffuseColor", c);
-                }
+                // When no texture is present, DiffuseColor is left as-is — the hexColor set
+                // by createEclipseMaterial is the intended surface color for untextured GLBs.
             }
             geometry.setMaterial(eclipseMat);
             return;
@@ -549,29 +548,34 @@ public final class BodyNodeFactory {
      *
      * <p>Gate on NAIF ID 10, not on body name, per the project-wide NAIF ID convention.
      */
-    private static Material createBodyMaterial(int naifId, String bodyName, AssetManager assetManager) {
+    private static Material createBodyMaterial(int naifId, String bodyName, boolean hasGlb, AssetManager assetManager) {
         if (naifId == KepplrConstants.SUN_NAIF_ID) {
             return createSunMaterial(bodyName, assetManager);
         }
-        return createEclipseMaterial(naifId, bodyName, assetManager);
+        return createEclipseMaterial(naifId, bodyName, hasGlb, assetManager);
     }
 
     /**
      * Create an EclipseLighting material for a non-Sun body.
      *
-     * <p>Sets the diffuse texture (if configured) or diffuse color. Shadow uniforms are left at shader defaults (zero
-     * occluders, no shadow) and will be overwritten by {@link EclipseShadowManager} every frame.
+     * <p>Sets the diffuse texture (if configured and applicable) or diffuse color. Shadow uniforms are left at shader
+     * defaults (zero occluders, no shadow) and will be overwritten by {@link EclipseShadowManager} every frame.
      *
      * <p>The {@code HasRings} material parameter is set to {@code true} only for Saturn (NAIF ID
      * {@link kepplr.util.KepplrConstants#SATURN_NAIF_ID}) to enable the ring-shadow path in the shader.
+     *
+     * @param hasGlb true if a GLB shape model will be used for this body. When true, the body block's
+     *     {@code textureMap} is skipped because equirectangular textures are incompatible with GLB UVs. The body
+     *     block's {@code hexColor} is applied as {@code DiffuseColor} instead.
      */
-    private static Material createEclipseMaterial(int naifId, String bodyName, AssetManager assetManager) {
+    private static Material createEclipseMaterial(
+            int naifId, String bodyName, boolean hasGlb, AssetManager assetManager) {
         Material mat = new Material(assetManager, "kepplr/shaders/Bodies/EclipseLighting.j3md");
 
         BodyBlock block = bodyBlockFor(bodyName);
         if (block != null) {
             String texPath = block.textureMap();
-            if (texPath != null && !texPath.isBlank()) {
+            if (!hasGlb && texPath != null && !texPath.isBlank()) {
                 try {
                     Path resolved = KEPPLRConfiguration.getInstance().getPathInResources(texPath);
                     assetManager.registerLocator(resolved.getParent().toString(), FileLocator.class);
@@ -586,11 +590,11 @@ public final class BodyNodeFactory {
                 } catch (Exception e) {
                     logger.warn("Could not load texture for {}: {}", bodyName, e.getMessage());
                     if (block.color() != null) {
-                        mat.setColor("DiffuseColor", toColorRGBA(block.color()));
+                        mat.setColor("DiffuseColor", toLinearColorRGBA(block.color()));
                     }
                 }
             } else if (block.color() != null) {
-                mat.setColor("DiffuseColor", toColorRGBA(block.color()));
+                mat.setColor("DiffuseColor", toLinearColorRGBA(block.color()));
             }
         }
 
@@ -692,6 +696,23 @@ public final class BodyNodeFactory {
 
     private static ColorRGBA toColorRGBA(Color awtColor) {
         return new ColorRGBA(awtColor.getRed() / 255f, awtColor.getGreen() / 255f, awtColor.getBlue() / 255f, 1f);
+    }
+
+    /**
+     * Convert an AWT sRGB color to a linear-space ColorRGBA for use with EclipseLighting.
+     *
+     * <p>The EclipseLighting shader applies linearToSrgb unconditionally on output, so DiffuseColor must be in linear
+     * space to avoid double-gamma.
+     */
+    private static ColorRGBA toLinearColorRGBA(Color awtColor) {
+        float r = srgbToLinear(awtColor.getRed() / 255f);
+        float g = srgbToLinear(awtColor.getGreen() / 255f);
+        float b = srgbToLinear(awtColor.getBlue() / 255f);
+        return new ColorRGBA(r, g, b, 1f);
+    }
+
+    private static float srgbToLinear(float c) {
+        return (float) Math.pow(c, 2.2);
     }
 
     /**

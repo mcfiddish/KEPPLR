@@ -428,6 +428,38 @@ public interface SimulationCommands {
      */
     void saveScreenshot(String outputPath);
 
+    // ── State snapshot (Step 26) ──
+
+    /**
+     * Capture the current simulation state as a compact, versioned Base64url string (Step 26).
+     *
+     * <p>The string encodes ET, time rate, paused flag, camera position and orientation in heliocentric J2000, camera
+     * frame, focused/targeted/selected NAIF IDs, and FOV. Overlay visibility is not included.
+     *
+     * <p>Recorded by {@link kepplr.scripting.CommandRecorder} as:
+     *
+     * <pre>{@code kepplr.setStateString("...") }</pre>
+     *
+     * @return the encoded state string
+     */
+    String getStateString();
+
+    /**
+     * Restore simulation state from a state string produced by {@link #getStateString()} (Step 26).
+     *
+     * <p>Applies all fields instantly (no transition animation). The string is decoded and all contained state — ET,
+     * time rate, paused flag, camera position and orientation, camera frame, body selections, and FOV — is restored
+     * atomically on the next JME frame.
+     *
+     * <p>Recorded by {@link kepplr.scripting.CommandRecorder} as:
+     *
+     * <pre>{@code kepplr.setStateString("...") }</pre>
+     *
+     * @param stateString the encoded state string; must not be null
+     * @throws IllegalArgumentException if the string is malformed or has an unsupported version
+     */
+    void setStateString(String stateString);
+
     // ── Configuration reload (Step 27) ──
 
     /**

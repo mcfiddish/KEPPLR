@@ -976,7 +976,87 @@ would cause a compilation error since `toScript()` has no default implementation
 
 ---
 
-*Last updated: Step 28 + bug fix (branch 50-clock-update-bug)*
+## D-049: State snapshot uses packed binary, not JSON
+**Status:** Accepted
+**Roadmap step:** 26 (State Snapshot Strings)
+
+**Context:** The roadmap left the internal representation TBD — "JSON for readability during development, packed binary if string length becomes a concern." The snapshot encodes 10 fields (ET, timeRate, paused, camPos[3], camOrient[4], cameraFrame, focus/target/selected IDs, FOV).
+
+**Decision:** Packed binary from the start. A `DataOutputStream` writes a version byte (1) followed by the fields in fixed order (74 bytes total), then Base64url-encodes without padding. This produces ~100-character strings — short enough to paste into chat, email, or script comments. JSON would produce ~300+ characters for the same data and add a JSON library dependency or manual string building.
+
+**Alternatives considered:** JSON was considered for debuggability, but the version byte + known layout means any future tooling can decode the binary trivially. A hex dump of the Base64-decoded bytes is equally readable for debugging.
+
+**Consequences:** Compact strings. Version byte allows future format extensions (add fields after the current layout in version 2, decode version 1 strings with defaults for missing fields). `StateSnapshotCodec` is the single encode/decode authority.
+
+---
+
+## D-050: Camera orientation exposed via SimulationState for snapshot capture
+**Status:** Accepted
+**Roadmap step:** 26 (State Snapshot Strings)
+
+**Context:** The state snapshot needs camera orientation in J2000, but `SimulationState` only exposed `cameraPositionJ2000Property()`. The JME camera rotation quaternion is the J2000 orientation (scene frame = J2000, translated to floating origin).
+
+**Decision:** Added `cameraOrientationJ2000Property()` returning `ReadOnlyObjectProperty<float[]>` (xyzw quaternion) to `SimulationState`. `KepplrApp` sets it each frame alongside position. `float[]` rather than `double[]` because JME quaternions are single-precision — no false precision.
+
+**Consequences:** Snapshot capture reads orientation from state like any other field. The property is also available for future HUD displays (e.g., camera Euler angles).
+
+---
+
+## D-051: State restore uses PendingCameraRestore consumed on JME thread
+**Status:** Accepted
+**Roadmap step:** 26 (State Snapshot Strings)
+
+**Context:** `setStateString()` must restore camera position, orientation, and FOV. These live in the JME `cam` object and `cameraHelioJ2000` array, which are only safe to mutate on the JME render thread. The command may be called from any thread (script thread, FX thread).
+
+**Decision:** `DefaultSimulationState` holds an `AtomicReference<PendingCameraRestore>` (same pattern as `HudMessage`). `setStateString()` posts a restore record; `KepplrApp.simpleUpdate()` consumes it at the top of the frame — after `clock.advance()` but before `cameraInputHandler.update()` — so the restored pose takes effect before any user input processing or frame co-rotation.
+
+**Alternatives considered:** Using `TransitionController.requestCameraPosition()` with duration 0 — rejected because that interprets position relative to a focus body in the active camera frame, whereas the snapshot stores absolute J2000 coordinates.
+
+**Consequences:** Thread-safe, instant restore. Any in-progress transition is cancelled before the restore is posted.
+
+---
+
+## D-052: CLI -script and -state options applied at end of simpleInitApp
+**Status:** Accepted
+**Roadmap step:** 26 (State Snapshot Strings — CLI extension)
+
+**Context:** Users need to launch KEPPLR pre-configured to a specific state or with a script running, e.g. for automated rendering or sharing views via command line.
+
+**Decision:** Two optional CLI flags added to `KEPPLR.main()`: `-state <string>` and `-script <path>`. Both are passed to `KepplrApp.run()` and applied at the very end of `simpleInitApp()`, after all managers, cameras, and input handlers are fully initialised. State is applied before script so the script sees the restored state. `ScriptRunner` and `CommandRecorder` promoted from local variables to fields to support this. The state string is routed through `CommandRecorder.setStateString()` so it is loggable if recording is later started.
+
+**Alternatives considered:** Applying via `enqueue()` on the first `simpleUpdate()` frame — rejected because that adds a visible frame at the default state before the restore takes effect. Applying in `simpleInitApp()` means the very first rendered frame already reflects the restored state.
+
+**Consequences:** `-state` errors are logged and skipped (non-fatal). `-script` launches on a daemon thread as usual. No new classes; ~15 lines of new code across `KEPPLR.java` and `KepplrApp.java`.
+
+---
+
+## D-053: KepplrScript exposes live SimulationState via getState()
+**Status:** Accepted
+**Roadmap step:** 28 (Scripting Console, Configuration Access, Display Messages)
+
+**Context:** Scripts had no way to read live simulation state (current ET, time rate, paused status, focused body ID, camera position/orientation). The `SimulationState` field existed on `KepplrScript` but was private with no accessor. Comparison with Cosmographia's scripting API highlighted the gap — Cosmographia exposes `getTime()`, `getDistanceFromCenter()`, `getCameraPosition()`, `getCameraOrientation()`, etc.
+
+**Decision:** Add `KepplrScript.getState()` returning the live `SimulationState` instance. Scripts can read any observable property directly (e.g., `kepplr.getState().currentEtProperty().get()`). This exposes the interface, not the `DefaultSimulationState` implementation — scripts get read-only property access only.
+
+**Alternatives considered:** Individual convenience getters (`getET()`, `getTimeRate()`, `isPaused()`, etc.) on `KepplrScript` — rejected as redundant wrapper proliferation when the `SimulationState` interface already provides a clean, documented property API. Individual getters can be added later for common cases if ergonomics demand it.
+
+**Consequences:** Scripts gain full read access to simulation state. No new mutation path — `SimulationState` properties are read-only from the consumer side. The `SimulationState` interface is already public API.
+
+---
+
+## D-054: setCameraPosition/setCameraOrientation Javadoc clarifies camera-frame semantics
+**Status:** Accepted
+**Roadmap step:** 28 (Frame-aware camera commands)
+
+**Context:** The `setCameraPosition()` and `setCameraOrientation()` methods on `KepplrScript` accept offset/look/up vectors that are interpreted in the active camera frame (INERTIAL, BODY_FIXED, SYNODIC), but the Javadoc did not state this. Comparison with Cosmographia's `moveToPovSpiceFrame()` — which explicitly names the frame — highlighted that KEPPLR's implicit-frame convention needs to be documented clearly.
+
+**Decision:** Updated Javadoc on all `KepplrScript.setCameraPosition()` overloads (3) and `setCameraOrientation()` to state that vectors are expressed in the current camera frame, with a pointer to `setCameraFrame()`. Parameter descriptions changed from "x offset in km" to "x offset in km in the current camera frame", etc.
+
+**Consequences:** Documentation-only change. No behavioral change. Scripts that need a specific frame should call `setCameraFrame()` before `setCameraPosition()` / `setCameraOrientation()`.
+
+---
+
+*Last updated: Step 28 + bug fix (branch 50-clock-update-bug), Step 26, D-053/D-054*
 *Backfill note: Entries D-001 through D-009 were reconstructed retrospectively.
 D-010 onwards recorded in real time.*
 

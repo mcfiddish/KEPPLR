@@ -427,4 +427,95 @@ class DefaultSimulationCommandsTest {
             assertFalse(called[0], "sceneRebuildCallback must not be called after a failed reload");
         }
     }
+
+    // ─────────────────────────────────────────────────────────────────
+    // State snapshot (Step 26)
+    // ─────────────────────────────────────────────────────────────────
+
+    @Nested
+    @DisplayName("State snapshot (Step 26)")
+    class StateSnapshotTests {
+
+        @Test
+        @DisplayName("getStateString returns non-empty encoded string")
+        void getStateStringReturnsEncoded() {
+            String s = commands.getStateString();
+            assertNotNull(s);
+            assertFalse(s.isEmpty());
+        }
+
+        @Test
+        @DisplayName("setStateString restores body IDs")
+        void setStateStringRestoresBodyIds() {
+            // Set some state — focusBody sets selected+focused+targeted to MOON,
+            // then targetBody sets selected+targeted to SUN
+            commands.focusBody(MOON);
+            commands.targetBody(SUN);
+            // Now: selected=SUN, focused=MOON, targeted=SUN
+            String snapshot = commands.getStateString();
+
+            // Reset state
+            state.setSelectedBodyId(-1);
+            state.setFocusedBodyId(-1);
+            state.setTargetedBodyId(-1);
+
+            // Restore
+            commands.setStateString(snapshot);
+            assertEquals(SUN, state.selectedBodyIdProperty().get());
+            assertEquals(MOON, state.focusedBodyIdProperty().get());
+            assertEquals(SUN, state.targetedBodyIdProperty().get());
+        }
+
+        @Test
+        @DisplayName("setStateString restores camera frame")
+        void setStateStringRestoresCameraFrame() {
+            commands.setCameraFrame(CameraFrame.SYNODIC);
+            String snapshot = commands.getStateString();
+
+            commands.setCameraFrame(CameraFrame.INERTIAL);
+            commands.setStateString(snapshot);
+            assertEquals(CameraFrame.SYNODIC, state.cameraFrameProperty().get());
+        }
+
+        @Test
+        @DisplayName("setStateString restores time state")
+        void setStateStringRestoresTimeState() {
+            clock.setTimeRate(100.0);
+            clock.setPaused(true);
+            String snapshot = commands.getStateString();
+
+            clock.setTimeRate(1.0);
+            clock.setPaused(false);
+            commands.setStateString(snapshot);
+            assertEquals(100.0, state.timeRateProperty().get());
+            assertTrue(state.pausedProperty().get());
+        }
+
+        @Test
+        @DisplayName("setStateString posts pending camera restore")
+        void setStateStringPostsCameraRestore() {
+            state.setCameraPositionJ2000(new double[] {1e8, 2e8, 3e8});
+            state.setCameraOrientationJ2000(new float[] {0.5f, 0.5f, 0.5f, 0.5f});
+            state.setFovDeg(60.0);
+            String snapshot = commands.getStateString();
+
+            // Restore from a different state
+            state.setCameraPositionJ2000(new double[] {0, 0, 0});
+            state.setCameraOrientationJ2000(new float[] {0, 0, 0, 1});
+            state.setFovDeg(45.0);
+            commands.setStateString(snapshot);
+
+            DefaultSimulationState.PendingCameraRestore restore = state.consumePendingCameraRestore();
+            assertNotNull(restore, "pending camera restore should be posted");
+            assertArrayEquals(new double[] {1e8, 2e8, 3e8}, restore.posJ2000());
+            assertArrayEquals(new float[] {0.5f, 0.5f, 0.5f, 0.5f}, restore.orientJ2000());
+            assertEquals(60.0, restore.fovDeg());
+        }
+
+        @Test
+        @DisplayName("setStateString with invalid string throws IllegalArgumentException")
+        void setStateStringInvalidThrows() {
+            assertThrows(IllegalArgumentException.class, () -> commands.setStateString("not-a-valid-state"));
+        }
+    }
 }

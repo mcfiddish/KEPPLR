@@ -19,7 +19,7 @@ import picante.math.vectorspace.VectorIJK;
 public class YaleBSCTest {
 
     public static final YaleBrightStarCatalog bsc =
-            YaleBrightStarCatalog.loadFromResource("/resources/kepplr/stars/catalogs/yaleBSC/ybsc5.gz");
+            YaleBrightStarCatalog.loadFromResource("/kepplr/stars/catalogs/yaleBSC/ybsc5.gz");
 
     @Test
     public void testGetStar() {

@@ -14,6 +14,8 @@ import kepplr.ephemeris.BodyLookupService;
 import kepplr.render.RenderQuality;
 import kepplr.render.vector.VectorType;
 import kepplr.state.DefaultSimulationState;
+import kepplr.state.StateSnapshot;
+import kepplr.state.StateSnapshotCodec;
 import kepplr.util.KepplrConstants;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -291,6 +293,38 @@ public final class DefaultSimulationCommands implements SimulationCommands {
     @Override
     public void setFrustumVisible(String instrumentName, boolean visible) {
         setFrustumVisible(BodyLookupService.resolve(instrumentName), visible);
+    }
+
+    // ── State snapshot (Step 26) ──────────────────────────────────────────────
+
+    @Override
+    public String getStateString() {
+        return StateSnapshotCodec.encode(StateSnapshot.capture(state));
+    }
+
+    @Override
+    public void setStateString(String stateString) {
+        StateSnapshot snap = StateSnapshotCodec.decode(stateString);
+
+        // Restore body selections
+        state.setSelectedBodyId(snap.selectedBodyId());
+        state.setFocusedBodyId(snap.focusedBodyId());
+        state.setTargetedBodyId(snap.targetedBodyId());
+
+        // Restore camera frame
+        state.setCameraFrame(snap.cameraFrame());
+
+        // Restore time state via clock (atomic anchor replacement, no ET jump artifacts)
+        clock.setET(snap.et());
+        clock.setTimeRate(snap.timeRate());
+        clock.setPaused(snap.paused());
+
+        // Cancel any in-progress transitions before restoring camera
+        transitionController.requestCancel();
+
+        // Post camera restore for the JME thread (position, orientation, FOV)
+        state.setPendingCameraRestore(new DefaultSimulationState.PendingCameraRestore(
+                snap.camPosJ2000().clone(), snap.camOrientJ2000().clone(), snap.fovDeg()));
     }
 
     // ── Screenshot capture (Step 25) ──────────────────────────────────────────

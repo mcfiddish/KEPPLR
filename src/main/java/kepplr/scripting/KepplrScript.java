@@ -58,6 +58,28 @@ public final class KepplrScript {
         this.waitTransition = new WaitTransition(state);
     }
 
+    // ── State access ────────────────────────────────────────────────────────────
+
+    /**
+     * Return the live simulation state.
+     *
+     * <p>Scripts can read any observable property — current ET, time rate, paused status, focused body ID, camera
+     * position, etc.
+     *
+     * <p>Example:
+     *
+     * <pre>{@code
+     * et = kepplr.getState().currentEtProperty().get()
+     * rate = kepplr.getState().timeRateProperty().get()
+     * focused = kepplr.getState().focusedBodyIdProperty().get()
+     * }</pre>
+     *
+     * @return the live {@link SimulationState} instance
+     */
+    public SimulationState getState() {
+        return state;
+    }
+
     // ── Configuration access (Step 28) ────────────────────────────────────────────
 
     /**
@@ -345,11 +367,14 @@ public final class KepplrScript {
     /**
      * Set the camera position relative to the current focus body.
      *
+     * <p>The offset vector is expressed in the current camera frame (INERTIAL = J2000, BODY_FIXED = IAU body frame,
+     * SYNODIC = synodic frame axes). Use {@link #setCameraFrame} to change the frame before calling this method.
+     *
      * <p>Example: {@code kepplr.setCameraPosition(0, 0, 10000, 2.0)}
      *
-     * @param x x offset in km
-     * @param y y offset in km
-     * @param z z offset in km
+     * @param x x offset in km in the current camera frame
+     * @param y y offset in km in the current camera frame
+     * @param z z offset in km in the current camera frame
      * @param durationSeconds transition duration in seconds
      */
     public void setCameraPosition(double x, double y, double z, double durationSeconds) {
@@ -359,11 +384,14 @@ public final class KepplrScript {
     /**
      * Set the camera position relative to an explicit origin body by NAIF ID.
      *
+     * <p>The offset vector is expressed in the current camera frame (INERTIAL = J2000, BODY_FIXED = IAU body frame,
+     * SYNODIC = synodic frame axes). Use {@link #setCameraFrame} to change the frame before calling this method.
+     *
      * <p>Example: {@code kepplr.setCameraPosition(0, 0, 50000, 301, 3.0)}
      *
-     * @param x x offset in km
-     * @param y y offset in km
-     * @param z z offset in km
+     * @param x x offset in km in the current camera frame
+     * @param y y offset in km in the current camera frame
+     * @param z z offset in km in the current camera frame
      * @param originNaifId NAIF ID of the origin body
      * @param durationSeconds transition duration in seconds
      */
@@ -374,11 +402,14 @@ public final class KepplrScript {
     /**
      * Set the camera position relative to an explicit origin body by name.
      *
+     * <p>The offset vector is expressed in the current camera frame (INERTIAL = J2000, BODY_FIXED = IAU body frame,
+     * SYNODIC = synodic frame axes). Use {@link #setCameraFrame} to change the frame before calling this method.
+     *
      * <p>Example: {@code kepplr.setCameraPosition(0, 0, 50000, "Moon", 3.0)}
      *
-     * @param x x offset in km
-     * @param y y offset in km
-     * @param z z offset in km
+     * @param x x offset in km in the current camera frame
+     * @param y y offset in km in the current camera frame
+     * @param z z offset in km in the current camera frame
      * @param originBodyName origin body name; case-insensitive
      * @param durationSeconds transition duration in seconds
      * @throws IllegalArgumentException if the name cannot be resolved
@@ -390,14 +421,17 @@ public final class KepplrScript {
     /**
      * Set the camera look direction and up vector.
      *
+     * <p>Both vectors are expressed in the current camera frame (INERTIAL = J2000, BODY_FIXED = IAU body frame, SYNODIC
+     * = synodic frame axes). Use {@link #setCameraFrame} to change the frame before calling this method.
+     *
      * <p>Example: {@code kepplr.setCameraOrientation(1, 0, 0, 0, 0, 1, 2.0)}
      *
-     * @param lookX x component of look direction
-     * @param lookY y component of look direction
-     * @param lookZ z component of look direction
-     * @param upX x component of up vector
-     * @param upY y component of up vector
-     * @param upZ z component of up vector
+     * @param lookX x component of look direction in the current camera frame
+     * @param lookY y component of look direction in the current camera frame
+     * @param lookZ z component of look direction in the current camera frame
+     * @param upX x component of up vector in the current camera frame
+     * @param upY y component of up vector in the current camera frame
+     * @param upZ z component of up vector in the current camera frame
      * @param durationSeconds transition duration in seconds
      */
     public void setCameraOrientation(
@@ -743,6 +777,30 @@ public final class KepplrScript {
      */
     public void saveScreenshot(String outputPath) {
         commands.saveScreenshot(outputPath);
+    }
+
+    /**
+     * Capture the current simulation state as a compact, copy-pasteable string (Step 26).
+     *
+     * <p>Example: {@code def s = kepplr.getStateString()}
+     *
+     * @return the encoded state string
+     */
+    public String getStateString() {
+        return commands.getStateString();
+    }
+
+    /**
+     * Restore simulation state from a state string (Step 26).
+     *
+     * <p>All fields are applied instantly (no transition animation).
+     *
+     * <p>Example: {@code kepplr.setStateString("AQA...")}
+     *
+     * @param stateString the encoded state string
+     */
+    public void setStateString(String stateString) {
+        commands.setStateString(stateString);
     }
 
     /**
