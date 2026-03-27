@@ -754,6 +754,14 @@ scripts are ephemeral and do not persist references as class fields. The
 `KEPPLRConfiguration.getInstance()` at point-of-use, consistent with Rule 3
 at the Java level. No other Java class gains a stored reference.
 
+**(2b) Live simulation state access from scripts.** `KepplrScript.getState()`
+returns the live `SimulationState` instance, giving scripts read access to
+all observable properties — current ET, time rate, paused status, focused
+body ID, camera position, camera orientation, etc. (e.g.,
+`et = kepplr.getState().currentEtProperty().get()`). This complements
+`getConfiguration()` by exposing runtime state that is not available through
+the configuration singleton. (See D-053.)
+
 **(3) Script display messages.** `KepplrScript.displayMessage(String text)`
 and `KepplrScript.displayMessage(String text, double durationSeconds)` show
 a message on the JME HUD overlay. Messages appear in the lower-center of the
@@ -776,6 +784,9 @@ No behavioral change — purely a naming improvement.
   `TransitionController.frameToJ2000()`. In SYNODIC the three `Basis` vectors
   form the columns of the synodic-to-J2000 rotation matrix; in BODY_FIXED the
   transpose multiply `rot.mtxv()` converts body-fixed to J2000. (See D-045.)
+  Javadoc on all `KepplrScript.setCameraPosition()` and
+  `setCameraOrientation()` overloads updated to document that vectors are
+  expressed in the current camera frame. (See D-054.)
 
 - **`setWindowSize(int, int)`** added to `SimulationCommands` / `KepplrScript` /
   `CommandRecorder`. Implementation uses a `BiConsumer<Integer, Integer>` callback

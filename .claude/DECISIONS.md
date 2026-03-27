@@ -1030,7 +1030,33 @@ would cause a compilation error since `toScript()` has no default implementation
 
 ---
 
-*Last updated: Step 28 + bug fix (branch 50-clock-update-bug), Step 26*
+## D-053: KepplrScript exposes live SimulationState via getState()
+**Status:** Accepted
+**Roadmap step:** 28 (Scripting Console, Configuration Access, Display Messages)
+
+**Context:** Scripts had no way to read live simulation state (current ET, time rate, paused status, focused body ID, camera position/orientation). The `SimulationState` field existed on `KepplrScript` but was private with no accessor. Comparison with Cosmographia's scripting API highlighted the gap — Cosmographia exposes `getTime()`, `getDistanceFromCenter()`, `getCameraPosition()`, `getCameraOrientation()`, etc.
+
+**Decision:** Add `KepplrScript.getState()` returning the live `SimulationState` instance. Scripts can read any observable property directly (e.g., `kepplr.getState().currentEtProperty().get()`). This exposes the interface, not the `DefaultSimulationState` implementation — scripts get read-only property access only.
+
+**Alternatives considered:** Individual convenience getters (`getET()`, `getTimeRate()`, `isPaused()`, etc.) on `KepplrScript` — rejected as redundant wrapper proliferation when the `SimulationState` interface already provides a clean, documented property API. Individual getters can be added later for common cases if ergonomics demand it.
+
+**Consequences:** Scripts gain full read access to simulation state. No new mutation path — `SimulationState` properties are read-only from the consumer side. The `SimulationState` interface is already public API.
+
+---
+
+## D-054: setCameraPosition/setCameraOrientation Javadoc clarifies camera-frame semantics
+**Status:** Accepted
+**Roadmap step:** 28 (Frame-aware camera commands)
+
+**Context:** The `setCameraPosition()` and `setCameraOrientation()` methods on `KepplrScript` accept offset/look/up vectors that are interpreted in the active camera frame (INERTIAL, BODY_FIXED, SYNODIC), but the Javadoc did not state this. Comparison with Cosmographia's `moveToPovSpiceFrame()` — which explicitly names the frame — highlighted that KEPPLR's implicit-frame convention needs to be documented clearly.
+
+**Decision:** Updated Javadoc on all `KepplrScript.setCameraPosition()` overloads (3) and `setCameraOrientation()` to state that vectors are expressed in the current camera frame, with a pointer to `setCameraFrame()`. Parameter descriptions changed from "x offset in km" to "x offset in km in the current camera frame", etc.
+
+**Consequences:** Documentation-only change. No behavioral change. Scripts that need a specific frame should call `setCameraFrame()` before `setCameraPosition()` / `setCameraOrientation()`.
+
+---
+
+*Last updated: Step 28 + bug fix (branch 50-clock-update-bug), Step 26, D-053/D-054*
 *Backfill note: Entries D-001 through D-009 were reconstructed retrospectively.
 D-010 onwards recorded in real time.*
 
