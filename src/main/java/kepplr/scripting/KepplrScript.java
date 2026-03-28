@@ -31,6 +31,19 @@ import picante.mechanics.EphemerisID;
  * <p><b>Threading:</b> methods are called from the Groovy script thread. {@code SimulationCommands} methods are
  * thread-safe (they post to the transition controller's inbox). Wait primitives block the calling thread.
  *
+ * <p><b>Execution semantics</b> (labelled on every public method):
+ *
+ * <ul>
+ *   <li><b>Immediate</b> — takes effect on the calling thread with no JME thread involvement. State mutations are
+ *       visible on the next JME frame.
+ *   <li><b>Queued</b> — enqueued to the JME thread's transition inbox; returns immediately. The effect occurs when the
+ *       JME thread processes the request. Use {@link #waitTransition()} to block until completion.
+ *   <li><b>Blocking</b> — blocks the script thread until the operation completes (e.g., screenshot written, scene
+ *       rebuilt, wall/sim time elapsed, transition finished).
+ *   <li><b>Immediate + Queued</b> — hybrid: some effects (state mutations) are immediate while others (camera
+ *       transitions) are queued. Use {@link #waitTransition()} after these calls to ensure the camera arrives.
+ * </ul>
+ *
  * <h3>Example script</h3>
  *
  * <pre>{@code
@@ -64,6 +77,8 @@ public final class KepplrScript {
     /**
      * Return the live simulation state.
      *
+     * <p><b>Execution semantics:</b> <em>Immediate</em>.
+     *
      * <p>Scripts can read any observable property — current ET, time rate, paused status, focused body ID, camera
      * position, etc.
      *
@@ -85,6 +100,8 @@ public final class KepplrScript {
 
     /**
      * Return the current KEPPLR configuration.
+     *
+     * <p><b>Execution semantics:</b> <em>Immediate</em>.
      *
      * <p>Acquires the singleton at point-of-use (CLAUDE.md Rule 3). Scripts may call any method on the returned object,
      * including {@code getEphemeris()}.
@@ -124,6 +141,8 @@ public final class KepplrScript {
     /**
      * Select a body for HUD display by NAIF ID.
      *
+     * <p><b>Execution semantics:</b> <em>Immediate</em>.
+     *
      * <p>Example: {@code kepplr.selectBody(399)}
      *
      * @param naifId NAIF ID of the body to select
@@ -134,6 +153,8 @@ public final class KepplrScript {
 
     /**
      * Select a body for HUD display by name.
+     *
+     * <p><b>Execution semantics:</b> <em>Immediate</em>.
      *
      * <p>Example: {@code kepplr.selectBody("Earth")}
      *
@@ -147,6 +168,10 @@ public final class KepplrScript {
     /**
      * Focus the camera on a body by NAIF ID.
      *
+     * <p><b>Execution semantics:</b> <em>Immediate + Queued</em> — state mutations (selected/focused/targeted body IDs)
+     * take effect immediately; camera transitions (point-at and go-to) are queued to the JME thread. Use
+     * {@link #waitTransition()} to block until the camera arrives.
+     *
      * <p>Example: {@code kepplr.focusBody(399)}
      *
      * @param naifId NAIF ID of the body to focus
@@ -157,6 +182,10 @@ public final class KepplrScript {
 
     /**
      * Focus the camera on a body by name.
+     *
+     * <p><b>Execution semantics:</b> <em>Immediate + Queued</em> — state mutations (selected/focused/targeted body IDs)
+     * take effect immediately; camera transitions (point-at and go-to) are queued to the JME thread. Use
+     * {@link #waitTransition()} to block until the camera arrives.
      *
      * <p>Example: {@code kepplr.focusBody("Earth")}
      *
@@ -170,6 +199,10 @@ public final class KepplrScript {
     /**
      * Target a body by NAIF ID.
      *
+     * <p><b>Execution semantics:</b> <em>Immediate + Queued</em> — state mutations (selected/targeted body IDs) take
+     * effect immediately; camera point-at transition is queued to the JME thread. Use {@link #waitTransition()} to
+     * block until the camera arrives.
+     *
      * <p>Example: {@code kepplr.targetBody(301)}
      *
      * @param naifId NAIF ID of the body to target
@@ -180,6 +213,10 @@ public final class KepplrScript {
 
     /**
      * Target a body by name.
+     *
+     * <p><b>Execution semantics:</b> <em>Immediate + Queued</em> — state mutations (selected/targeted body IDs) take
+     * effect immediately; camera point-at transition is queued to the JME thread. Use {@link #waitTransition()} to
+     * block until the camera arrives.
      *
      * <p>Example: {@code kepplr.targetBody("Moon")}
      *
@@ -195,6 +232,8 @@ public final class KepplrScript {
     /**
      * Set the simulation time rate as an absolute value.
      *
+     * <p><b>Execution semantics:</b> <em>Immediate</em>.
+     *
      * <p>Example: {@code kepplr.setTimeRate(3600.0)} — one hour of sim time per wall second.
      *
      * @param simSecondsPerWallSecond simulation seconds per wall-clock second
@@ -205,6 +244,8 @@ public final class KepplrScript {
 
     /**
      * Pause or unpause the simulation clock.
+     *
+     * <p><b>Execution semantics:</b> <em>Immediate</em>.
      *
      * <p>Example: {@code kepplr.setPaused(true)}
      *
@@ -217,6 +258,8 @@ public final class KepplrScript {
     /**
      * Jump the simulation clock to the specified ET.
      *
+     * <p><b>Execution semantics:</b> <em>Immediate</em>.
+     *
      * <p>Example: {@code kepplr.setET(4.895232e8)}
      *
      * @param et target ET (TDB seconds past J2000)
@@ -227,6 +270,8 @@ public final class KepplrScript {
 
     /**
      * Jump the simulation clock to the specified UTC string.
+     *
+     * <p><b>Execution semantics:</b> <em>Immediate</em>.
      *
      * <p>Example: {@code kepplr.setUTC("2015 Jul 14 07:59:00")}
      *
@@ -241,6 +286,8 @@ public final class KepplrScript {
     /**
      * Point the camera at a body by NAIF ID.
      *
+     * <p><b>Execution semantics:</b> <em>Queued</em> — enqueued to the JME thread; returns immediately.
+     *
      * <p>Example: {@code kepplr.pointAt(399, 2.0)}
      *
      * @param naifId NAIF ID of the body
@@ -252,6 +299,8 @@ public final class KepplrScript {
 
     /**
      * Point the camera at a body by name.
+     *
+     * <p><b>Execution semantics:</b> <em>Queued</em> — enqueued to the JME thread; returns immediately.
      *
      * <p>Example: {@code kepplr.pointAt("Earth", 2.0)}
      *
@@ -266,6 +315,8 @@ public final class KepplrScript {
     /**
      * Fly the camera to a body by NAIF ID.
      *
+     * <p><b>Execution semantics:</b> <em>Queued</em> — enqueued to the JME thread; returns immediately.
+     *
      * <p>Example: {@code kepplr.goTo(399, 5.0, 3.0)}
      *
      * @param naifId NAIF ID of the body
@@ -278,6 +329,8 @@ public final class KepplrScript {
 
     /**
      * Fly the camera to a body by name.
+     *
+     * <p><b>Execution semantics:</b> <em>Queued</em> — enqueued to the JME thread; returns immediately.
      *
      * <p>Example: {@code kepplr.goTo("Earth", 5.0, 3.0)}
      *
@@ -295,6 +348,8 @@ public final class KepplrScript {
     /**
      * Zoom the camera by a multiplicative factor.
      *
+     * <p><b>Execution semantics:</b> <em>Queued</em> — enqueued to the JME thread; returns immediately.
+     *
      * <p>Example: {@code kepplr.zoom(0.5, 1.0)} — halve the distance over one second.
      *
      * @param factor multiplicative distance factor; must be positive
@@ -307,6 +362,8 @@ public final class KepplrScript {
     /**
      * Set the camera field of view.
      *
+     * <p><b>Execution semantics:</b> <em>Queued</em> — enqueued to the JME thread; returns immediately.
+     *
      * <p>Example: {@code kepplr.setFov(60.0, 1.0)}
      *
      * @param degrees desired FOV in degrees
@@ -318,6 +375,8 @@ public final class KepplrScript {
 
     /**
      * Orbit the camera around the focus body.
+     *
+     * <p><b>Execution semantics:</b> <em>Queued</em> — enqueued to the JME thread; returns immediately.
      *
      * <p>Example: {@code kepplr.orbit(45.0, 0.0, 2.0)} — orbit 45 degrees right over two seconds.
      *
@@ -332,6 +391,8 @@ public final class KepplrScript {
     /**
      * Tilt the camera in place.
      *
+     * <p><b>Execution semantics:</b> <em>Queued</em> — enqueued to the JME thread; returns immediately.
+     *
      * <p>Example: {@code kepplr.tilt(10.0, 0.5)}
      *
      * @param degrees tilt angle in degrees; positive tilts up
@@ -343,6 +404,8 @@ public final class KepplrScript {
 
     /**
      * Yaw the camera in place.
+     *
+     * <p><b>Execution semantics:</b> <em>Queued</em> — enqueued to the JME thread; returns immediately.
      *
      * <p>Example: {@code kepplr.yaw(45.0, 1.0)}
      *
@@ -356,6 +419,8 @@ public final class KepplrScript {
     /**
      * Roll the camera around its look axis.
      *
+     * <p><b>Execution semantics:</b> <em>Queued</em> — enqueued to the JME thread; returns immediately.
+     *
      * <p>Example: {@code kepplr.roll(90.0, 1.0)}
      *
      * @param degrees roll angle in degrees; positive rolls clockwise
@@ -367,6 +432,8 @@ public final class KepplrScript {
 
     /**
      * Set the camera position relative to the current focus body.
+     *
+     * <p><b>Execution semantics:</b> <em>Queued</em> — enqueued to the JME thread; returns immediately.
      *
      * <p>The offset vector is expressed in the current camera frame (INERTIAL = J2000, BODY_FIXED = IAU body frame,
      * SYNODIC = synodic frame axes). Use {@link #setCameraFrame} to change the frame before calling this method.
@@ -384,6 +451,8 @@ public final class KepplrScript {
 
     /**
      * Set the camera position relative to an explicit origin body by NAIF ID.
+     *
+     * <p><b>Execution semantics:</b> <em>Queued</em> — enqueued to the JME thread; returns immediately.
      *
      * <p>The offset vector is expressed in the current camera frame (INERTIAL = J2000, BODY_FIXED = IAU body frame,
      * SYNODIC = synodic frame axes). Use {@link #setCameraFrame} to change the frame before calling this method.
@@ -403,6 +472,8 @@ public final class KepplrScript {
     /**
      * Set the camera position relative to an explicit origin body by name.
      *
+     * <p><b>Execution semantics:</b> <em>Queued</em> — enqueued to the JME thread; returns immediately.
+     *
      * <p>The offset vector is expressed in the current camera frame (INERTIAL = J2000, BODY_FIXED = IAU body frame,
      * SYNODIC = synodic frame axes). Use {@link #setCameraFrame} to change the frame before calling this method.
      *
@@ -421,6 +492,8 @@ public final class KepplrScript {
 
     /**
      * Set the camera look direction and up vector.
+     *
+     * <p><b>Execution semantics:</b> <em>Queued</em> — enqueued to the JME thread; returns immediately.
      *
      * <p>Both vectors are expressed in the current camera frame (INERTIAL = J2000, BODY_FIXED = IAU body frame, SYNODIC
      * = synodic frame axes). Use {@link #setCameraFrame} to change the frame before calling this method.
@@ -445,6 +518,8 @@ public final class KepplrScript {
     /**
      * Translate the camera along its screen-right axis.
      *
+     * <p><b>Execution semantics:</b> <em>Queued</em> — enqueued to the JME thread; returns immediately.
+     *
      * <p>Example: {@code kepplr.truck(1000.0, 3.0)} — move 1000 km right over 3 seconds.
      *
      * @param km distance to translate in km; positive = right
@@ -457,6 +532,8 @@ public final class KepplrScript {
     /**
      * Translate the camera along its screen-right axis using the default cinematic duration.
      *
+     * <p><b>Execution semantics:</b> <em>Queued</em> — enqueued to the JME thread; returns immediately.
+     *
      * @param km distance to translate in km; positive = right
      */
     public void truck(double km) {
@@ -465,6 +542,8 @@ public final class KepplrScript {
 
     /**
      * Translate the camera along its screen-up axis.
+     *
+     * <p><b>Execution semantics:</b> <em>Queued</em> — enqueued to the JME thread; returns immediately.
      *
      * <p>Example: {@code kepplr.crane(500.0, 2.0)} — move 500 km up over 2 seconds.
      *
@@ -478,6 +557,8 @@ public final class KepplrScript {
     /**
      * Translate the camera along its screen-up axis using the default cinematic duration.
      *
+     * <p><b>Execution semantics:</b> <em>Queued</em> — enqueued to the JME thread; returns immediately.
+     *
      * @param km distance to translate in km; positive = up
      */
     public void crane(double km) {
@@ -486,6 +567,8 @@ public final class KepplrScript {
 
     /**
      * Translate the camera along its look direction.
+     *
+     * <p><b>Execution semantics:</b> <em>Queued</em> — enqueued to the JME thread; returns immediately.
      *
      * <p>Example: {@code kepplr.dolly(2000.0, 5.0)} — move 2000 km forward over 5 seconds. Note: dolly is a pure
      * spatial translation — it does not modify apparent radius relative to any body, unlike {@code goTo}.
@@ -500,6 +583,8 @@ public final class KepplrScript {
     /**
      * Translate the camera along its look direction using the default cinematic duration.
      *
+     * <p><b>Execution semantics:</b> <em>Queued</em> — enqueued to the JME thread; returns immediately.
+     *
      * @param km distance to translate in km; positive = forward
      */
     public void dolly(double km) {
@@ -508,6 +593,8 @@ public final class KepplrScript {
 
     /**
      * Switch to the synodic camera frame with explicit body IDs.
+     *
+     * <p><b>Execution semantics:</b> <em>Immediate</em>.
      *
      * <p>Example: {@code kepplr.setSynodicFrame(399, 301)}
      *
@@ -520,6 +607,8 @@ public final class KepplrScript {
 
     /**
      * Switch to the synodic camera frame with explicit body names.
+     *
+     * <p><b>Execution semantics:</b> <em>Immediate</em>.
      *
      * <p>Example: {@code kepplr.setSynodicFrame("Earth", "Moon")}
      *
@@ -536,6 +625,8 @@ public final class KepplrScript {
     /**
      * Switch the active camera frame.
      *
+     * <p><b>Execution semantics:</b> <em>Immediate</em>.
+     *
      * <p>Example: {@code kepplr.setCameraFrame(CameraFrame.SYNODIC)}
      *
      * @param frame the desired camera frame
@@ -548,6 +639,8 @@ public final class KepplrScript {
 
     /**
      * Set the render quality preset.
+     *
+     * <p><b>Execution semantics:</b> <em>Immediate</em>.
      *
      * <p>Example: {@code kepplr.setRenderQuality(RenderQuality.HIGH)}
      *
@@ -562,6 +655,8 @@ public final class KepplrScript {
     /**
      * Toggle label visibility for a body by NAIF ID.
      *
+     * <p><b>Execution semantics:</b> <em>Immediate</em>.
+     *
      * <p>Example: {@code kepplr.setLabelVisible(399, true)}
      *
      * @param naifId NAIF ID of the body
@@ -573,6 +668,8 @@ public final class KepplrScript {
 
     /**
      * Toggle label visibility for a body by name.
+     *
+     * <p><b>Execution semantics:</b> <em>Immediate</em>.
      *
      * <p>Example: {@code kepplr.setLabelVisible("Earth", true)}
      *
@@ -586,6 +683,8 @@ public final class KepplrScript {
 
     /**
      * Toggle label visibility for ALL bodies and spacecraft.
+     *
+     * <p><b>Execution semantics:</b> <em>Immediate</em>.
      *
      * <p>When enabling, barycenters (NAIF 1–9) are skipped except Pluto barycenter (9), matching the Overlays menu
      * behavior.
@@ -601,6 +700,8 @@ public final class KepplrScript {
     /**
      * Toggle the HUD time display.
      *
+     * <p><b>Execution semantics:</b> <em>Immediate</em>.
+     *
      * <p>Example: {@code kepplr.setHudTimeVisible(true)}
      *
      * @param visible {@code true} to show, {@code false} to hide
@@ -612,6 +713,8 @@ public final class KepplrScript {
     /**
      * Toggle the HUD info display.
      *
+     * <p><b>Execution semantics:</b> <em>Immediate</em>.
+     *
      * <p>Example: {@code kepplr.setHudInfoVisible(false)}
      *
      * @param visible {@code true} to show, {@code false} to hide
@@ -622,6 +725,8 @@ public final class KepplrScript {
 
     /**
      * Toggle trail visibility for a body by NAIF ID.
+     *
+     * <p><b>Execution semantics:</b> <em>Immediate</em>.
      *
      * <p>Example: {@code kepplr.setTrailVisible(399, true)}
      *
@@ -635,6 +740,8 @@ public final class KepplrScript {
     /**
      * Toggle trail visibility for a body by name.
      *
+     * <p><b>Execution semantics:</b> <em>Immediate</em>.
+     *
      * <p>Example: {@code kepplr.setTrailVisible("Earth", true)}
      *
      * @param bodyName body name; case-insensitive
@@ -647,6 +754,8 @@ public final class KepplrScript {
 
     /**
      * Toggle trail visibility for ALL bodies and spacecraft.
+     *
+     * <p><b>Execution semantics:</b> <em>Immediate</em>.
      *
      * <p>When enabling, barycenters (NAIF 1–9) are skipped except Pluto barycenter (9), matching the Overlays menu
      * behavior.
@@ -662,6 +771,8 @@ public final class KepplrScript {
     /**
      * Set the trail duration for a body by NAIF ID.
      *
+     * <p><b>Execution semantics:</b> <em>Immediate</em>.
+     *
      * <p>Example: {@code kepplr.setTrailDuration(399, 86400.0)} — one day.
      *
      * @param naifId NAIF ID of the body
@@ -673,6 +784,8 @@ public final class KepplrScript {
 
     /**
      * Set the trail duration for a body by name.
+     *
+     * <p><b>Execution semantics:</b> <em>Immediate</em>.
      *
      * <p>Example: {@code kepplr.setTrailDuration("Earth", 86400.0)}
      *
@@ -687,6 +800,8 @@ public final class KepplrScript {
     /**
      * Toggle vector overlay visibility by NAIF ID.
      *
+     * <p><b>Execution semantics:</b> <em>Immediate</em>.
+     *
      * <p>Example: {@code kepplr.setVectorVisible(399, VectorTypes.velocity(), true)}
      *
      * @param naifId NAIF ID of the body
@@ -699,6 +814,8 @@ public final class KepplrScript {
 
     /**
      * Toggle vector overlay visibility by body name.
+     *
+     * <p><b>Execution semantics:</b> <em>Immediate</em>.
      *
      * <p>Example: {@code kepplr.setVectorVisible("Earth", VectorTypes.velocity(), true)}
      *
@@ -713,6 +830,8 @@ public final class KepplrScript {
 
     /**
      * Toggle body-fixed X, Y, and Z axis overlays by NAIF ID.
+     *
+     * <p><b>Execution semantics:</b> <em>Immediate</em>.
      *
      * <p>Convenience method equivalent to calling {@link #setVectorVisible(int, VectorType, boolean)} three times with
      * {@link VectorTypes#bodyAxisX()}, {@link VectorTypes#bodyAxisY()}, and {@link VectorTypes#bodyAxisZ()}.
@@ -730,6 +849,8 @@ public final class KepplrScript {
 
     /**
      * Toggle body-fixed X, Y, and Z axis overlays by body name.
+     *
+     * <p><b>Execution semantics:</b> <em>Immediate</em>.
      *
      * <p>Convenience method equivalent to calling {@link #setVectorVisible(String, VectorType, boolean)} three times
      * with {@link VectorTypes#bodyAxisX()}, {@link VectorTypes#bodyAxisY()}, and {@link VectorTypes#bodyAxisZ()}.
@@ -752,6 +873,8 @@ public final class KepplrScript {
     /**
      * Toggle instrument frustum overlay visibility by NAIF code.
      *
+     * <p><b>Execution semantics:</b> <em>Immediate</em>.
+     *
      * <p>Example: {@code kepplr.setFrustumVisible(-98300, true)}
      *
      * @param instrumentNaifCode NAIF code of the instrument
@@ -763,6 +886,8 @@ public final class KepplrScript {
 
     /**
      * Toggle instrument frustum overlay visibility by instrument name.
+     *
+     * <p><b>Execution semantics:</b> <em>Immediate</em>.
      *
      * <p>Example: {@code kepplr.setFrustumVisible("NH_LORRI", true)}
      *
@@ -779,6 +904,8 @@ public final class KepplrScript {
     /**
      * Show or hide a body in the scene by NAIF ID.
      *
+     * <p><b>Execution semantics:</b> <em>Immediate</em>.
+     *
      * <p>Example: {@code kepplr.setBodyVisible(9, false)} — hide Pluto barycenter
      *
      * @param naifId NAIF ID of the body
@@ -790,6 +917,8 @@ public final class KepplrScript {
 
     /**
      * Show or hide a body in the scene by name.
+     *
+     * <p><b>Execution semantics:</b> <em>Immediate</em>.
      *
      * <p>Example: {@code kepplr.setBodyVisible("Pluto Barycenter", false)}
      *
@@ -806,7 +935,7 @@ public final class KepplrScript {
     /**
      * Capture the current JME framebuffer to a PNG file.
      *
-     * <p>Blocks the script thread until the screenshot is written.
+     * <p><b>Execution semantics:</b> <em>Blocking</em> — blocks the script thread until the screenshot is written.
      *
      * <p>Example: {@code kepplr.saveScreenshot("/tmp/screenshot.png")}
      *
@@ -819,6 +948,8 @@ public final class KepplrScript {
     /**
      * Capture the current simulation state as a compact, copy-pasteable string (Step 26).
      *
+     * <p><b>Execution semantics:</b> <em>Immediate</em>.
+     *
      * <p>Example: {@code def s = kepplr.getStateString()}
      *
      * @return the encoded state string
@@ -829,6 +960,9 @@ public final class KepplrScript {
 
     /**
      * Restore simulation state from a state string (Step 26).
+     *
+     * <p><b>Execution semantics:</b> <em>Immediate + Queued</em> — state mutations and clock changes are immediate;
+     * camera restore is queued to the JME thread.
      *
      * <p>All fields are applied instantly (no transition animation).
      *
@@ -842,6 +976,8 @@ public final class KepplrScript {
 
     /**
      * Capture a sequence of frames as PNG files (Step 25).
+     *
+     * <p><b>Execution semantics:</b> <em>Blocking</em> — blocks the script thread until all frames are captured.
      *
      * <p>Sets ET to {@code startET}, pauses the simulation, then loops {@code frameCount} times: captures a screenshot,
      * advances ET by {@code etStep}. After the sequence completes, the simulation remains paused at the final ET.
@@ -863,6 +999,8 @@ public final class KepplrScript {
     /**
      * Capture a sequence of frames as PNG files, starting from a UTC string (Step 25).
      *
+     * <p><b>Execution semantics:</b> <em>Blocking</em> — blocks the script thread until all frames are captured.
+     *
      * <p>Converts {@code startUTC} to ET via ephemeris, then delegates to {@link #captureSequence(String, double, int,
      * double)}.
      *
@@ -883,8 +1021,10 @@ public final class KepplrScript {
     /**
      * Reload the KEPPLR configuration from the given file path and rebuild the scene.
      *
-     * <p>Blocks the script thread until the JME scene rebuild completes (or the timeout elapses), so any command issued
-     * after this call sees the new configuration.
+     * <p><b>Execution semantics:</b> <em>Blocking</em> — blocks the script thread until the JME scene rebuild completes
+     * (or the timeout elapses).
+     *
+     * <p>Any command issued after this call sees the new configuration.
      *
      * <p>Example: {@code kepplr.loadConfiguration("/path/to/config.properties")}
      *
@@ -898,6 +1038,8 @@ public final class KepplrScript {
 
     /**
      * Display a message on the JME HUD overlay with the default duration.
+     *
+     * <p><b>Execution semantics:</b> <em>Immediate</em>.
      *
      * <p>The message appears in the lower-center of the screen for
      * {@value KepplrConstants#SCRIPT_MESSAGE_DEFAULT_DURATION_SEC} seconds, then fades out. Use {@code \n} in the text
@@ -913,6 +1055,8 @@ public final class KepplrScript {
 
     /**
      * Display a message on the JME HUD overlay with a specified duration.
+     *
+     * <p><b>Execution semantics:</b> <em>Immediate</em>.
      *
      * <p>The message appears in the lower-center of the screen for the given duration, then fades out. Only one message
      * is visible at a time — a new message replaces any existing one. Use {@code \n} for line breaks.
@@ -931,6 +1075,8 @@ public final class KepplrScript {
     /**
      * Resize the JME render window.
      *
+     * <p><b>Execution semantics:</b> <em>Queued</em> — enqueued to the JME thread; returns immediately.
+     *
      * <p>Example: {@code kepplr.setWindowSize(1920, 1080)}
      *
      * @param width window width in pixels
@@ -945,6 +1091,8 @@ public final class KepplrScript {
     /**
      * Cancel the active camera transition.
      *
+     * <p><b>Execution semantics:</b> <em>Queued</em> — enqueued to the JME thread; returns immediately.
+     *
      * <p>Example: {@code kepplr.cancelTransition()}
      */
     public void cancelTransition() {
@@ -955,6 +1103,8 @@ public final class KepplrScript {
 
     /**
      * Block the script thread until the given number of wall-clock seconds have elapsed.
+     *
+     * <p><b>Execution semantics:</b> <em>Blocking</em>.
      *
      * <p>Example: {@code kepplr.waitWall(2.5)} — pause the script for 2.5 real seconds.
      *
@@ -968,6 +1118,8 @@ public final class KepplrScript {
 
     /**
      * Block the script thread until simulation time has advanced by the given number of seconds.
+     *
+     * <p><b>Execution semantics:</b> <em>Blocking</em>.
      *
      * <p>Example: {@code kepplr.waitSim(86400.0)} — wait for one simulation day to pass.
      *
@@ -988,6 +1140,8 @@ public final class KepplrScript {
     /**
      * Block the script thread until simulation ET reaches the given value.
      *
+     * <p><b>Execution semantics:</b> <em>Blocking</em>.
+     *
      * <p>Example: {@code kepplr.waitUntilSim(4.895232e8)} — wait until a specific epoch.
      *
      * <p><b>Warning:</b> this method blocks indefinitely if the simulation is paused or the time rate works against the
@@ -1003,6 +1157,8 @@ public final class KepplrScript {
 
     /**
      * Block the script thread until simulation time reaches the given UTC string.
+     *
+     * <p><b>Execution semantics:</b> <em>Blocking</em>.
      *
      * <p>Example: {@code kepplr.waitUntilSim("2015 Jul 14 12:00:00")}
      *
@@ -1020,6 +1176,8 @@ public final class KepplrScript {
 
     /**
      * Block the script thread until the active camera transition completes.
+     *
+     * <p><b>Execution semantics:</b> <em>Blocking</em>.
      *
      * <p>Example:
      *
