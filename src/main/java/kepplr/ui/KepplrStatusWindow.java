@@ -989,9 +989,6 @@ public final class KepplrStatusWindow {
             if (jmeShutdown != null) jmeShutdown.run();
         };
         quit.setOnAction(e -> doQuit.run());
-        // CustomMenuItem.onAction can sometimes not fire due to a JavaFX timing issue where the
-        // menu hides before the action event propagates. Wire the label's mouse handler as well.
-        ((Label) quit.getContent()).setOnMouseClicked(e -> doQuit.run());
 
         // Store references for mutual exclusion
         this.captureSeqItem = captureSeq;
@@ -1504,6 +1501,30 @@ public final class KepplrStatusWindow {
         Tooltip.install(label, new Tooltip(tooltip));
         CustomMenuItem item = new CustomMenuItem(label);
         item.setHideOnClick(true);
+        // Work around a JavaFX timing issue: CustomMenuItem.onAction sometimes does not fire
+        // because the menu hides before the action event propagates to the item.
+        // Two interaction patterns reach a menu item:
+        //   1. Click (press+release on item): MOUSE_PRESSED fires on the label — handle it there.
+        //   2. Drag-to-select (press on menu title, drag to item, release): only MOUSE_RELEASED
+        //      fires on the label — handle it in the RELEASED filter when PRESSED did not fire.
+        // The normal onAction path may also fire, but all current handlers are idempotent.
+        boolean[] pressedHere = {false};
+        label.addEventFilter(javafx.scene.input.MouseEvent.MOUSE_PRESSED, e -> {
+            pressedHere[0] = true;
+            javafx.event.EventHandler<javafx.event.ActionEvent> handler = item.getOnAction();
+            if (handler != null) {
+                handler.handle(new javafx.event.ActionEvent(item, item));
+            }
+        });
+        label.addEventFilter(javafx.scene.input.MouseEvent.MOUSE_RELEASED, e -> {
+            if (!pressedHere[0]) {
+                javafx.event.EventHandler<javafx.event.ActionEvent> handler = item.getOnAction();
+                if (handler != null) {
+                    handler.handle(new javafx.event.ActionEvent(item, item));
+                }
+            }
+            pressedHere[0] = false;
+        });
         return item;
     }
 
