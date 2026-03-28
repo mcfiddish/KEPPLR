@@ -131,6 +131,13 @@ public class VectorManager {
         }
     }
 
+    /** Detach all vector geometry from the scene graph and clear the active set. */
+    public void dispose() {
+        renderer.detach();
+        identitySet.clear();
+        orderedDefinitions.clear();
+    }
+
     /**
      * Returns an unmodifiable view of the currently active definitions, in insertion order.
      *

@@ -743,19 +743,22 @@ public class KepplrApp extends SimpleApplication {
      * Rebuild all render managers after a configuration reload. Must run on the JME render thread.
      *
      * <p>A config reload is treated as an application restart: all managers that hold scene-graph state are disposed
-     * and reconstructed from scratch. {@link VectorManager} and {@link StarFieldManager} are reconstructed without a
-     * separate dispose step because they detach all geometry on every {@link #simpleUpdate} call and hold no persistent
-     * scene nodes. {@code activeTrailIds} and {@code activeVectorDefs} are cleared so the next
-     * {@link #syncTrails}/{@link #syncVectors} call rebuilds them from the current state.
+     * and reconstructed from scratch. {@code activeTrailIds} and {@code activeVectorDefs} are cleared so the next
+     * {@link #syncTrails}/{@link #syncVectors} call rebuilds them from the current state. Overlay visibility state is
+     * also cleared so scripts start with a clean slate.
      */
     private void rebuildBodyScene() {
         // Tear down managers that hold persistent scene-graph state
         bodySceneManager.dispose();
         trailManager.dispose();
+        vectorManager.dispose();
+        starFieldManager.dispose();
         sunHaloRenderer.dispose();
         labelManager.dispose();
         activeTrailIds.clear();
         activeVectorDefs.clear();
+        // Clear overlay visibility state so scripts start with a clean slate
+        simulationState.clearOverlayState();
 
         // Clear the asset cache so GLB shape models and textures are reloaded from disk
         // rather than served from the stale cache left by the previous configuration.

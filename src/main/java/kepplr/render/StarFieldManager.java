@@ -64,6 +64,11 @@ public class StarFieldManager {
      * @param cameraHelioJ2000 camera heliocentric J2000 position in km (reserved for future aberration correction;
      *     currently unused — stars are placed at fixed directions from the camera)
      */
+    /** Detach all star geometry from the scene graph. */
+    public void dispose() {
+        renderer.detach();
+    }
+
     public void update(double et, double[] cameraHelioJ2000) {
         if (catalog == null) {
             renderer.detach();

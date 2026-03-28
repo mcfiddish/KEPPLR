@@ -493,4 +493,23 @@ public final class DefaultSimulationState implements SimulationState {
     public ConcurrentHashMap<Integer, SimpleBooleanProperty> getBodyVisibilityMap() {
         return bodyVisibility;
     }
+
+    /**
+     * Clear all overlay visibility state — labels, trails, trail durations, vectors, frustums, and body visibility.
+     *
+     * <p>Called during configuration reload to give scripts a clean slate. After clearing, barycenters (NAIF 0–9) are
+     * re-hidden by default.
+     */
+    public void clearOverlayState() {
+        labelVisibility.clear();
+        trailVisibility.clear();
+        trailDuration.clear();
+        vectorVisibility.clear();
+        frustumVisibility.clear();
+        bodyVisibility.clear();
+        // Restore default: barycenters hidden
+        for (int i = 0; i <= 9; i++) {
+            bodyVisibility.put(i, new SimpleBooleanProperty(false));
+        }
+    }
 }
