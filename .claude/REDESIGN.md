@@ -673,7 +673,7 @@ textures. When `SpacecraftBlock.shapeModel()` returns a non-null path:
   WARN level and fall back to the existing point sprite. The simulation must
   continue normally.
 
-#### 16.6.5 Frame Semantics
+#### 16.6.5 Frame Semantics [D-055]
 
 * `bodyFixedNode` carries the time-varying SPICE body-fixed → J2000 rotation,
   updated each frame by `BodySceneManager`, exactly as it does today for
@@ -682,6 +682,16 @@ textures. When `SpacecraftBlock.shapeModel()` returns a non-null path:
   applied once at load time as the local rotation of `glbModelRoot`. It maps
   glTF model-space into the body-fixed frame expected by SPICE. It is never
   reapplied or updated per-frame.
+* `modelToBodyFixedQuat` defaults to identity for all source formats. JME's
+  glTF loader handles the Y-up basis conversion via the scene graph, so loaded
+  vertices are already in their original frame. No format-based correction is
+  needed.
+* The conversion script (`convert_to_normalized_glb.py`) provides two mutually
+  exclusive options for per-model corrections when the model's vertex frame
+  does not match the SPICE body-fixed frame:
+  - `--apply-rotation x,y,z,a` (axis-angle in degrees)
+  - `--apply-quaternion w,x,y,z` (quaternion; accepts Cosmographia
+    `meshRotation` values directly)
 
 #### 16.6.6 Iteration Scope
 

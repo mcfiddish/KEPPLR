@@ -1056,7 +1056,27 @@ would cause a compilation error since `toScript()` has no default implementation
 
 ---
 
-*Last updated: Step 28 + bug fix (branch 50-clock-update-bug), Step 26, D-053/D-054*
+## D-055: modelToBodyFixedQuat defaults to identity; no format-based basis correction
+**Status:** Accepted
+**Roadmap step:** N/A (conversion tooling fix)
+
+**Context:** The Python conversion script (`convert_to_normalized_glb.py`) injected an `Rx(-90°)` quaternion as `modelToBodyFixedQuat` for OBJ/CMOD sources, based on the assumption that Blender's `export_yup=True` bakes an `Rx(-90°)` rotation into GLB vertex data and KEPPLR would need to undo it. Empirical testing showed this was wrong: JME's glTF loader handles the Y-up basis conversion via the scene graph, so loaded vertices are already in their original frame. The injected rotation was doubling the conversion, producing incorrect orientation.
+
+**Decision:**
+1. `modelToBodyFixedQuat` defaults to identity `(0,0,0,1)` for all source formats. No format-based basis correction is applied.
+2. Two new mutually exclusive CLI options allow per-model correction when a model's vertex frame does not match the expected SPICE body-fixed frame:
+   - `--apply-rotation x,y,z,a` (axis-angle, degrees)
+   - `--apply-quaternion w,x,y,z` (quaternion in Cosmographia `meshRotation` order; reordered to `x,y,z,w` for glTF/JME)
+3. No changes to the Java side — `GLTFUtils`, `BodyNodeFactory`, and `GlbModelViewer` are correct as-is.
+
+**Consequences:**
+- All previously converted GLB files from OBJ/CMOD sources that had the erroneous `Rx(-90°)` quaternion must be reconverted.
+- CMOD models that need alignment (e.g., authored with +Y up) can use `--apply-quaternion` with the `meshRotation` value from Cosmographia's SSC/JSON config files directly.
+- OBJ models with vertices already in body-fixed coordinates need no flags.
+
+---
+
+*Last updated: D-055 (convert_to_normalized_glb.py rotation fix), Step 28 + bug fix (branch 50-clock-update-bug), Step 26, D-053/D-054*
 *Backfill note: Entries D-001 through D-009 were reconstructed retrospectively.
 D-010 onwards recorded in real time.*
 
