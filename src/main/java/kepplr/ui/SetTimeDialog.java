@@ -50,12 +50,16 @@ final class SetTimeDialog extends Dialog<ButtonType> {
         nowButton.setOnAction(e -> {
             errorLabel.setText("");
             try {
-                double et = KEPPLRConfiguration.getInstance().getTimeConversion().instantToTDB(Instant.now());
+                double et =
+                        KEPPLRConfiguration.getInstance().getTimeConversion().instantToTDB(Instant.now());
                 commands.setET(et);
                 setResult(okButton);
                 close();
             } catch (Exception ex) {
-                errorLabel.setText(ex.getMessage() != null ? ex.getMessage() : ex.getClass().getSimpleName());
+                errorLabel.setText(
+                        ex.getMessage() != null
+                                ? ex.getMessage()
+                                : ex.getClass().getSimpleName());
             }
         });
 
