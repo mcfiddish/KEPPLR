@@ -1076,7 +1076,55 @@ would cause a compilation error since `toScript()` has no default implementation
 
 ---
 
-*Last updated: D-055 (convert_to_normalized_glb.py rotation fix), Step 28 + bug fix (branch 50-clock-update-bug), Step 26, D-053/D-054*
+## D-056: KepplrScript execution semantics labels
+**Status:** Accepted
+**Roadmap step:** N/A (scripting API documentation)
+
+**Context:** Users writing scripts had no way to know which `KepplrScript` methods execute immediately, which are queued to the JME thread, and which block the script thread. This led to subtle bugs — for example, calling `focusBody()` immediately after `loadConfiguration()` without realizing the camera transitions were queued while the JME thread hadn't yet computed body positions. The prototype's `EngineApi` labelled every method clearly.
+
+**Decision:** Every public method on `KepplrScript` now has an `<b>Execution semantics:</b>` label in its Javadoc, using one of four categories:
+- **Immediate** — takes effect on the calling thread; no JME involvement.
+- **Queued** — enqueued to the JME thread's transition inbox; returns immediately.
+- **Blocking** — blocks the script thread until the operation completes.
+- **Immediate + Queued** — hybrid: state mutations are immediate, camera transitions are queued.
+
+The class-level Javadoc summarizes all four categories.
+
+**Consequences:** Script authors can determine whether they need `waitTransition()` or `waitWall()` between calls. Hybrid methods (`focusBody`, `targetBody`, `setStateString`) are flagged so users understand that state is visible immediately but the camera arrives asynchronously.
+
+---
+
+## D-057: loadConfiguration blocks until first simpleUpdate completes
+**Status:** Accepted
+**Roadmap step:** N/A (scripting reliability fix)
+
+**Context:** `loadConfiguration()` blocked the script thread via a `CountDownLatch` until `rebuildBodyScene()` finished on the JME thread. However, the latch was counted down inside the enqueued callable that runs during `super.update()` — *before* `simpleUpdate()`. This meant the script thread could resume and queue camera transitions (via `focusBody`) before the JME thread had computed body positions for the new scene, causing transitions to target stale or missing positions.
+
+**Decision:** The latch is no longer counted down inside the enqueued callable. Instead, it is stored in a `volatile postRebuildLatch` field and counted down at the end of `simpleUpdate()`. This guarantees that the first full update cycle with the new configuration (body positions computed, scene graph updated) has completed before the script thread unblocks.
+
+**Alternatives considered:** Adding `waitWall(5)` in scripts as a workaround — functional but fragile and violates the "Blocking means truly blocking" contract.
+
+**Consequences:** Scripts can safely call `focusBody()` immediately after `loadConfiguration()` without any artificial delay. The `loadConfiguration` Javadoc labelled as "Blocking" now accurately reflects its behavior.
+
+---
+
+## D-058: Scene rebuild clears overlay state and disposes all render managers
+**Status:** Accepted
+**Roadmap step:** N/A (scene rebuild correctness fix)
+
+**Context:** Running a script that called `loadConfiguration()` multiple times left orphaned geometry in the scene graph. Two bugs:
+1. `VectorManager` and `StarFieldManager` were reconstructed without disposing the old instances. The old geometry remained attached to the frustum layer nodes — the new manager's `detachAll()` only knew about its own geometry, not the predecessor's.
+2. Overlay visibility state in `DefaultSimulationState` (vectors, trails, labels, frustums, body visibility) was not cleared on rebuild, so flags set by a previous script run survived and caused the new managers to immediately re-enable stale overlays.
+
+**Decision:**
+1. Added `dispose()` methods to `VectorManager` and `StarFieldManager` that detach all geometry and clear internal state. Both are called in `rebuildBodyScene()` before constructing replacements.
+2. Added `clearOverlayState()` to `DefaultSimulationState` that clears all overlay visibility maps and re-applies the default barycenter hiding. Called in `rebuildBodyScene()`.
+
+**Consequences:** Scripts that call `loadConfiguration()` (including re-running the same script) get a clean slate — no orphaned geometry, no stale overlay flags. The script must re-enable any desired overlays after each `loadConfiguration()` call, which matches user expectation and the script's own flow.
+
+---
+
+*Last updated: D-058 (scene rebuild cleanup), D-057 (loadConfiguration blocking fix), D-056 (execution semantics labels)*
 *Backfill note: Entries D-001 through D-009 were reconstructed retrospectively.
 D-010 onwards recorded in real time.*
 

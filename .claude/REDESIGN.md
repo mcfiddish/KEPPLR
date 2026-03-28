@@ -498,6 +498,32 @@ All menu items call `SimulationCommands` only — no rendering logic in `ui/`.
 * `VectorType` arguments are serialized via `VectorType.toScript()` — see
   D-026.
 
+### 11.5 Execution Semantics [D-056]
+
+* Every public method on `KepplrScript` must have an **execution semantics**
+  label in its Javadoc, using one of:
+  * **Immediate** — takes effect on the calling thread; no JME thread
+    involvement. State mutations are visible on the next JME frame.
+  * **Queued** — enqueued to the JME thread's transition inbox; returns
+    immediately. Use `waitTransition()` to block until completion.
+  * **Blocking** — blocks the script thread until the operation completes.
+  * **Immediate + Queued** — hybrid: state mutations are immediate, camera
+    transitions are queued. Use `waitTransition()` to ensure the camera
+    arrives before issuing dependent commands.
+* Hybrid methods (`focusBody`, `targetBody`, `setStateString`) must document
+  which effects are immediate and which are queued.
+
+### 11.6 Configuration Reload [D-057, D-058]
+
+* `loadConfiguration(path)` is **Blocking**: it blocks the script thread
+  until the first full `simpleUpdate()` with the new configuration completes.
+  This guarantees body positions are computed before the script resumes.
+* A configuration reload clears all overlay visibility state (labels, trails,
+  vectors, frustums, body visibility) to give scripts a clean slate. Scripts
+  must re-enable desired overlays after each `loadConfiguration()` call.
+* All render managers (`VectorManager`, `StarFieldManager`, etc.) are disposed
+  before reconstruction to prevent orphaned geometry in the scene graph.
+
 ---
 
 ## 12. Texture Mapping Requirements
