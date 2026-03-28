@@ -7,6 +7,7 @@ import kepplr.ephemeris.BodyLookupService;
 import kepplr.ephemeris.KEPPLREphemeris;
 import kepplr.render.RenderQuality;
 import kepplr.render.vector.VectorType;
+import kepplr.render.vector.VectorTypes;
 import kepplr.state.SimulationState;
 import kepplr.util.KepplrConstants;
 import org.apache.logging.log4j.LogManager;
@@ -708,6 +709,42 @@ public final class KepplrScript {
      */
     public void setVectorVisible(String bodyName, VectorType type, boolean visible) {
         commands.setVectorVisible(resolve(bodyName), type, visible);
+    }
+
+    /**
+     * Toggle body-fixed X, Y, and Z axis overlays by NAIF ID.
+     *
+     * <p>Convenience method equivalent to calling {@link #setVectorVisible(int, VectorType, boolean)} three times with
+     * {@link VectorTypes#bodyAxisX()}, {@link VectorTypes#bodyAxisY()}, and {@link VectorTypes#bodyAxisZ()}.
+     *
+     * <p>Example: {@code kepplr.setBodyFixedAxesVisible(399, true)}
+     *
+     * @param naifId NAIF ID of the body
+     * @param visible {@code true} to show all three axes, {@code false} to hide
+     */
+    public void setBodyFixedAxesVisible(int naifId, boolean visible) {
+        commands.setVectorVisible(naifId, VectorTypes.bodyAxisX(), visible);
+        commands.setVectorVisible(naifId, VectorTypes.bodyAxisY(), visible);
+        commands.setVectorVisible(naifId, VectorTypes.bodyAxisZ(), visible);
+    }
+
+    /**
+     * Toggle body-fixed X, Y, and Z axis overlays by body name.
+     *
+     * <p>Convenience method equivalent to calling {@link #setVectorVisible(String, VectorType, boolean)} three times
+     * with {@link VectorTypes#bodyAxisX()}, {@link VectorTypes#bodyAxisY()}, and {@link VectorTypes#bodyAxisZ()}.
+     *
+     * <p>Example: {@code kepplr.setBodyFixedAxesVisible("Earth", true)}
+     *
+     * @param bodyName body name; case-insensitive
+     * @param visible {@code true} to show all three axes, {@code false} to hide
+     * @throws IllegalArgumentException if the name cannot be resolved
+     */
+    public void setBodyFixedAxesVisible(String bodyName, boolean visible) {
+        int id = resolve(bodyName);
+        commands.setVectorVisible(id, VectorTypes.bodyAxisX(), visible);
+        commands.setVectorVisible(id, VectorTypes.bodyAxisY(), visible);
+        commands.setVectorVisible(id, VectorTypes.bodyAxisZ(), visible);
     }
 
     // ── Instrument frustum overlays (Step 22) ────────────────────────────────────
