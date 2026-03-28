@@ -166,6 +166,14 @@ public class KepplrApp extends SimpleApplication {
 
     private volatile PendingCapture pendingCapture;
 
+    // ── Post-rebuild latch (Step 27 fix) ─────────────────────────────────────────────────────
+    // When loadConfiguration() triggers a scene rebuild, the latch is stored here (by the
+    // enqueued callable) and counted down at the END of simpleUpdate() — guaranteeing that the
+    // first full update cycle with the new configuration has completed before the script thread
+    // unblocks.  Without this, the script thread could queue transitions against bodies whose
+    // positions have not yet been computed in the new scene.
+    private volatile java.util.concurrent.CountDownLatch postRebuildLatch;
+
     @Override
     public void simpleInitApp() {
         setLostFocusBehavior(LostFocusBehavior.Disabled);
@@ -201,10 +209,12 @@ public class KepplrApp extends SimpleApplication {
         DefaultSimulationCommands commands =
                 new DefaultSimulationCommands(simulationState, simulationClock, transitionController);
         // Wire the scene rebuild callback so loadConfiguration() can block the script thread
-        // until rebuildBodyScene() finishes on the JME render thread.
+        // until the first full simpleUpdate() after rebuildBodyScene() completes.  The latch is
+        // stored in postRebuildLatch and counted down at the end of simpleUpdate(), ensuring body
+        // positions are computed before the script thread resumes.
         commands.setSceneRebuildCallback(latch -> enqueue(() -> {
             rebuildBodyScene();
-            latch.countDown();
+            postRebuildLatch = latch;
             return null;
         }));
         // Wire the screenshot callback: store a pending capture that will be processed after the
@@ -521,6 +531,13 @@ public class KepplrApp extends SimpleApplication {
         farNode.updateGeometricState();
         midNode.updateGeometricState();
         nearNode.updateGeometricState();
+
+        // Signal loadConfiguration() that the first full update with the new config is done
+        java.util.concurrent.CountDownLatch rebuildLatch = postRebuildLatch;
+        if (rebuildLatch != null) {
+            postRebuildLatch = null;
+            rebuildLatch.countDown();
+        }
     }
 
     @Override

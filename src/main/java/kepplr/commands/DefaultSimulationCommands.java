@@ -395,7 +395,11 @@ public final class DefaultSimulationCommands implements SimulationCommands {
     }
 
     /**
-     * Reload the configuration from {@code path} and block until the JME scene rebuild completes (Step 27).
+     * Reload the configuration from {@code path} and block until the first full {@code simpleUpdate()} with the new
+     * configuration completes (Step 27).
+     *
+     * <p>This ensures that body positions are computed for the new scene before the script thread resumes, so
+     * subsequent commands like {@code focusBody()} can immediately queue transitions against valid body positions.
      *
      * <p>If {@link KEPPLRConfiguration#reload} throws for any reason (file not found, parse error, etc.) the error is
      * logged and this method returns immediately — no rebuild is enqueued and the previous configuration remains
