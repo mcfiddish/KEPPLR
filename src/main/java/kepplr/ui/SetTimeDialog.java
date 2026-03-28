@@ -1,5 +1,6 @@
 package kepplr.ui;
 
+import java.time.Instant;
 import javafx.geometry.Insets;
 import javafx.scene.control.Button;
 import javafx.scene.control.ButtonBar;
@@ -8,8 +9,10 @@ import javafx.scene.control.Dialog;
 import javafx.scene.control.Label;
 import javafx.scene.control.TextField;
 import javafx.scene.layout.GridPane;
+import javafx.scene.layout.HBox;
 import javafx.scene.paint.Color;
 import kepplr.commands.SimulationCommands;
+import kepplr.config.KEPPLRConfiguration;
 
 /**
  * Modal dialog for setting the simulation time to a UTC string (REDESIGN.md §1.2).
@@ -43,12 +46,27 @@ final class SetTimeDialog extends Dialog<ButtonType> {
         errorLabel.setWrapText(true);
         errorLabel.setMaxWidth(320);
 
+        Button nowButton = new Button("Now");
+        nowButton.setOnAction(e -> {
+            errorLabel.setText("");
+            try {
+                double et = KEPPLRConfiguration.getInstance().getTimeConversion().instantToTDB(Instant.now());
+                commands.setET(et);
+                setResult(okButton);
+                close();
+            } catch (Exception ex) {
+                errorLabel.setText(ex.getMessage() != null ? ex.getMessage() : ex.getClass().getSimpleName());
+            }
+        });
+
+        HBox fieldRow = new HBox(6, utcField, nowButton);
+
         GridPane grid = new GridPane();
         grid.setHgap(10);
         grid.setVgap(8);
         grid.setPadding(new Insets(10, 14, 4, 14));
         grid.add(new Label("UTC time:"), 0, 0);
-        grid.add(utcField, 1, 0);
+        grid.add(fieldRow, 1, 0);
         grid.add(errorLabel, 1, 1);
 
         getDialogPane().setContent(grid);
