@@ -120,7 +120,7 @@ format.  Here's the default version:
     spacecraft.newhorizons.scale = 1.0
 
 
-Any object with an ephemeris will be drawn.  If an object does not have an body block specified, the following assumptions are used:
+Any object with an ephemeris will be drawn.  If an object does not have a body block specified, the following assumptions are used:
 
  * its name is the one bound to its NAIF ID.
  * its color is white (#FFFFFF)

@@ -32,7 +32,7 @@ Run KEPPLR:
 See:
 
     * :doc:`configuration` for details on the configuration file.
-    * :doc:`gui` for details on the GUI application.
+    * :doc:`gui` for details on the GUI application, including the :ref:`body interaction model <body-interaction-model>` (selected, targeted, focused).
     * :doc:`scripting` for details on running a `Groovy <https://groovy-lang.org/>`__ script with KEPPLR.
 
 .. toctree::

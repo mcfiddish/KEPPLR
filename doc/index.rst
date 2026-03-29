@@ -3,6 +3,11 @@ KEPPLR documentation
 
 This package contains the KEPPLR software suite version |version|.
 
+KEPPLR is a deterministic, interactive 3D solar system simulator.  It uses SPICE-compatible ephemeris
+data to render accurate positions, orientations, and lighting for planets, moons, and spacecraft.
+You can fly the camera to any body in the simulation, view instrument fields of view, display orbital
+trails and vector overlays, and automate sequences with Groovy scripts to produce animations.
+
 Prerequisites
 -------------
 
