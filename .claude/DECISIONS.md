@@ -1124,7 +1124,55 @@ The class-level Javadoc summarizes all four categories.
 
 ---
 
-*Last updated: D-058 (scene rebuild cleanup), D-057 (loadConfiguration blocking fix), D-056 (execution semantics labels)*
+## D-059: Remove G/F/T keyboard shortcuts; reverse tilt sense
+**Status:** Accepted
+**Roadmap step:** N/A (UX refinement)
+
+**Context:** The G (goTo focused body), F (toggle synodic/inertial frame), and T (target selected body) keybindings in `CameraInputHandler` were not useful in practice. Additionally, the Up arrow tilted the camera down and Down arrow tilted up, which was counterintuitive.
+
+**Decision:** Removed G, F, and T keybindings from `CameraInputHandler.onKeyEvent()`. Reversed the tilt direction so Up arrow tilts the camera up (positive degrees) and Down arrow tilts down (negative degrees). Frame switching is done via the Camera Frame submenu in the View menu. REDESIGN.md §4.6 updated to remove the F-key reference.
+
+**Consequences:** Keyboard shortcuts are now: arrow keys (tilt/orbit), Page Up/Down (zoom), Space (pause), `[`/`]` (time rate). Frame switching is menu-only.
+
+---
+
+## D-060: Move Copy/Paste State from Edit menu to File menu
+**Status:** Accepted
+**Roadmap step:** N/A (UX refinement)
+
+**Context:** The Edit menu contained only Copy State and Paste State — not enough to justify a dedicated menu. Moving them into the File menu reduces menu bar clutter.
+
+**Decision:** Moved Copy State and Paste State into the File menu (between Capture Sequence and Show Log, with separators). Removed the Edit menu entirely. `buildEditMenu()` deleted from `KepplrStatusWindow`.
+
+**Consequences:** Menu bar is: File, View, Time, Overlays, Instruments, Window. One fewer top-level menu.
+
+---
+
+## D-061: Velocity vector overlay uses parent-relative velocity
+**Status:** Accepted
+**Roadmap step:** N/A (correctness fix)
+
+**Context:** `VectorTypes.velocity()` computed the heliocentric velocity for all bodies. For satellites (e.g. the Moon), this showed the velocity relative to the Sun, which did not match the orbital trail direction and was not useful for understanding the body's orbit around its parent.
+
+**Decision:** `VelocityVectorType` now subtracts the parent barycenter's velocity for satellites (NAIF IDs 100–999 not ending in 99, plus Pluto 999). For planets and other bodies, the heliocentric velocity is used. This matches the trail direction convention in `TrailSampler`.
+
+**Consequences:** The velocity overlay arrow now points along the orbital trail for all bodies. REDESIGN.md §10.3 updated to document this.
+
+---
+
+## D-062: Bodies without body-fixed frames render as sprites instead of crashing
+**Status:** Accepted
+**Roadmap step:** N/A (robustness fix)
+
+**Context:** `BodySceneManager.update()` called `eph.getJ2000ToBodyFixedRotation()` for any body with `DRAW_FULL` decision. Bodies like Hyperion (NAIF 607) have no PCK orientation data, causing `getJ2000ToBodyFixedRotation()` to return null and a subsequent NullPointerException.
+
+**Decision:** When `getJ2000ToBodyFixedRotation()` returns null for a `DRAW_FULL` body, the decision is downgraded to `DRAW_SPRITE`. The body is still visible as a point sprite rather than crashing.
+
+**Consequences:** All bodies in the SPK are renderable regardless of PCK coverage. Bodies without orientation data appear as sprites even at close range, which is acceptable since there is no texture to orient anyway.
+
+---
+
+*Last updated: D-062 (sprite fallback for missing body-fixed frames), D-061 (parent-relative velocity), D-060 (Edit menu removal), D-059 (keyboard shortcut cleanup)*
 *Backfill note: Entries D-001 through D-009 were reconstructed retrospectively.
 D-010 onwards recorded in real time.*
 

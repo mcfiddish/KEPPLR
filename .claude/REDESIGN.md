@@ -173,13 +173,8 @@ At any time, the application maintains at most:
 switching the camera frame to Synodic with the selected body as the
 "other body."
 
-* Pressing **F** while a selected body is set switches the camera frame to
-  Synodic. If the camera frame is already Synodic, F switches back to
-  Inertial. If no selected body is set and the frame is Inertial, F is a
-  no-op.
-* Selecting **Inertial** in the Camera Frame submenu exits the Synodic frame
-  via the menu. Stop Tracking no longer exists as a separate menu item.
-* The Camera Frame submenu and F are always kept in sync.
+* The Camera Frame submenu in the View menu is used to switch frames.
+  Stop Tracking no longer exists as a separate menu item.
 * There is no separate "tracked body" property. The synodic "other body"
   is always the currently selected body (see §5).
 
@@ -424,7 +419,7 @@ The JavaFX menu bar must include an **Overlays** menu with:
 
   * Sun Direction
   * Earth Direction
-  * Velocity Direction
+  * Velocity Direction — relative to parent body (barycenter for satellites, Sun for planets), matching the orbital trail direction
   * Trajectory (trail for focused body)
   * Axes
 
