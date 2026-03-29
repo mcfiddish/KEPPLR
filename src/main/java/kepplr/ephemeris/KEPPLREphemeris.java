@@ -271,7 +271,9 @@ public class KEPPLREphemeris {
      * @throws NullPointerException if no body-fixed transform is available for {@code id}
      */
     public RotationMatrixIJK getJ2000ToBodyFixedRotation(EphemerisID id, double et) {
-        return getJ2000ToBodyFixed(id).getTransform(et);
+        StateTransformFunction func = getJ2000ToBodyFixed(id);
+        if (func == null) return null;
+        return func.getTransform(et);
     }
 
     /**
