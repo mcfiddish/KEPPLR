@@ -854,14 +854,13 @@ public final class KepplrStatusWindow {
 
     private MenuBar buildMenuBar() {
         Menu fileMenu = buildFileMenu();
-        Menu editMenu = buildEditMenu();
         Menu viewMenu = buildViewMenu();
         Menu timeMenu = buildTimeMenu();
         Menu overlaysMenu = buildOverlaysMenu();
         instrumentsMenu = buildInstrumentsMenu();
         Menu windowMenu = buildWindowMenu();
 
-        MenuBar bar = new MenuBar(fileMenu, editMenu, viewMenu, timeMenu, overlaysMenu, instrumentsMenu, windowMenu);
+        MenuBar bar = new MenuBar(fileMenu, viewMenu, timeMenu, overlaysMenu, instrumentsMenu, windowMenu);
         bar.setUseSystemMenuBar(false);
         return bar;
     }
@@ -997,6 +996,37 @@ public final class KepplrStatusWindow {
         CustomMenuItem showLog = tipItem("Show Log", "Show the application log window");
         showLog.setOnAction(e -> logWindow.show());
 
+        CustomMenuItem copyState = tipItem("Copy State", "Copy the current simulation state to the clipboard");
+        copyState.setOnAction(e -> {
+            String stateString = commands.getStateString();
+            ClipboardContent content = new ClipboardContent();
+            content.putString(stateString);
+            Clipboard.getSystemClipboard().setContent(content);
+            logger.info("State string copied to clipboard ({} chars)", stateString.length());
+        });
+
+        CustomMenuItem pasteState = tipItem("Paste State", "Restore simulation state from the clipboard");
+        pasteState.setOnAction(e -> {
+            String text = Clipboard.getSystemClipboard().getString();
+            if (text == null || text.isBlank()) {
+                Alert warn = new Alert(Alert.AlertType.WARNING, "Clipboard is empty.", ButtonType.OK);
+                warn.setTitle("Paste State");
+                warn.setHeaderText(null);
+                warn.showAndWait();
+                return;
+            }
+            try {
+                commands.setStateString(text.strip());
+                logger.info("State restored from clipboard");
+            } catch (IllegalArgumentException ex) {
+                Alert warn =
+                        new Alert(Alert.AlertType.WARNING, "Invalid state string: " + ex.getMessage(), ButtonType.OK);
+                warn.setTitle("Paste State");
+                warn.setHeaderText(null);
+                warn.showAndWait();
+            }
+        });
+
         return new Menu(
                 "File",
                 null,
@@ -1007,6 +1037,9 @@ public final class KepplrStatusWindow {
                 new SeparatorMenuItem(),
                 saveScreenshot,
                 captureSeq,
+                new SeparatorMenuItem(),
+                copyState,
+                pasteState,
                 new SeparatorMenuItem(),
                 showLog,
                 new SeparatorMenuItem(),
@@ -1131,40 +1164,6 @@ public final class KepplrStatusWindow {
         thread.start();
     }
 
-    private Menu buildEditMenu() {
-        CustomMenuItem copyState = tipItem("Copy State", "Copy the current simulation state to the clipboard");
-        copyState.setOnAction(e -> {
-            String stateString = commands.getStateString();
-            ClipboardContent content = new ClipboardContent();
-            content.putString(stateString);
-            Clipboard.getSystemClipboard().setContent(content);
-            logger.info("State string copied to clipboard ({} chars)", stateString.length());
-        });
-
-        CustomMenuItem pasteState = tipItem("Paste State", "Restore simulation state from the clipboard");
-        pasteState.setOnAction(e -> {
-            String text = Clipboard.getSystemClipboard().getString();
-            if (text == null || text.isBlank()) {
-                Alert warn = new Alert(Alert.AlertType.WARNING, "Clipboard is empty.", ButtonType.OK);
-                warn.setTitle("Paste State");
-                warn.setHeaderText(null);
-                warn.showAndWait();
-                return;
-            }
-            try {
-                commands.setStateString(text.strip());
-                logger.info("State restored from clipboard");
-            } catch (IllegalArgumentException ex) {
-                Alert warn =
-                        new Alert(Alert.AlertType.WARNING, "Invalid state string: " + ex.getMessage(), ButtonType.OK);
-                warn.setTitle("Paste State");
-                warn.setHeaderText(null);
-                warn.showAndWait();
-            }
-        });
-
-        return new Menu("Edit", null, copyState, pasteState);
-    }
 
     private Menu buildViewMenu() {
         // Camera Frame submenu — RadioButtons inside CustomMenuItems to support tooltips
