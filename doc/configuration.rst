@@ -120,6 +120,13 @@ format.  Here's the default version:
     spacecraft.newhorizons.scale = 1.0
 
 
+Any object with an ephemeris will be drawn.  If an object does not have an body block specified, the following assumptions are used:
+
+ * its name is the one bound to its NAIF ID.
+ * its color is white (#FFFFFF)
+ * its texture map is assumed to exist in resources/maps/<name>.jpg where name is lowercase.  If no such file exists, no texture map is applied.
+ * its shape is assumed to be an ellipsoid.  If no ellipsoid is defined in the kernel pool, it will be drawn as a point.
+
 You may need to either change
 
 ::
@@ -147,3 +154,5 @@ Phobos as an ellipsoid with a texture map.
         body.phobos.centerLonDeg = 0.0
         # Path under resourcesFolder() for this body's shape model.  If blank an ellipsoid model will be used
         body.phobos.shapeModel =
+
+See :doc:`pythonindex` for instructions on generating shape model files.

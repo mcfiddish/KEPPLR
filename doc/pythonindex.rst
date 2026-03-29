@@ -2,8 +2,13 @@
 Python Tools
 ============
 
-The script `convert_to_normalized_glb` can convert common model formats into glTF Binary (.glb) for use
-with KEPPLR.
+The script `convert_to_normalized_glb` can convert assorted model formats into a *normalized* glTF Binary (.glb) that is
+more likely to load consistently in engines like jMonkeyEngine (jME).
+
+This script is designed to run *inside* Blender (it uses `bpy`). Execute it with
+Blender's `-b -P` options and pass script arguments after a `--` separator.
+
+`NASA 3D Resources <https://github.com/nasa/NASA-3D-Resources/tree/master/3D%20Models>`__ is a good source for spacecraft models.
 
 Dependencies
 ------------
@@ -15,12 +20,39 @@ Dependencies
 - `cmodconvert <https://github.com/ajtribick/cmodconvert>`__ (for converting Celestia `.cmod` inputs)
 - `ImageMagick <https://imagemagick.org/>`__ (for converting `.dds` textures to `.png`)
 
+Supported input formats
+-----------------------
+- `.glb` / `.gltf`
+    Imported directly via Blender's built-in glTF importer.
+
+- `.3ds`
+    Always converted via **assimp** to an intermediate `.glb`, then imported.
+    This avoids relying on Blender add-ons for 3DS import.
+
+- `.cmod` (Cosmographia/Celestia model)
+    Converted via **cmodconvert** to `.obj` + `.mtl` in a temporary folder, then imported.
+
+    CMOD models frequently reference "texture filenames" in the generated MTL
+    (e.g., `DARKGREY.DDS`, `NH_FOIL2.DDS`) that may *not* be distributed with the model.
+    Cosmographia can still render such models using the MTL's per-material constants
+    (`Kd`, `Ks`, `Ns`) even when image files are missing.
+
+    To match that behavior, this script supports a missing-texture policy:
+      - `strip` (default): remove `map_*` lines and rely on `Kd/Ks/Ns` colors.
+      - `swatch`: generate 1×1 PNG swatches from each material's `Kd` and replace `map_Kd`
+                 so the exported GLB has actual image textures (solid-color), but still works
+                 even without the original images.
+
+- `.obj` (Wavefront OBJ)
+    Imported via Blender's built-in OBJ importer (`bpy.ops.wm.obj_import`). If a matching `.mtl`
+    file is referenced and textures are available, Blender will load them and this script will
+    normalize any loaded images to PNG on export.
+
 Command-line options
 --------------------
+All script options must come *after* `--` (Blender's argument separator).
 
 ::
-
-    All script options must come *after* `--` (Blender's argument separator).
 
     Required:
       --input, -i <file|dir>        Input model file or directory
@@ -28,12 +60,22 @@ Command-line options
 
     Optional:
       --recursive                   If --input is a directory, recurse into subdirectories
+      --scale <float>               Uniform scale factor applied to the imported model before export
       --assimp <path>               Path to assimp executable (default: 'assimp' on PATH)
       --cmodconvert <path>          Path to cmodconvert executable (required for .cmod inputs)
       --magick <path>               Path to ImageMagick binary (default: try 'magick' then 'convert')
       --texture-dir <dir>           (Repeatable) Add search roots for CMOD-referenced textures
       --texture-recursive           If set, search each --texture-dir recursively
       --missing-texture-mode <mode> CMOD-only: 'strip' (default) or 'swatch'
+      --apply-rotation x,y,z,a      Rotation to inject as modelToBodyFixedQuat (axis-angle form).
+                                      x,y,z is the rotation axis (need not be unit length),
+                                      a is the angle in degrees. Use this when a model's vertex
+                                      coordinates are not in the expected SPICE body-fixed frame.
+                                      Mutually exclusive with --apply-quaternion.
+      --apply-quaternion w,x,y,z    Rotation to inject as modelToBodyFixedQuat (quaternion form).
+                                      Components are in w,x,y,z order. Cosmographia's "meshRotation"
+                                      values from SSC/JSON config files can be used directly here.
+                                      Mutually exclusive with --apply-rotation.
 
 Examples
 --------
