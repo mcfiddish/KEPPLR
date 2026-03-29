@@ -1164,7 +1164,6 @@ public final class KepplrStatusWindow {
         thread.start();
     }
 
-
     private Menu buildViewMenu() {
         // Camera Frame submenu — RadioButtons inside CustomMenuItems to support tooltips
         ToggleGroup frameGroup = new ToggleGroup();

@@ -27,10 +27,12 @@ public final class VectorTypes {
     private VectorTypes() {}
 
     /**
-     * Returns a {@link VectorType} whose direction is the unit velocity vector of the origin body in heliocentric
-     * J2000.
+     * Returns a {@link VectorType} whose direction is the unit velocity vector of the origin body relative to its
+     * parent body in J2000.
      *
-     * <p>The velocity is taken from the geometric (no-aberration) heliocentric state at the current ET.
+     * <p>For natural satellites (NAIF IDs 100–999 not ending in 99, plus Pluto 999), the velocity is relative to the
+     * system barycenter ({@code naifId / 100}). For all other bodies (planets, Sun, spacecraft), the velocity is
+     * heliocentric. This matches the orbital trail direction.
      *
      * @return velocity direction strategy
      */
@@ -84,7 +86,11 @@ public final class VectorTypes {
 
     // ── Package-private implementations ───────────────────────────────────────────────────────
 
-    /** Computes the unit heliocentric velocity direction of the origin body at the given ET. */
+    /**
+     * Computes the unit velocity direction of the origin body relative to its parent body at the given ET.
+     *
+     * <p>For satellites, velocity is relative to the system barycenter; for other bodies it is heliocentric.
+     */
     static final class VelocityVectorType implements VectorType {
 
         private static final Logger logger = LogManager.getLogger(VelocityVectorType.class);
@@ -93,12 +99,26 @@ public final class VectorTypes {
         public VectorIJK computeDirection(int originNaifId, double et) {
             try {
                 KEPPLREphemeris eph = KEPPLRConfiguration.getInstance().getEphemeris();
-                StateVector state = eph.getHeliocentricStateJ2000(originNaifId, et);
-                if (state == null) {
+                StateVector bodyState = eph.getHeliocentricStateJ2000(originNaifId, et);
+                if (bodyState == null) {
                     logger.warn("velocity(): null state for NAIF {} at ET={}", originNaifId, et);
                     return null;
                 }
-                VectorIJK vel = state.getVelocity();
+                VectorIJK vel = bodyState.getVelocity();
+
+                // Satellites: subtract parent barycenter velocity to get orbit-relative velocity
+                if (isSatellite(originNaifId)) {
+                    int barycenterId = originNaifId / 100;
+                    StateVector parentState = eph.getHeliocentricStateJ2000(barycenterId, et);
+                    if (parentState != null) {
+                        VectorIJK parentVel = parentState.getVelocity();
+                        vel = new VectorIJK(
+                                vel.getI() - parentVel.getI(),
+                                vel.getJ() - parentVel.getJ(),
+                                vel.getK() - parentVel.getK());
+                    }
+                }
+
                 double len = vel.getLength();
                 if (!(len > 0.0)) {
                     logger.warn("velocity(): zero velocity for NAIF {} at ET={}", originNaifId, et);
@@ -109,6 +129,11 @@ public final class VectorTypes {
                 logger.warn("velocity(): failed for NAIF {} at ET={}: {}", originNaifId, et, e.getMessage());
                 return null;
             }
+        }
+
+        /** Returns true if naifId is a natural satellite (100–999 not ending in 99) or Pluto (999). */
+        private static boolean isSatellite(int naifId) {
+            return (naifId >= 100 && naifId <= 999 && naifId % 100 != 99) || naifId == 999;
         }
 
         @Override
