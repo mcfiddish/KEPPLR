@@ -2,7 +2,7 @@
 Running the GUI
 ===============
 
-The main :doc:`tools/KEPPLR` launches a graphical user interface (GUI):
+The main :doc:`tools/KEPPLR` application launches a graphical user interface (GUI):
 
 ::
 
@@ -19,17 +19,17 @@ Body Interaction Model
 
 KEPPLR uses three levels of body interaction.  Each level includes the effects of the levels below it:
 
-**Selected**
-    The selected body's name and distance from the camera are shown on the HUD.  Selecting a body does not
-    move the camera.  Click on a body in the display or single-click in the body list to select it.
-
-**Targeted**
-    The camera points at the targeted body.  Targeting a body also selects it.
-
 **Focused**
     The focused body becomes the origin of the camera coordinate frame.  The camera moves to the focused body
     and orbits around it.  Focusing a body also targets and selects it.  Double-click a body in the display or
     in the body list to focus it.
+
+**Targeted**
+    The camera points at the targeted body.  Targeting a body also selects it.
+
+**Selected**
+    The selected body's name and distance from the camera are shown on the HUD.  Selecting a body does not
+    move the camera.  Click on a body in the display or single-click in the body list to select it.
 
 For example, you might focus on Earth, then target the Moon so the camera stays at Earth but points toward
 the Moon.  You could then select a spacecraft to see its distance on the HUD without changing the camera.

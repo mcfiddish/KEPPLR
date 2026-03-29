@@ -14,6 +14,7 @@ Dependencies
 ------------
 
 - `Blender <https://www.blender.org/>`__ (required, 5.0+ recommended)
+
     - this script runs with Blender's Python (`bpy`), not system Python
 
 - `assimp <https://github.com/assimp/assimp>`__ (for converting `.3ds` inputs)
