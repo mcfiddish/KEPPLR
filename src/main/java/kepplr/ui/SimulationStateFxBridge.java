@@ -71,8 +71,7 @@ public final class SimulationStateFxBridge {
     private final SimpleStringProperty cameraPositionText = new SimpleStringProperty("");
     private final SimpleStringProperty cameraBodyFixedText = new SimpleStringProperty("N/A");
     private final SimpleStringProperty bodiesInViewText = new SimpleStringProperty("");
-    private final SimpleObjectProperty<Set<Integer>> inViewNaifIds =
-            new SimpleObjectProperty<>(Set.of());
+    private final SimpleObjectProperty<Set<Integer>> inViewNaifIds = new SimpleObjectProperty<>(Set.of());
     private final SimpleBooleanProperty transitionActive = new SimpleBooleanProperty(false);
     private final SimpleDoubleProperty transitionProgress = new SimpleDoubleProperty(0.0);
     private final SimpleDoubleProperty fovDeg = new SimpleDoubleProperty(KepplrConstants.CAMERA_FOV_Y_DEG);
@@ -722,8 +721,12 @@ public final class SimulationStateFxBridge {
             int synodicFocusId = state.synodicFrameFocusIdProperty().get();
             int synodicTargetId = state.synodicFrameTargetIdProperty().get();
             // Fall back to interaction state when explicit synodic IDs are not set
-            int focusId = synodicFocusId != -1 ? synodicFocusId : state.focusedBodyIdProperty().get();
-            int targetId = synodicTargetId != -1 ? synodicTargetId : state.targetedBodyIdProperty().get();
+            int focusId = synodicFocusId != -1
+                    ? synodicFocusId
+                    : state.focusedBodyIdProperty().get();
+            int targetId = synodicTargetId != -1
+                    ? synodicTargetId
+                    : state.targetedBodyIdProperty().get();
             String focusStr = focusId == -1 ? "—" : formatBodyName(focusId);
             String targetStr = targetId == -1 ? "—" : formatBodyName(targetId);
             return "SYNODIC [" + focusStr + " → " + targetStr + "]";

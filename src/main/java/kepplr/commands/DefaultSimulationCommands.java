@@ -55,6 +55,13 @@ public final class DefaultSimulationCommands implements SimulationCommands {
     private Consumer<CountDownLatch> sceneRebuildCallback;
 
     /**
+     * Called on the caller's thread after {@link #loadConfiguration} completes (whether via the scene-rebuild latch or
+     * timeout). Used to notify the UI to refresh the body tree and instruments menu. Set by {@code KepplrApp};
+     * {@code null} in unit tests.
+     */
+    private Runnable postReloadCallback;
+
+    /**
      * Accepts an output path and a {@link CountDownLatch}, enqueues a JME-thread framebuffer capture, and counts the
      * latch down when the PNG file has been written. Set by {@code KepplrApp} after construction; {@code null} in unit
      * tests.
@@ -395,6 +402,19 @@ public final class DefaultSimulationCommands implements SimulationCommands {
     }
 
     /**
+     * Set the callback invoked after {@link #loadConfiguration} completes.
+     *
+     * <p>Called on whichever thread invoked {@code loadConfiguration} (script thread, background thread, etc.). The
+     * implementation must be thread-safe. In practice this callback sets a volatile flag that the JavaFX
+     * {@code AnimationTimer} polls to refresh the body tree on the FX thread.
+     *
+     * @param callback the post-reload notification; may be null
+     */
+    public void setPostReloadCallback(Runnable callback) {
+        this.postReloadCallback = callback;
+    }
+
+    /**
      * Reload the configuration from {@code path} and block until the first full {@code simpleUpdate()} with the new
      * configuration completes (Step 27).
      *
@@ -435,6 +455,10 @@ public final class DefaultSimulationCommands implements SimulationCommands {
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             logger.warn("loadConfiguration: interrupted while waiting for scene rebuild");
+        }
+
+        if (postReloadCallback != null) {
+            postReloadCallback.run();
         }
     }
 

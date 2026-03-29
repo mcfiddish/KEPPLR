@@ -209,9 +209,7 @@ class SimulationStateFxBridgeTest {
         void cameraFrameUpdates() {
             // No synodic IDs, no interaction state → both sides show —
             state.setCameraFrame(CameraFrame.SYNODIC);
-            assertEquals(
-                    "SYNODIC [— → —]",
-                    bridge.cameraFrameTextProperty().get());
+            assertEquals("SYNODIC [— → —]", bridge.cameraFrameTextProperty().get());
         }
 
         @Test
@@ -222,8 +220,7 @@ class SimulationStateFxBridgeTest {
             state.setTargetedBodyId(301);
             state.setCameraFrame(CameraFrame.SYNODIC);
             assertEquals(
-                    "SYNODIC [Earth → Moon]",
-                    bridge.cameraFrameTextProperty().get());
+                    "SYNODIC [Earth → Moon]", bridge.cameraFrameTextProperty().get());
         }
 
         @Test
@@ -244,9 +241,7 @@ class SimulationStateFxBridgeTest {
             // No explicit synodic IDs → fallback to focusedBodyId, targetedBodyId stays —
             state.setCameraFrame(CameraFrame.SYNODIC);
             state.setFocusedBodyId(399);
-            assertEquals(
-                    "SYNODIC [Earth → —]",
-                    bridge.cameraFrameTextProperty().get());
+            assertEquals("SYNODIC [Earth → —]", bridge.cameraFrameTextProperty().get());
         }
 
         @Test

@@ -247,7 +247,10 @@ public class KepplrApp extends SimpleApplication {
                     GLFW.glfwSetWindowSize(glfwWindowHandle, w, h);
                 }
             }));
-            statusWindow.setConfigReloadCallback(() -> appRef.enqueue(appRef::rebuildBodyScene));
+            // Wire the post-reload notification: after loadConfiguration() finishes the JME scene
+            // rebuild (from either a script or the File menu), signal the status window to refresh
+            // the body tree and instruments menu on the next animation frame.
+            commands.setPostReloadCallback(statusWindow::signalConfigRefresh);
             statusWindow.setScriptRunner(scriptRunner);
             statusWindow.setCommandRecorder(recorder);
             statusWindow.show();

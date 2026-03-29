@@ -38,8 +38,8 @@ import javafx.scene.control.TextArea;
 import javafx.scene.control.TextField;
 import javafx.scene.control.ToggleButton;
 import javafx.scene.control.ToggleGroup;
-import javafx.scene.control.TreeCell;
 import javafx.scene.control.Tooltip;
+import javafx.scene.control.TreeCell;
 import javafx.scene.control.TreeItem;
 import javafx.scene.control.TreeView;
 import javafx.scene.input.Clipboard;
@@ -117,6 +117,9 @@ public final class KepplrStatusWindow {
     private CustomMenuItem saveScreenshotItem;
     private volatile Thread captureSequenceThread;
     private volatile Thread consoleThread;
+    /** Set by {@link #signalConfigRefresh()} from any thread; drained by the AnimationTimer on the FX thread. */
+    private volatile boolean pendingConfigRefresh = false;
+
     private TextArea consoleInput;
     private LogWindow logWindow;
 
@@ -173,6 +176,16 @@ public final class KepplrStatusWindow {
      */
     public void setCommandRecorder(CommandRecorder recorder) {
         this.commandRecorder = recorder;
+    }
+
+    /**
+     * Signal that the body tree and instruments menu should be refreshed on the next animation frame.
+     *
+     * <p>Thread-safe; may be called from any thread (script thread, background load thread, etc.). The actual UI
+     * refresh runs on the JavaFX thread inside the {@code AnimationTimer}.
+     */
+    public void signalConfigRefresh() {
+        pendingConfigRefresh = true;
     }
 
     /**
@@ -234,6 +247,7 @@ public final class KepplrStatusWindow {
             public void handle(long now) {
                 drainScriptOutput();
                 checkCaptureThreadDone();
+                drainConfigRefresh();
                 logWindow.drain();
             }
         }.start();
@@ -389,9 +403,10 @@ public final class KepplrStatusWindow {
         // Shared filter logic: reads current text + toggle state, rebuilds tree root
         Runnable applyFilters = () -> {
             String raw = searchField.getText();
-            String textFilter = (raw == null || raw.trim().isEmpty()) ? null : raw.trim().toLowerCase();
-            Set<Integer> inViewConstraint = inViewToggle.isSelected()
-                    ? bridge.inViewNaifIdsProperty().get() : null;
+            String textFilter =
+                    (raw == null || raw.trim().isEmpty()) ? null : raw.trim().toLowerCase();
+            Set<Integer> inViewConstraint =
+                    inViewToggle.isSelected() ? bridge.inViewNaifIdsProperty().get() : null;
             if (textFilter == null && inViewConstraint == null) {
                 bodyTree.setRoot(masterRoot);
             } else {
@@ -512,12 +527,14 @@ public final class KepplrStatusWindow {
      * Build a filtered copy of the master tree.
      *
      * <p>Items are included only when they satisfy both constraints:
+     *
      * <ul>
      *   <li>{@code textFilter} — display name or NAIF ID contains the string (null = no text filter)
      *   <li>{@code inViewConstraint} — NAIF ID is in the set (null = no in-view filter)
      * </ul>
-     * Group nodes are included (expanded) if any child passes both constraints. When a group name
-     * matches the text filter, all its children are candidates for the in-view constraint only.
+     *
+     * Group nodes are included (expanded) if any child passes both constraints. When a group name matches the text
+     * filter, all its children are candidates for the in-view constraint only.
      */
     private TreeItem<BodyTreeEntry> buildFilteredRoot(String textFilter, Set<Integer> inViewConstraint) {
         TreeItem<BodyTreeEntry> filteredRoot = new TreeItem<>(masterRoot.getValue());
@@ -903,6 +920,20 @@ public final class KepplrStatusWindow {
         }
     }
 
+    /**
+     * Called from the AnimationTimer (FX thread) to refresh the body tree and instruments menu after a configuration
+     * reload. The flag is set by {@link #signalConfigRefresh()} from any thread.
+     */
+    private void drainConfigRefresh() {
+        if (!pendingConfigRefresh) return;
+        pendingConfigRefresh = false;
+        populateBodyTree();
+        populateInstrumentsMenu();
+        if (labelsCheckItem != null) {
+            applyLabelVisibility(labelsCheckItem.isSelected());
+        }
+    }
+
     // ── Menu Bar ─────────────────────────────────────────────────────────────
 
     private MenuBar buildMenuBar() {
@@ -926,15 +957,15 @@ public final class KepplrStatusWindow {
             chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("All Files", "*.*"));
             File file = chooser.showOpenDialog(stage);
             if (file != null) {
-                // Route through commands so CommandRecorder can capture the call when recording.
-                // DefaultSimulationCommands.loadConfiguration() handles the JME scene rebuild;
-                // we then refresh the UI tree on the FX thread after it returns.
-                commands.loadConfiguration(file.getAbsolutePath());
-                populateBodyTree();
-                populateInstrumentsMenu();
-                if (labelsCheckItem != null) {
-                    applyLabelVisibility(labelsCheckItem.isSelected());
-                }
+                // Run on a background thread so the FX thread is never blocked by the
+                // latch inside DefaultSimulationCommands.loadConfiguration().  The
+                // postReloadCallback wired by KepplrApp will call signalConfigRefresh()
+                // when the scene rebuild completes, and the AnimationTimer will then call
+                // populateBodyTree() / populateInstrumentsMenu() on the next FX frame.
+                String path = file.getAbsolutePath();
+                Thread loadThread = new Thread(() -> commands.loadConfiguration(path), "config-load");
+                loadThread.setDaemon(true);
+                loadThread.start();
             }
         });
 
