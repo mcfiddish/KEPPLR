@@ -245,14 +245,14 @@ public final class CameraInputHandler implements ActionListener, AnalogListener,
 
             case TILT_UP -> {
                 if (!shiftDown) {
-                    double degrees = -Math.toDegrees(value * KepplrConstants.CAMERA_KEYBOARD_ROTATE_RATE_RAD_PER_SEC);
+                    double degrees = Math.toDegrees(value * KepplrConstants.CAMERA_KEYBOARD_ROTATE_RATE_RAD_PER_SEC);
                     commands.tilt(degrees, 0);
                     manualNavigationThisFrame = true;
                 }
             }
             case TILT_DOWN -> {
                 if (!shiftDown) {
-                    double degrees = Math.toDegrees(value * KepplrConstants.CAMERA_KEYBOARD_ROTATE_RATE_RAD_PER_SEC);
+                    double degrees = -Math.toDegrees(value * KepplrConstants.CAMERA_KEYBOARD_ROTATE_RATE_RAD_PER_SEC);
                     commands.tilt(degrees, 0);
                     manualNavigationThisFrame = true;
                 }
@@ -367,28 +367,6 @@ public final class CameraInputHandler implements ActionListener, AnalogListener,
         if (!evt.isPressed() || commands == null) return;
 
         switch (evt.getKeyCode()) {
-            case KeyInput.KEY_G -> {
-                // G — goTo focused body
-                int focusId = state.focusedBodyIdProperty().get();
-                if (focusId != -1) {
-                    commands.goTo(
-                            focusId,
-                            KepplrConstants.DEFAULT_GOTO_APPARENT_RADIUS_DEG,
-                            KepplrConstants.DEFAULT_GOTO_DURATION_SECONDS);
-                }
-            }
-            case KeyInput.KEY_F -> {
-                // F — toggle camera frame between SYNODIC and INERTIAL (§4.6)
-                CameraFrame current = state.cameraFrameProperty().get();
-                commands.setCameraFrame(current == CameraFrame.SYNODIC ? CameraFrame.INERTIAL : CameraFrame.SYNODIC);
-            }
-            case KeyInput.KEY_T -> {
-                // T — target selected body
-                int selectedId = state.selectedBodyIdProperty().get();
-                if (selectedId != -1) {
-                    commands.targetBody(selectedId);
-                }
-            }
             case KeyInput.KEY_SPACE ->
                 commands.setPaused(!state.pausedProperty().get());
             case KeyInput.KEY_LBRACKET -> {
