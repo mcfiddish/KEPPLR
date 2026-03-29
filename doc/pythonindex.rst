@@ -10,7 +10,7 @@ Blender's `-b -P` options and pass script arguments after a `--` separator.
 
 `NASA 3D Resources <https://github.com/nasa/NASA-3D-Resources/tree/master/3D%20Models>`__ is a good source for spacecraft models.
 
-Use :doc:`GlbModelViewer` to view the resulting GLB model and check that the body-fixed axes are correct.
+Use :doc:`tools/GlbModelViewer` to view the resulting GLB model and check that the body-fixed axes are correct.
 
 Dependencies
 ------------
@@ -83,13 +83,10 @@ All script options must come *after* `--` (Blender's argument separator).
 Examples
 --------
 
-- Convert a single GLB/GLTF file:
-
+- Convert a single GLB/GLTF file.  Download the MESSENGER GLB file from https://github.com/nasa/NASA-3D-Resources/tree/master/3D%20Models
 ::
 
-     blender -b -P convert_to_normalized_glb.py -- \
-       --input "Voyager Probe (A).glb" \
-       --output "Voyager Probe (A)-normalized.glb"
+    blender -b -P convert_to_normalized_glb.py -- --input MErcury\ Surface,\ Space\ ENvironment,\ GEochemistry,\ and\ Ranging\ \(MESSENGER\).glb --output MESSENGER_normalized.glb
 
 - Convert a directory recursively (GLB/GLTF/OBJ/3DS/CMOD):
 
@@ -141,7 +138,7 @@ Examples
 
     curl -RO https://sbmt.jhuapl.edu/shared-files/files/phobos_g_296m_spc_obj_0000n00000_v004.obj.zip
 
- Uncompress and convert it to `.glb`:
+Uncompress and convert it to `.glb`:
 
 ::
 
@@ -149,7 +146,7 @@ Examples
     blender -b -P convert_to_normalized_glb.py -- --input phobos_g_296m_spc_obj_0000n00000_v004.obj --output phobos_g_296m_spc_obj_0000n00000_v004.glb
 
 
-  Add it to your configuration file:
+Add it to your configuration file:
 
 ::
 
