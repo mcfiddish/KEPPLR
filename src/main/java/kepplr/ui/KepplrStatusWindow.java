@@ -36,7 +36,9 @@ import javafx.scene.control.SeparatorMenuItem;
 import javafx.scene.control.SplitPane;
 import javafx.scene.control.TextArea;
 import javafx.scene.control.TextField;
+import javafx.scene.control.ToggleButton;
 import javafx.scene.control.ToggleGroup;
+import javafx.scene.control.TreeCell;
 import javafx.scene.control.Tooltip;
 import javafx.scene.control.TreeItem;
 import javafx.scene.control.TreeView;
@@ -342,6 +344,7 @@ public final class KepplrStatusWindow {
         row = addStatusRow(grid, row, "Time rate:", bridge.timeRateTextProperty());
         row = addStatusRow(grid, row, "Clock:", bridge.pausedTextProperty());
         row = addStatusRow(grid, row, "Cam frame:", bridge.cameraFrameTextProperty());
+        row = addStatusRow(grid, row, "FOV:", bridge.fovTextProperty());
         row = addStatusRow(grid, row, "Cam pos:", bridge.cameraPositionTextProperty());
         addStatusRow(grid, row, "BF pos:", bridge.cameraBodyFixedTextProperty());
 
@@ -357,17 +360,49 @@ public final class KepplrStatusWindow {
         TextField searchField = new TextField();
         searchField.setPromptText("Filter...");
 
-        // Live filtering: rebuild visible tree on each keystroke
-        searchField.textProperty().addListener((obs, oldText, newText) -> {
-            String filter = newText == null ? "" : newText.trim().toLowerCase();
-            if (filter.isEmpty()) {
-                bodyTree.setRoot(masterRoot);
-            } else {
-                bodyTree.setRoot(buildFilteredRoot(filter));
+        ToggleButton inViewToggle = new ToggleButton("In View");
+        inViewToggle.setStyle("-fx-font-size: 10px; -fx-padding: 2 6 2 6;");
+        Tooltip.install(inViewToggle, new Tooltip("Show only bodies currently in the camera's field of view"));
+
+        bodyTree = new TreeView<>();
+        bodyTree.setShowRoot(false);
+        populateBodyTree();
+        VBox.setVgrow(bodyTree, Priority.ALWAYS);
+
+        // Cell factory: highlight bodies currently in the camera FOV
+        bodyTree.setCellFactory(tv -> new TreeCell<>() {
+            @Override
+            protected void updateItem(BodyTreeEntry item, boolean empty) {
+                super.updateItem(item, empty);
+                if (empty || item == null) {
+                    setText(null);
+                    setStyle("");
+                } else {
+                    setText(item.displayName());
+                    boolean inView = item.naifId() != -1
+                            && bridge.inViewNaifIdsProperty().get().contains(item.naifId());
+                    setStyle(inView ? "-fx-font-weight: bold; -fx-text-fill: #4d9eff;" : "");
+                }
             }
         });
 
-        // Enter still resolves and selects (useful for exact NAIF ID entry)
+        // Shared filter logic: reads current text + toggle state, rebuilds tree root
+        Runnable applyFilters = () -> {
+            String raw = searchField.getText();
+            String textFilter = (raw == null || raw.trim().isEmpty()) ? null : raw.trim().toLowerCase();
+            Set<Integer> inViewConstraint = inViewToggle.isSelected()
+                    ? bridge.inViewNaifIdsProperty().get() : null;
+            if (textFilter == null && inViewConstraint == null) {
+                bodyTree.setRoot(masterRoot);
+            } else {
+                bodyTree.setRoot(buildFilteredRoot(textFilter, inViewConstraint));
+            }
+        };
+
+        // Live filtering on text changes
+        searchField.textProperty().addListener((obs, oldText, newText) -> applyFilters.run());
+
+        // Enter resolves by body name or exact NAIF ID
         searchField.setOnAction(e -> {
             String text = searchField.getText().trim();
             if (text.isEmpty()) return;
@@ -380,10 +415,14 @@ public final class KepplrStatusWindow {
             }
         });
 
-        bodyTree = new TreeView<>();
-        bodyTree.setShowRoot(false);
-        populateBodyTree();
-        VBox.setVgrow(bodyTree, Priority.ALWAYS);
+        // Toggle: switch between all bodies and in-view only
+        inViewToggle.selectedProperty().addListener((obs, wasOn, isOn) -> applyFilters.run());
+
+        // When the in-view set changes: repaint cells and re-filter if toggle is on
+        bridge.inViewNaifIdsProperty().addListener((obs, oldIds, newIds) -> {
+            bodyTree.refresh();
+            if (inViewToggle.isSelected()) applyFilters.run();
+        });
 
         // Single click → select; double-click → focus
         bodyTree.setOnMouseClicked(evt -> {
@@ -410,10 +449,11 @@ public final class KepplrStatusWindow {
             }
         });
 
-        VBox searchBox = new VBox(searchField);
-        searchBox.setPadding(new Insets(0, 10, 4, 10));
+        HBox searchRow = new HBox(4, searchField, inViewToggle);
+        HBox.setHgrow(searchField, Priority.ALWAYS);
+        searchRow.setPadding(new Insets(0, 10, 4, 10));
 
-        VBox section = new VBox(4, header, searchBox, bodyTree);
+        VBox section = new VBox(4, header, searchRow, bodyTree);
         VBox.setVgrow(section, Priority.ALWAYS);
         return section;
     }
@@ -469,25 +509,38 @@ public final class KepplrStatusWindow {
     }
 
     /**
-     * Build a filtered copy of the master tree, keeping only items whose display name or NAIF ID matches the filter.
-     * Parent groups are included (expanded) if any child matches.
+     * Build a filtered copy of the master tree.
+     *
+     * <p>Items are included only when they satisfy both constraints:
+     * <ul>
+     *   <li>{@code textFilter} — display name or NAIF ID contains the string (null = no text filter)
+     *   <li>{@code inViewConstraint} — NAIF ID is in the set (null = no in-view filter)
+     * </ul>
+     * Group nodes are included (expanded) if any child passes both constraints. When a group name
+     * matches the text filter, all its children are candidates for the in-view constraint only.
      */
-    private TreeItem<BodyTreeEntry> buildFilteredRoot(String filter) {
+    private TreeItem<BodyTreeEntry> buildFilteredRoot(String textFilter, Set<Integer> inViewConstraint) {
         TreeItem<BodyTreeEntry> filteredRoot = new TreeItem<>(masterRoot.getValue());
         filteredRoot.setExpanded(true);
 
         for (TreeItem<BodyTreeEntry> topItem : masterRoot.getChildren()) {
             if (topItem.getChildren().isEmpty()) {
-                // Leaf (Sun, spacecraft, etc.)
-                if (matchesFilter(topItem.getValue(), filter)) {
+                // Leaf node (Sun, spacecraft, etc.)
+                boolean textOk = textFilter == null || matchesFilter(topItem.getValue(), textFilter);
+                boolean inViewOk = inViewConstraint == null
+                        || inViewConstraint.contains(topItem.getValue().naifId());
+                if (textOk && inViewOk) {
                     filteredRoot.getChildren().add(new TreeItem<>(topItem.getValue()));
                 }
             } else {
-                // Group node — include if group name matches or any child matches
-                boolean groupMatches = matchesFilter(topItem.getValue(), filter);
+                // Group node — include expanded if any child passes all constraints
+                boolean groupMatchesText = textFilter == null || matchesFilter(topItem.getValue(), textFilter);
                 List<TreeItem<BodyTreeEntry>> matchingChildren = new ArrayList<>();
                 for (TreeItem<BodyTreeEntry> child : topItem.getChildren()) {
-                    if (groupMatches || matchesFilter(child.getValue(), filter)) {
+                    boolean childTextOk = groupMatchesText || matchesFilter(child.getValue(), textFilter);
+                    boolean childInViewOk = inViewConstraint == null
+                            || inViewConstraint.contains(child.getValue().naifId());
+                    if (childTextOk && childInViewOk) {
                         matchingChildren.add(new TreeItem<>(child.getValue()));
                     }
                 }

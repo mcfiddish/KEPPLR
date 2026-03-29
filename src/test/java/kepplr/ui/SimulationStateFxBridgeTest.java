@@ -205,33 +205,47 @@ class SimulationStateFxBridgeTest {
         }
 
         @Test
-        @DisplayName("cameraFrameTextProperty updates when cameraFrame changes")
+        @DisplayName("cameraFrameTextProperty shows dashes when SYNODIC and no body set")
         void cameraFrameUpdates() {
-            // No focus set (focusedBodyId == -1, targetedBodyId == -1) → default Sun target
+            // No synodic IDs, no interaction state → both sides show —
             state.setCameraFrame(CameraFrame.SYNODIC);
             assertEquals(
-                    "SYNODIC [— → NAIF 10 (Sun)]",
+                    "SYNODIC [— → —]",
                     bridge.cameraFrameTextProperty().get());
         }
 
         @Test
-        @DisplayName("cameraFrameTextProperty shows focus+target when SYNODIC and focus is set")
+        @DisplayName("cameraFrameTextProperty falls back to interaction state when synodic IDs not set")
         void cameraFrameUpdatesSynodicWithFocus() {
+            // Explicit synodic IDs not set → falls back to focusedBodyId / targetedBodyId
             state.setFocusedBodyId(399);
-            state.setTargetedBodyId(399); // same as focus → default Sun
+            state.setTargetedBodyId(301);
             state.setCameraFrame(CameraFrame.SYNODIC);
             assertEquals(
-                    "SYNODIC [NAIF 399 → NAIF 10 (Sun)]",
+                    "SYNODIC [Earth → Moon]",
+                    bridge.cameraFrameTextProperty().get());
+        }
+
+        @Test
+        @DisplayName("cameraFrameTextProperty uses explicit synodic IDs when set")
+        void cameraFrameUpdatesSynodicWithExplicitIds() {
+            state.setFocusedBodyId(399);
+            state.setSynodicFrameFocusId(-98);
+            state.setSynodicFrameTargetId(999);
+            state.setCameraFrame(CameraFrame.SYNODIC);
+            assertEquals(
+                    "SYNODIC [New Horizons → Pluto]",
                     bridge.cameraFrameTextProperty().get());
         }
 
         @Test
         @DisplayName("cameraFrameTextProperty updates when focusedBodyId changes while SYNODIC")
         void cameraFrameUpdatesSynodicOnFocusChange() {
+            // No explicit synodic IDs → fallback to focusedBodyId, targetedBodyId stays —
             state.setCameraFrame(CameraFrame.SYNODIC);
             state.setFocusedBodyId(399);
             assertEquals(
-                    "SYNODIC [NAIF 399 → NAIF 10 (Sun)]",
+                    "SYNODIC [Earth → —]",
                     bridge.cameraFrameTextProperty().get());
         }
 
