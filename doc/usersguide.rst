@@ -11,8 +11,8 @@ Unpack the archive in your desired working directory:
 
     tar xfz KEPPLR-YYYY.MM.DD-xxxxxxx.tar.gz
 
-The directory `KEPPLR-YYYY.MM.DD/scripts` contains all of the command-line utilities.  Run them without arguments to get a 
-usage description.
+The directory `KEPPLR-YYYY.MM.DD/scripts` contains all of the command-line utilities.  Run them without arguments to
+get a usage description.
 
 Create a configuration file and move it to your working directory:
 
@@ -20,6 +20,9 @@ Create a configuration file and move it to your working directory:
 
     ./KEPPLR-YYYY.MM.DD/scripts/DumpConfig tmp
     mv tmp/* .
+
+You can run the script `resources/spice/spk/getSPK.bash` to download SPICE kernels containing ephemerides for most
+planets and satellites from NAIF.
 
 Edit KEPPLR.config and resources/spice/kepplr.tm as needed to set correct paths.
 

@@ -16,7 +16,7 @@ Usage
 Example
 *******
 
-Print a table of positions and velocities at 2025 November 30 00:00:00 UTC
+Print a table of positions and velocities at 2025 November 30 00:00:00 UTC:
 
 ::
 
