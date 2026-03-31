@@ -81,13 +81,22 @@ This will create executable and source packages in the `dist` directory,
 named KEPPLR-YYYY.MM.DD-UNVERSIONED.tar.gz and KEPPLR-YYYY.MM.DD-UNVERSIONED-src.tar.gz
 
 
-Pages
------
+.. toctree::
+   :caption: Getting Started
+
+   usersguide
+   configuration
+   gui
 
 .. toctree::
+   :caption: Scripting
 
-   self
-   usersguide
-   pythonindex
+   scripting
+   scripting_examples
+
+.. toctree::
+   :caption: Reference
+
    tools/index
+   python_tools
    javadoc

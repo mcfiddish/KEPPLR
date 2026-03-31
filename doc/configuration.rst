@@ -155,4 +155,4 @@ Phobos as an ellipsoid with a texture map.
         # Path under resourcesFolder() for this body's shape model.  If blank an ellipsoid model will be used
         body.phobos.shapeModel =
 
-See :doc:`pythonindex` for instructions on generating shape model files.
+See :doc:`python_tools` for instructions on generating shape model files.
