@@ -10,6 +10,8 @@ controlling the simulation, camera, and overlays.
 Run a script using ``File > Run Script`` from the GUI, or enter commands directly in the Script Console
 at the bottom of the control window.  See :doc:`gui` for details.
 
+For ready-to-use examples, see :doc:`scripting_examples`.
+
 
 Basic Concepts
 --------------
