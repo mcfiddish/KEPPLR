@@ -335,7 +335,16 @@ Stepping Through Time in a Loop
 Advance the simulation in discrete steps, taking a screenshot and checking a condition at each one.
 This pattern is useful for searching for a geometric event.
 
-.. code-block:: groovy
+.. This code block triggers a Pygments Groovy lexer warning.
+   It is NOT a real syntax error.
+   The problematic line is
+              def frameNum = String.format("%04d", i / 24)
+
+   Workarounds:
+   - Use `java` instead of `groovy` for highlighting
+   - Or ignore the warning
+
+.. code-block:: java
 
    kepplr.focusBody("Earth")
    kepplr.waitTransition()
