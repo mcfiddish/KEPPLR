@@ -20,7 +20,7 @@ import kepplr.camera.CameraFrame;
  * byte    version         (1)
  * double  et              (8)
  * double  timeRate        (8)
- * byte    flags           (1) — bit 0 = paused
+ * byte    flags           (1) — bit 0 = paused, bit 1 = camPosRelativeToFocus
  * double  camPosX         (8)
  * double  camPosY         (8)
  * double  camPosZ         (8)
@@ -59,7 +59,8 @@ public final class StateSnapshotCodec {
             out.writeByte(VERSION);
             out.writeDouble(snapshot.et());
             out.writeDouble(snapshot.timeRate());
-            out.writeByte(snapshot.paused() ? 1 : 0);
+            int flags = (snapshot.paused() ? 1 : 0) | (snapshot.camPosRelativeToFocus() ? 2 : 0);
+            out.writeByte(flags);
 
             double[] pos = snapshot.camPosJ2000();
             out.writeDouble(pos[0]);
@@ -116,7 +117,9 @@ public final class StateSnapshotCodec {
 
             double et = in.readDouble();
             double timeRate = in.readDouble();
-            boolean paused = in.readByte() != 0;
+            byte flags = in.readByte();
+            boolean paused = (flags & 1) != 0;
+            boolean camPosRelativeToFocus = (flags & 2) != 0;
 
             double[] pos = new double[] {in.readDouble(), in.readDouble(), in.readDouble()};
             float[] orient = new float[] {in.readFloat(), in.readFloat(), in.readFloat(), in.readFloat()};
@@ -133,7 +136,18 @@ public final class StateSnapshotCodec {
             int selectedId = in.readInt();
             double fovDeg = in.readDouble();
 
-            return new StateSnapshot(et, timeRate, paused, pos, orient, frame, focusId, targetId, selectedId, fovDeg);
+            return new StateSnapshot(
+                    et,
+                    timeRate,
+                    paused,
+                    pos,
+                    orient,
+                    frame,
+                    focusId,
+                    targetId,
+                    selectedId,
+                    fovDeg,
+                    camPosRelativeToFocus);
         } catch (IOException e) {
             throw new IllegalArgumentException("Invalid state string: truncated or corrupt payload", e);
         }

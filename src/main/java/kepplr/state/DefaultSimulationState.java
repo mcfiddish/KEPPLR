@@ -95,8 +95,17 @@ public final class DefaultSimulationState implements SimulationState {
 
     // ── HUD message (Step 28) ──
 
-    /** An immutable snapshot of a pending camera restore from a state string (Step 26). */
-    public record PendingCameraRestore(double[] posJ2000, float[] orientJ2000, double fovDeg) {}
+    /**
+     * An immutable snapshot of a pending camera restore from a state string (Step 26).
+     *
+     * @param posJ2000 absolute heliocentric J2000 camera position in km [x, y, z]
+     * @param orientJ2000 camera orientation quaternion [x, y, z, w]
+     * @param fovDeg camera field of view in degrees
+     * @param restoreDone optional latch to count down after the restore is applied and all state properties have been
+     *     updated; {@code null} when no synchronisation is needed (e.g. tests)
+     */
+    public record PendingCameraRestore(
+            double[] posJ2000, float[] orientJ2000, double fovDeg, java.util.concurrent.CountDownLatch restoreDone) {}
 
     private final AtomicReference<PendingCameraRestore> pendingCameraRestore = new AtomicReference<>();
 

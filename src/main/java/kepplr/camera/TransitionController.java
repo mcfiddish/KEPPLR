@@ -63,7 +63,8 @@ public final class TransitionController {
                     CameraPositionRequest,
                     CameraOrientationRequest,
                     TranslateRequest,
-                    CancelRequest {}
+                    CancelRequest,
+                    FollowRequest {}
 
     private record PointAtRequest(int naifId, double durationSeconds) implements PendingRequest {}
 
@@ -106,6 +107,9 @@ public final class TransitionController {
 
     private record CancelRequest() implements PendingRequest {}
 
+    /** Request to establish body-following at a fixed distance, posted from the commands thread. */
+    private record FollowRequest(int naifId, double distKm) implements PendingRequest {}
+
     private final ConcurrentLinkedQueue<PendingRequest> inbox = new ConcurrentLinkedQueue<>();
 
     // ── JME-thread-only state ─────────────────────────────────────────────────
@@ -127,6 +131,17 @@ public final class TransitionController {
      * arrives while another is already pending. {@code null} if none.
      */
     private GoToRequest pendingGoTo = null;
+
+    /**
+     * NAIF ID of the body the camera is following after a {@code goTo} transition, or {@code -1} if not following.
+     * Body-following maintains a fixed radial distance from the body's heliocentric J2000 position each frame so that
+     * the body remains at a constant apparent size as time advances. Cleared by any new transition request or explicit
+     * cancel. Set by {@code requestFollow} and automatically when a {@code goTo} transition completes.
+     */
+    private int followBodyId = -1;
+
+    /** Distance to maintain from the followed body in km. Valid only when {@code followBodyId != -1}. */
+    private double followDistKm = 0.0;
 
     // ── Constructor ───────────────────────────────────────────────────────────
 
@@ -240,6 +255,20 @@ public final class TransitionController {
         inbox.add(new CancelRequest());
     }
 
+    /**
+     * Request that the camera begin following a body at the given distance.
+     *
+     * <p>Thread-safe. The request is enqueued and processed on the next JME render frame. Enqueue this <em>after</em>
+     * any {@link #requestCancel} in the same command sequence so that the follow state is established after
+     * cancellation is processed.
+     *
+     * @param naifId NAIF ID of the body to follow
+     * @param distKm distance to maintain from the body in km
+     */
+    public void requestFollow(int naifId, double distKm) {
+        inbox.add(new FollowRequest(naifId, distKm));
+    }
+
     // ── JME-thread methods ────────────────────────────────────────────────────
 
     /**
@@ -253,6 +282,7 @@ public final class TransitionController {
     public void cancel() {
         active = null;
         pendingGoTo = null;
+        followBodyId = -1;
         updateStateProperties();
     }
 
@@ -306,6 +336,11 @@ public final class TransitionController {
                 case CancelRequest r -> {
                     active = null;
                     pendingGoTo = null;
+                    followBodyId = -1;
+                }
+                case FollowRequest r -> {
+                    followBodyId = r.naifId();
+                    followDistKm = r.distKm();
                 }
             }
         }
@@ -315,6 +350,24 @@ public final class TransitionController {
             GoToRequest r = pendingGoTo;
             pendingGoTo = null;
             startGoToNow(r, cameraHelioJ2000);
+        }
+
+        // Body-following: after a goTo completes, maintain a fixed radial distance from the body so
+        // the body stays at a constant apparent size as simulation time advances.
+        if (active == null && followBodyId != -1) {
+            double[] bodyPos = getBodyPos(followBodyId);
+            if (bodyPos != null) {
+                double dx = cameraHelioJ2000[0] - bodyPos[0];
+                double dy = cameraHelioJ2000[1] - bodyPos[1];
+                double dz = cameraHelioJ2000[2] - bodyPos[2];
+                double dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+                if (dist > 0) {
+                    double scale = followDistKm / dist;
+                    cameraHelioJ2000[0] = bodyPos[0] + dx * scale;
+                    cameraHelioJ2000[1] = bodyPos[1] + dy * scale;
+                    cameraHelioJ2000[2] = bodyPos[2] + dz * scale;
+                }
+            }
         }
 
         if (active == null) {
@@ -345,6 +398,8 @@ public final class TransitionController {
 
         if (t >= 1.0 || earlyComplete) {
             CameraTransition.Type completedType = active.getType();
+            int completedNaifId = active.getTargetNaifId();
+            double completedEndDist = active.getEndDistanceKm();
             active = null;
 
             // If a pointAt just completed and a goTo is waiting, start the goTo immediately
@@ -352,6 +407,13 @@ public final class TransitionController {
                 GoToRequest r = pendingGoTo;
                 pendingGoTo = null;
                 startGoToNow(r, cameraHelioJ2000);
+            }
+
+            // A completed goTo (normal or early) establishes body-following so the camera tracks
+            // the body as simulation time advances.
+            if (completedType == CameraTransition.Type.GO_TO && !earlyComplete) {
+                followBodyId = completedNaifId;
+                followDistKm = completedEndDist;
             }
 
             updateStateProperties();
@@ -368,6 +430,7 @@ public final class TransitionController {
         // A new pointAt always cancels whatever is active and discards any pending goTo
         active = null;
         pendingGoTo = null;
+        followBodyId = -1;
 
         double et = state.currentEtProperty().get();
         KEPPLREphemeris eph = KEPPLRConfiguration.getInstance().getEphemeris();
@@ -738,10 +801,11 @@ public final class TransitionController {
 
     // ── Private helpers ──────────────────────────────────────────────────────────
 
-    /** Cancel active transition and pending goTo for a new Step 19c request. */
+    /** Cancel active transition, pending goTo, and body-following for a new request. */
     private void cancelForNewRequest() {
         active = null;
         pendingGoTo = null;
+        followBodyId = -1;
     }
 
     private void startGoToNow(GoToRequest r, double[] cameraHelioJ2000) {
@@ -791,6 +855,8 @@ public final class TransitionController {
                 cameraHelioJ2000[1] = bodyPos.getJ() + dy * scale;
                 cameraHelioJ2000[2] = bodyPos.getK() + dz * scale;
             }
+            followBodyId = r.naifId();
+            followDistKm = endDistKm;
             return;
         }
 

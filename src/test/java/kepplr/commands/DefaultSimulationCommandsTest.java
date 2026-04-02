@@ -478,17 +478,21 @@ class DefaultSimulationCommandsTest {
         }
 
         @Test
-        @DisplayName("setStateString restores time state")
+        @DisplayName("setStateString restores time rate but not paused flag")
         void setStateStringRestoresTimeState() {
             clock.setTimeRate(100.0);
             clock.setPaused(true);
             String snapshot = commands.getStateString();
 
             clock.setTimeRate(1.0);
+            // Explicitly unpause so we can verify the paused flag is NOT overridden
             clock.setPaused(false);
             commands.setStateString(snapshot);
             assertEquals(100.0, state.timeRateProperty().get());
-            assertTrue(state.pausedProperty().get());
+            // Paused flag is intentionally not restored — the caller's pause state takes precedence
+            assertFalse(
+                    state.pausedProperty().get(),
+                    "setStateString must not restore paused flag; caller controls pause state");
         }
 
         @Test

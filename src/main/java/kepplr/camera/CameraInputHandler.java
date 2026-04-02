@@ -423,6 +423,18 @@ public final class CameraInputHandler implements ActionListener, AnalogListener,
     }
 
     /**
+     * Resets the focus-tracking anchor so that {@link #applyFocusTracking()} skips the delta on the next frame.
+     *
+     * <p>Called from {@code KepplrApp.simpleUpdate()} immediately after consuming a {@code PendingCameraRestore}: the
+     * ET jump between the previous frame and the restored ET would otherwise cause {@code applyFocusTracking()} to
+     * apply a large spurious displacement (the focus body's motion over the elapsed simulation time) to the freshly
+     * restored camera position.
+     */
+    public void resetFocusTrackingAnchor() {
+        prevFocusPos = null;
+    }
+
+    /**
      * Returns {@code true} if any manual navigation action fired since the last call to this method, then resets the
      * flag to {@code false}.
      *

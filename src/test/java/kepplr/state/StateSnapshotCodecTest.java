@@ -22,7 +22,8 @@ class StateSnapshotCodecTest {
                 399, // Earth focused
                 301, // Moon targeted
                 10, // Sun selected
-                45.0);
+                45.0,
+                false); // absolute J2000
     }
 
     @Nested
@@ -46,23 +47,47 @@ class StateSnapshotCodecTest {
             assertEquals(original.targetedBodyId(), decoded.targetedBodyId());
             assertEquals(original.selectedBodyId(), decoded.selectedBodyId());
             assertEquals(original.fovDeg(), decoded.fovDeg());
+            assertEquals(original.camPosRelativeToFocus(), decoded.camPosRelativeToFocus());
         }
 
         @Test
         @DisplayName("paused flag encodes correctly")
         void pausedFlag() {
             StateSnapshot paused = new StateSnapshot(
-                    0, 1, true, new double[3], new float[] {0, 0, 0, 1}, CameraFrame.INERTIAL, -1, -1, -1, 45);
+                    0, 1, true, new double[3], new float[] {0, 0, 0, 1}, CameraFrame.INERTIAL, -1, -1, -1, 45, false);
             String encoded = StateSnapshotCodec.encode(paused);
             assertTrue(StateSnapshotCodec.decode(encoded).paused());
+        }
+
+        @Test
+        @DisplayName("camPosRelativeToFocus flag encodes correctly")
+        void camPosRelativeToFocusFlag() {
+            double[] offset = {12345.6, -7890.1, 2345.6};
+            StateSnapshot relative = new StateSnapshot(
+                    0, 1, false, offset, new float[] {0, 0, 0, 1}, CameraFrame.INERTIAL, 399, -1, -1, 45, true);
+            String encoded = StateSnapshotCodec.encode(relative);
+            StateSnapshot decoded = StateSnapshotCodec.decode(encoded);
+            assertTrue(decoded.camPosRelativeToFocus());
+            assertArrayEquals(offset, decoded.camPosJ2000());
+        }
+
+        @Test
+        @DisplayName("paused and camPosRelativeToFocus both set encode independently")
+        void bothFlagsSet() {
+            StateSnapshot snap = new StateSnapshot(
+                    0, 1, true, new double[3], new float[] {0, 0, 0, 1}, CameraFrame.INERTIAL, 10, -1, -1, 45, true);
+            String encoded = StateSnapshotCodec.encode(snap);
+            StateSnapshot decoded = StateSnapshotCodec.decode(encoded);
+            assertTrue(decoded.paused());
+            assertTrue(decoded.camPosRelativeToFocus());
         }
 
         @Test
         @DisplayName("all camera frames round-trip")
         void allCameraFrames() {
             for (CameraFrame frame : CameraFrame.values()) {
-                StateSnapshot snap =
-                        new StateSnapshot(0, 1, false, new double[3], new float[] {0, 0, 0, 1}, frame, -1, -1, -1, 45);
+                StateSnapshot snap = new StateSnapshot(
+                        0, 1, false, new double[3], new float[] {0, 0, 0, 1}, frame, -1, -1, -1, 45, false);
                 String encoded = StateSnapshotCodec.encode(snap);
                 assertEquals(frame, StateSnapshotCodec.decode(encoded).cameraFrame());
             }
@@ -72,7 +97,7 @@ class StateSnapshotCodecTest {
         @DisplayName("negative NAIF IDs round-trip")
         void negativeNaifIds() {
             StateSnapshot snap = new StateSnapshot(
-                    0, 1, false, new double[3], new float[] {0, 0, 0, 1}, CameraFrame.INERTIAL, -98, -1, -1, 45);
+                    0, 1, false, new double[3], new float[] {0, 0, 0, 1}, CameraFrame.INERTIAL, -98, -1, -1, 45, false);
             String encoded = StateSnapshotCodec.encode(snap);
             assertEquals(-98, StateSnapshotCodec.decode(encoded).focusedBodyId());
         }
@@ -81,7 +106,8 @@ class StateSnapshotCodecTest {
         @DisplayName("non-identity quaternion round-trips")
         void nonIdentityQuaternion() {
             float[] q = {0.5f, -0.5f, 0.5f, 0.5f};
-            StateSnapshot snap = new StateSnapshot(0, 1, false, new double[3], q, CameraFrame.SYNODIC, -1, -1, -1, 45);
+            StateSnapshot snap =
+                    new StateSnapshot(0, 1, false, new double[3], q, CameraFrame.SYNODIC, -1, -1, -1, 45, false);
             String encoded = StateSnapshotCodec.encode(snap);
             assertArrayEquals(q, StateSnapshotCodec.decode(encoded).camOrientJ2000());
         }
@@ -100,7 +126,8 @@ class StateSnapshotCodecTest {
                     10,
                     399,
                     301,
-                    120);
+                    120,
+                    false);
             String encoded = StateSnapshotCodec.encode(snap);
             StateSnapshot decoded = StateSnapshotCodec.decode(encoded);
             assertEquals(et, decoded.et());
@@ -198,6 +225,7 @@ class StateSnapshotCodecTest {
             assertEquals(301, snap.targetedBodyId());
             assertEquals(10, snap.selectedBodyId());
             assertEquals(60.0, snap.fovDeg());
+            assertFalse(snap.camPosRelativeToFocus(), "capture() always stores absolute J2000");
         }
 
         @Test

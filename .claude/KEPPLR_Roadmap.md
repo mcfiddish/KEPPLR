@@ -616,7 +616,7 @@ on `KepplrScript`. Synodic frame javadoc corrected from "targeted" to
 
 ---
 
-### 26. State Snapshot Strings
+### 26. State Snapshot Strings ✅
 
 A compact serialized encoding of the current simulation state as a single
 copy-pasteable string.
@@ -636,12 +636,50 @@ extension.
   can capture and restore snapshots. `setStateString` jumps instantly (no
   transition animation) for predictable script behavior; a future
   `setStateStringAnimated` could be added if smooth restoration is wanted.
-- GUI: `Edit → Copy State` copies to clipboard; `Edit → Paste State` reads
+- GUI: `File → Copy State` copies to clipboard; `File → Paste State` reads
   from clipboard and applies. Both are loggable by `CommandRecorder`.
 - CLI: `-state <string>` restores state on startup (applied at the end of
   `simpleInitApp()` before any script runs). `-script <path>` runs a Groovy
   script on startup (equivalent to File → Run Script). Both are optional.
   State is applied first so the script sees the restored state. See D-052.
+
+**Bug fixes (branch 56-update-documentation):**
+
+Three bugs in the state restore path were diagnosed and fixed:
+
+1. **Paused flag restored incorrectly.** `setStateString()` called
+   `clock.setPaused(snap.paused())`, which unpaused a running simulation
+   when restoring a snapshot taken while paused (or vice versa). The paused
+   flag is caller state, not snapshot state. **Fix:** removed the
+   `clock.setPaused()` call from `setStateString()`.
+
+2. **Sync latch race condition.** The original latch implementation stored
+   a `CountDownLatch` separately in `KepplrApp.postRestoreLatch`. A JME
+   frame could run and count the latch down before `setPendingCameraRestore()`
+   was called, causing `setStateString()` to unblock without the restore
+   having been applied. **Fix:** the latch is embedded directly in
+   `PendingCameraRestore` so the JME thread only counts it down when it
+   actually consumes the restore record. See D-051.
+
+3. **Focus-tracking anchor causes spurious displacement on ET jump (D-063).**
+   `CameraInputHandler.applyFocusTracking()` maintains a `prevFocusPos`
+   anchor from the previous frame. When state restore jumps ET backward
+   (e.g., `et1` → `et0`), the delta `earthPos(et0) − prevFocusPos(et1)`
+   (≈108,000 km for a 1-hour jump) was added to the freshly restored
+   camera position before body-following ran. Body-following corrected the
+   distance but not the direction, producing wrong body-fixed
+   lat/lon for every restore except the most recent snapshot. **Fix:**
+   `CameraInputHandler.resetFocusTrackingAnchor()` nulls `prevFocusPos`;
+   called from `KepplrApp.simpleUpdate()` immediately after consuming a
+   `PendingCameraRestore`.
+
+**Test coverage:** `TransitionControllerBodyFollowingTest` (5 tests) covers
+body-following after `requestFollow`, ET advance across an hour, state string
+encoding of body-relative offset, and a full save/advance-1h/restore
+round-trip asserting ET, J2000 position, orientation, FOV, and body-fixed
+spherical coordinates (distance, latitude, longitude).
+
+**Step 26 is complete.**
 
 ---
 

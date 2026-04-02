@@ -217,6 +217,10 @@ public class KepplrApp extends SimpleApplication {
             postRebuildLatch = latch;
             return null;
         }));
+        // Enable synchronous restore: setStateString() will embed a latch in PendingCameraRestore
+        // and block until simpleUpdate() counts it down after applying the restore and updating
+        // all state properties.
+        commands.setRestoreSyncEnabled(true);
         // Wire the screenshot callback: store a pending capture that will be processed after the
         // render pass completes (see update() override). This ensures the framebuffer reflects the
         // current frame's scene graph, including focus-body tracking from simpleUpdate().
@@ -397,8 +401,11 @@ public class KepplrApp extends SimpleApplication {
 
         simulationClock.advance();
 
-        // Apply pending camera restore from setStateString() (Step 26)
+        // Apply pending camera restore from setStateString() (Step 26).
+        // Save the latch (if any) — it is counted down at the END of this frame, after all state
+        // properties have been written, so setStateString() sees consistent values when it unblocks.
         DefaultSimulationState.PendingCameraRestore restore = simulationState.consumePendingCameraRestore();
+        java.util.concurrent.CountDownLatch restoreLatch = null;
         if (restore != null) {
             cameraHelioJ2000[0] = restore.posJ2000()[0];
             cameraHelioJ2000[1] = restore.posJ2000()[1];
@@ -408,6 +415,12 @@ public class KepplrApp extends SimpleApplication {
                     restore.orientJ2000()[2], restore.orientJ2000()[3]));
             cam.setFov((float)
                     Math.max(KepplrConstants.FOV_MIN_DEG, Math.min(restore.fovDeg(), KepplrConstants.FOV_MAX_DEG)));
+            restoreLatch = restore.restoreDone();
+            // Reset focus-tracking anchor so applyFocusTracking() skips the delta this frame.
+            // The ET jumps to the snapshot's ET, so prevFocusPos (from the last frame at the
+            // prior ET) would otherwise cause a large spurious displacement equal to the focus
+            // body's motion over the elapsed simulation time.
+            cameraInputHandler.resetFocusTrackingAnchor();
         }
 
         try {
@@ -540,6 +553,13 @@ public class KepplrApp extends SimpleApplication {
         if (rebuildLatch != null) {
             postRebuildLatch = null;
             rebuildLatch.countDown();
+        }
+
+        // Signal setStateString() that the restore has been fully applied: ET advanced by advance(),
+        // camera position set by PendingCameraRestore, body-following adjusted by transitionController,
+        // and all state properties (cameraPositionJ2000, cameraBodyFixedSpherical, etc.) written above.
+        if (restoreLatch != null) {
+            restoreLatch.countDown();
         }
     }
 

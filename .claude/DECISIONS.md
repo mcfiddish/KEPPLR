@@ -1172,7 +1172,42 @@ The class-level Javadoc summarizes all four categories.
 
 ---
 
-*Last updated: D-062 (sprite fallback for missing body-fixed frames), D-061 (parent-relative velocity), D-060 (Edit menu removal), D-059 (keyboard shortcut cleanup)*
+## D-063: Focus-tracking anchor must be reset on state restore to prevent ET-jump displacement
+**Status:** Accepted
+**Roadmap step:** 26 (State Snapshot Strings — bug fix)
+
+**Context:** `CameraInputHandler.applyFocusTracking()` maintains a `prevFocusPos` anchor
+(the focus body's J2000 position at the previous frame's ET). Each frame it computes the
+delta `currentPos − prevFocusPos` and adds it to `cameraHelioJ2000`, keeping the camera
+centred on the focus body as its orbit advances. When `setStateString()` restores a state
+from an earlier ET (e.g., the simulation advanced from `et0` to `et1`, then a snapshot
+taken at `et0` is restored), `advance()` jumps the ET back to `et0`. On the next frame,
+`applyFocusTracking()` computes `delta = earthPos(et0) − prevFocusPos(et1) ≈ −108,000 km`
+and adds it to the freshly restored `cameraHelioJ2000` *before* `transitionController.update()`
+runs. Body-following then moved the camera to the correct distance but in the wrong
+body-fixed direction, producing a wrong latitude in every restored snapshot except the
+most recent one (where the ET did not jump backward).
+
+**Decision:** `CameraInputHandler.resetFocusTrackingAnchor()` nulls `prevFocusPos`. It is
+called from `KepplrApp.simpleUpdate()` immediately after consuming a `PendingCameraRestore`
+and before `cameraInputHandler.update()`. On the restore frame, `applyFocusTracking()` finds
+`prevFocusPos == null`, skips the delta, and sets `prevFocusPos` to the current body position
+as a fresh anchor.
+
+**Alternatives considered:** Moving `cameraInputHandler.update()` before
+`consumePendingCameraRestore()` — rejected because `applyFocusTracking()` reads the focused
+body ID from `SimulationState`, which may already reflect the restored focus body, making the
+ordering fragile. Skipping `applyFocusTracking()` entirely on the restore frame — equivalent
+but requires a separate flag rather than reusing the existing null-anchor guard.
+
+**Consequences:** State restore correctly preserves body-fixed spherical coordinates across
+ET jumps. The `resetFocusTrackingAnchor()` call is paired with `consumePendingCameraRestore()`
+— any future code that posts a `PendingCameraRestore` should also call
+`resetFocusTrackingAnchor()`.
+
+---
+
+*Last updated: D-063 (focus-tracking anchor reset on state restore), D-062 (sprite fallback for missing body-fixed frames), D-061 (parent-relative velocity), D-060 (Edit menu removal), D-059 (keyboard shortcut cleanup)*
 *Backfill note: Entries D-001 through D-009 were reconstructed retrospectively.
 D-010 onwards recorded in real time.*
 
