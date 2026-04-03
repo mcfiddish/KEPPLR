@@ -338,7 +338,7 @@ This pattern is useful for searching for a geometric event.
 .. This code block triggers a Pygments Groovy lexer warning.
    It is NOT a real syntax error.
    The problematic line is
-              def frameNum = String.format("%04d", i / 24)
+           def frameNum = String.format("%04d", (int) (i / 24))
 
    Workarounds:
    - Use `java` instead of `groovy` for highlighting
@@ -366,7 +366,8 @@ This pattern is useful for searching for a geometric event.
        // Check every step — screenshot only on the 25th of each month at noon
        // (just an example condition; adapt to your needs)
        if (i % 24 == 0) {
-           def frameNum = String.format("%04d", i / 24)
+           // In Groovy, / between two integers returns a BigDecimal, not an int.
+           def frameNum = String.format("%04d", (int) (i / 24))
            kepplr.saveScreenshot("/tmp/earth_daily/frame_${frameNum}.png")
        }
    }
