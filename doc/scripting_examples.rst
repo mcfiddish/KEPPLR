@@ -34,40 +34,49 @@ Focus on a body, enable its trail, and fast-forward through one orbital period.
 
 .. code-block:: groovy
 
-   kepplr.focusBody("Mars")
-   kepplr.waitTransition()
-   kepplr.goTo("Mars", 5.0, 3.0)
-   kepplr.waitTransition()
+    kepplr.focusBody("SUN")
+    kepplr.waitTransition()
+    kepplr.setCameraPosition(0,5e8,0,5)
+    kepplr.waitTransition()
+    kepplr.setCameraOrientation(0,-1,0,0,1,0,5)
+    kepplr.waitTransition()
+    kepplr.selectBody("Mars")
 
-   kepplr.setTrailVisible("Mars", true)
-   kepplr.setTrailDuration("Mars", 59356800.0)   // ~687 days in seconds
+    def marsYeal = 687*86400
+    kepplr.setTrailVisible("Mars", true)
+    kepplr.setTrailDuration("Mars", marsYear)
 
-   kepplr.setTimeRate(500000.0)
-   kepplr.waitSim(59356800.0)
-   kepplr.setPaused(true)
+    kepplr.setTimeRate(500000.0)
+    kepplr.waitSim(marsYear)
+    kepplr.setPaused(true)
 
 
 Earth-Moon System Close-Up
 --------------------------
 
-Zoom in on the Earth and watch the Moon orbit.
+Zoom in on the Earth and watch the Moon orbit.  Show the Moon's velocity vector.
 
 .. code-block:: groovy
 
-   kepplr.setUTC("2024 Mar 25 00:00:00")
+    kepplr.setUTC("2024 Mar 25 00:00:00")
 
-   kepplr.focusBody("Earth")
-   kepplr.waitTransition()
-   kepplr.goTo("Earth", 3.0, 4.0)
-   kepplr.waitTransition()
+    kepplr.focusBody("Earth")
+    kepplr.waitTransition()
+    kepplr.setCameraPosition(0,1e6,0,5)
+    kepplr.waitTransition()
+    kepplr.setCameraOrientation(0,-1,0,0,1,0,5)
+    kepplr.waitTransition()
+    kepplr.selectBody("Moon")
+    kepplr.setFov(40, 5)
 
-   kepplr.setTrailVisible("Moon", true)
-   kepplr.setTrailDuration("Moon", 2360592.0)   // ~27.3 days
+    kepplr.setVectorVisible("Moon", VectorTypes.velocity(), true)
+    kepplr.setLabelVisible("Moon", true)
 
-   kepplr.setLabelVisible("Moon", true)
-   kepplr.setTimeRate(50000.0)
-   kepplr.waitSim(2360592.0)
-   kepplr.setPaused(true)
+    def month = 27.3 * 86400
+    kepplr.setTimeRate(50000.0)
+    kepplr.waitSim(month)
+    kepplr.setPaused(true)
+
 
 
 Capture a Screenshot Sequence
@@ -107,27 +116,6 @@ Orbit the camera 360 degrees around Saturn for a cinematic sweep.
        kepplr.orbit(10.0, 0.0, 0.5)
        kepplr.waitTransition()
    }
-
-
-Show Velocity Vectors
----------------------
-
-Display velocity vectors for the inner planets to visualize orbital motion.
-
-.. code-block:: groovy
-
-   kepplr.focusBody("Sun")
-   kepplr.waitTransition()
-   kepplr.goTo("Sun", 0.5, 5.0)
-   kepplr.waitTransition()
-
-   ["Mercury", "Venus", "Earth", "Mars"].each { body ->
-       kepplr.setTrailVisible(body, true)
-       kepplr.setLabelVisible(body, true)
-       kepplr.setVectorVisible(body, VectorTypes.velocity(), true)
-   }
-
-   kepplr.setTimeRate(1000000.0)
 
 
 Save and Restore State
@@ -174,13 +162,18 @@ View the Earth-Moon system from a synodic (co-rotating) frame where both bodies 
 
    kepplr.focusBody("Earth")
    kepplr.waitTransition()
-   kepplr.goTo("Earth", 1.0, 4.0)
+   kepplr.selectBody("Moon")
+   kepplr.setCameraFrame(CameraFrame.SYNODIC)
+   kepplr.setCameraPosition(-1e6,1e5,0,5)
    kepplr.waitTransition()
+   kepplr.setCameraOrientation(1,-0.1,0,0,0,1,5)
+   kepplr.waitTransition()
+   kepplr.setFov(.1,5)
 
-   kepplr.setSynodicFrame("Earth", "Moon")
    kepplr.setLabelVisible("Moon", true)
    kepplr.setTimeRate(100000.0)
    kepplr.displayMessage("Synodic frame: Earth-Moon system co-rotating")
+
 
 
 Toggle Overlays
@@ -281,25 +274,28 @@ Use a Groovy map to associate bodies with display settings, then iterate over it
 
 .. code-block:: groovy
 
-   def bodies = [
-       "Jupiter": 30 * 86400.0,     // 30-day trail
-       "Saturn" : 60 * 86400.0,     // 60-day trail
-       "Uranus" : 180 * 86400.0,    // 180-day trail
-       "Neptune": 365 * 86400.0,    // 365-day trail
-   ]
+    def year = 365.25 * 86400
+    def bodies = [
+        "Jupiter": 3 * year,     // 3 year trail
+        "Saturn" : 7 * year,     // 60-day trail
+        "Uranus" : 20 * year,    // 180-day trail
+        "Neptune": 40 * year,    // 365-day trail
+    ]
 
-   bodies.each { name, trailDuration ->
-       kepplr.setTrailVisible(name, true)
-       kepplr.setTrailDuration(name, trailDuration)
-       kepplr.setLabelVisible(name, true)
-   }
+    bodies.each { name, trailDuration ->
+        kepplr.setTrailDuration(name, trailDuration)
+        kepplr.setTrailVisible(name, true)
+        kepplr.setLabelVisible(name, true)
+    }
 
-   kepplr.focusBody("Sun")
-   kepplr.waitTransition()
-   kepplr.goTo("Sun", 0.1, 5.0)
-   kepplr.waitTransition()
-   kepplr.setTimeRate(5000000.0)
-   kepplr.displayMessage("Outer planet trails")
+    kepplr.focusBody("Sun")
+    kepplr.waitTransition()
+    kepplr.setCameraPosition(0,0,2e10,5)
+    kepplr.waitTransition()
+    kepplr.setCameraOrientation(0,0,-1,1,0,0,5)
+    kepplr.waitTransition()
+    kepplr.setTimeRate(5000000.0)
+    kepplr.displayMessage("Outer planet trails")
 
 
 Timed Slideshow with a Closure
