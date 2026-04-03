@@ -209,7 +209,7 @@ public final class KepplrStatusWindow {
         VBox bodyReadout = buildBodyReadout();
         VBox statusSection = buildStatusSection();
         VBox bodyListSection = buildBodyListSection();
-        VBox scriptPanel = buildScriptOutputPanel();
+        SplitPane scriptPanel = buildScriptOutputPanel();
 
         SplitPane splitPane = new SplitPane(bodyListSection, scriptPanel);
         splitPane.setOrientation(Orientation.VERTICAL);
@@ -762,7 +762,7 @@ public final class KepplrStatusWindow {
 
     // ── Script Output Panel ────────────────────────────────────────────────
 
-    private VBox buildScriptOutputPanel() {
+    private SplitPane buildScriptOutputPanel() {
         Label header = boldLabel("Script Console");
         header.setPadding(new Insets(4, 10, 2, 10));
 
@@ -771,6 +771,7 @@ public final class KepplrStatusWindow {
         consoleInput.setStyle("-fx-font-family: monospace; -fx-font-size: 11px;");
         consoleInput.setPrefRowCount(4);
         consoleInput.setWrapText(true);
+        VBox.setVgrow(consoleInput, Priority.ALWAYS);
         // Enter runs the console; Shift+Enter inserts a newline
         consoleInput.addEventFilter(KeyEvent.KEY_PRESSED, e -> {
             if (e.getCode() == KeyCode.ENTER) {
@@ -794,14 +795,17 @@ public final class KepplrStatusWindow {
         HBox buttonBar = new HBox(6, runButton, clearButton);
         buttonBar.setPadding(new Insets(0, 10, 0, 10));
 
+        VBox inputPane = new VBox(4, header, consoleInput, buttonBar);
+
         scriptOutputArea = new TextArea();
         scriptOutputArea.setEditable(false);
         scriptOutputArea.setWrapText(true);
         scriptOutputArea.setStyle("-fx-font-family: monospace; -fx-font-size: 10px;");
-        VBox.setVgrow(scriptOutputArea, Priority.ALWAYS);
 
-        VBox box = new VBox(4, header, consoleInput, buttonBar, scriptOutputArea);
-        return box;
+        SplitPane innerSplit = new SplitPane(inputPane, scriptOutputArea);
+        innerSplit.setOrientation(Orientation.VERTICAL);
+        innerSplit.setDividerPositions(0.35);
+        return innerSplit;
     }
 
     private void evaluateConsoleInput() {
