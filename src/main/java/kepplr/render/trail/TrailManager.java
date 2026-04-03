@@ -118,7 +118,11 @@ public class TrailManager {
 
             if (stale) {
                 try {
-                    double duration = TrailSampler.computeTrailDurationSec(naifId, currentEt);
+                    double customDuration =
+                            this.state.trailDurationProperty(naifId).get();
+                    double duration = (customDuration >= 0)
+                            ? customDuration
+                            : TrailSampler.computeTrailDurationSec(naifId, currentEt);
                     int maxSamples = this.state.renderQualityProperty().get().trailSamplesPerPeriod();
                     List<double[]> samples = TrailSampler.sample(naifId, currentEt, duration, "J2000", maxSamples);
                     int barycenterId = -1;
