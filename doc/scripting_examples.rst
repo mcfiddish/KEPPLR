@@ -94,9 +94,16 @@ by a fixed time step.
    kepplr.goTo("Jupiter", 12.0, 3.0)
    kepplr.waitTransition()
 
-   // 600 frames, 1 hour per frame = 25 days of Jupiter rotation
-   kepplr.captureSequence("/tmp/jupiter_frames/", "2024 Jun 01 00:00:00", 600, 3600.0)
+   // 600 frames, 10 minutes per frame = 10 Jupiter rotation periods
+   kepplr.captureSequence("/tmp/jupiter_frames/", "2024 Jun 01 00:00:00", 600, 600.0)
 
+Create an animation with :doc:`tools/PngToMovie` (assumes you have `ffmpeg` in your $PATH):
+
+::
+
+    PngToMovie -fps 30 -out jupiter.webm -seq /tmp/jupiter_frames
+
+You can view the `.webm` file in a browser.
 
 Orbit Around a Body
 --------------------
@@ -164,11 +171,14 @@ View the Earth-Moon system from a synodic (co-rotating) frame where both bodies 
    kepplr.waitTransition()
    kepplr.selectBody("Moon")
    kepplr.setCameraFrame(CameraFrame.SYNODIC)
-   kepplr.setCameraPosition(-1e6,1e5,0,5)
+   kepplr.setCameraPosition(-1e6,5e4,0,5)
    kepplr.waitTransition()
-   kepplr.setCameraOrientation(1,-0.1,0,0,0,1,5)
+   kepplr.setCameraOrientation(1,-0.05,0,0,0,1,5)
    kepplr.waitTransition()
-   kepplr.setFov(3,5)
+   kepplr.setFov(2,5)
+
+   kepplr.setVectorVisible("Moon", VectorTypes.towardBody(10), true)
+   kepplr.setVectorVisible("Moon", VectorTypes.velocity(), true)
 
    kepplr.setLabelVisible("Moon", true)
    kepplr.setTimeRate(100000.0)
@@ -219,51 +229,51 @@ take action.  This example waits for the New Horizons Pluto closest approach.
 
 .. code-block:: groovy
 
-   kepplr.focusBody("Pluto")
-   kepplr.waitTransition()
-   kepplr.goTo("Pluto", 8.0, 4.0)
-   kepplr.waitTransition()
+    kepplr.setUTC("2015 Jul 14 07:00:00")
+    kepplr.focusBody("NH_SPACECRAFT")
+    kepplr.waitTransition()
+    kepplr.setSynodicFrame("NH_SPACECRAFT", "PLUTO")
 
-   kepplr.setLabelVisible("Pluto", true)
-   kepplr.setFrustumVisible("NH_LORRI", true)
-   kepplr.setTrailVisible(-98, true)
+    kepplr.setLabelVisible("Pluto", true)
+    kepplr.setFrustumVisible("NH_LORRI", true)
 
-   kepplr.setUTC("2015 Jul 14 07:00:00")
-   kepplr.setTimeRate(60.0)
+    kepplr.setTimeRate(600.0)
 
-   // Block until closest approach
-   kepplr.waitUntilSim("2015 Jul 14 11:49:57")
-   kepplr.setPaused(true)
-   kepplr.displayMessage("Closest approach!")
-   kepplr.saveScreenshot("/tmp/nh_closest_approach.png")
+    // slow down the animation just before closest approach
+    kepplr.waitUntilSim("2015 Jul 14 11:30:00")
+    kepplr.setTimeRate(60.0)
+
+
+    // Block until closest approach
+    kepplr.waitUntilSim("2015 Jul 14 11:49:57")
+    kepplr.setPaused(true)
+    kepplr.displayMessage("Closest approach!")
+    kepplr.saveScreenshot("/tmp/nh_closest_approach.png")
 
 
 Conditional Camera Adjustment
 -----------------------------
 
-Read the simulation state inside a loop and react when a condition is met.  Here we zoom in
-progressively as the camera gets closer to the focused body.
+Step the camera progressively closer to a body by doubling the apparent radius on each iteration
+until a threshold is reached.  The second argument to ``goTo()`` is the desired apparent body
+radius in degrees — a larger value places the camera closer.  The loop body moves the camera and
+waits for the transition to complete before testing the condition again, so state genuinely
+changes on every pass.
 
 .. code-block:: groovy
 
    kepplr.focusBody("Jupiter")
    kepplr.waitTransition()
-   kepplr.goTo("Jupiter", 5.0, 4.0)
+   kepplr.goTo("Jupiter", 5.0, 3.0)
    kepplr.waitTransition()
 
-   def state = kepplr.getState()
-   def fov = state.fovDegProperty().get()
-
-   if (fov > 30.0) {
-       kepplr.setFov(30.0, 2.0)
+   def apparentRadius = 5.0
+   while (apparentRadius < 40.0) {
+       apparentRadius *= 2.0
+       kepplr.goTo("Jupiter", apparentRadius, 2.0)
        kepplr.waitTransition()
-       kepplr.displayMessage("Narrowed FOV to 30 degrees")
-   } else if (fov > 10.0) {
-       kepplr.setFov(10.0, 2.0)
-       kepplr.waitTransition()
-       kepplr.displayMessage("Narrowed FOV to 10 degrees")
-   } else {
-       kepplr.displayMessage("FOV already narrow: ${fov} degrees")
+       kepplr.displayMessage("Apparent radius: ${apparentRadius.round(1)} degrees")
+       kepplr.waitWall(1.0)
    }
 
 

@@ -164,3 +164,10 @@ Add it to your configuration file:
     body.phobos.centerLonDeg = 0.0
     # Path under resourcesFolder() for this body's shape model.  If blank an ellipsoid model will be used
     body.phobos.shapeModel = shapes/phobos_g_296m_spc_obj_0000n00000_v004.glb
+
+Look at it with the :doc:`tools/GlbModelViewer`.  Hit `X` to display the body fixed axes and use the arrow keys to rotate the model.
+
+.. image:: /_static/images/GlbModelViewer_01_phobos.png
+    :alt: Phobos shape model
+    :align: center
+
