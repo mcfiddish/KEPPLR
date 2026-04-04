@@ -168,7 +168,7 @@ View the Earth-Moon system from a synodic (co-rotating) frame where both bodies 
    kepplr.waitTransition()
    kepplr.setCameraOrientation(1,-0.1,0,0,0,1,5)
    kepplr.waitTransition()
-   kepplr.setFov(.1,5)
+   kepplr.setFov(3,5)
 
    kepplr.setLabelVisible("Moon", true)
    kepplr.setTimeRate(100000.0)
