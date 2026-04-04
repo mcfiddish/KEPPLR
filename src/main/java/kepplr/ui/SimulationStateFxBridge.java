@@ -1,8 +1,10 @@
 package kepplr.ui;
 
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Consumer;
 import javafx.animation.AnimationTimer;
 import javafx.application.Platform;
@@ -69,9 +71,11 @@ public final class SimulationStateFxBridge {
     private final SimpleStringProperty cameraPositionText = new SimpleStringProperty("");
     private final SimpleStringProperty cameraBodyFixedText = new SimpleStringProperty("N/A");
     private final SimpleStringProperty bodiesInViewText = new SimpleStringProperty("");
+    private final SimpleObjectProperty<Set<Integer>> inViewNaifIds = new SimpleObjectProperty<>(Set.of());
     private final SimpleBooleanProperty transitionActive = new SimpleBooleanProperty(false);
     private final SimpleDoubleProperty transitionProgress = new SimpleDoubleProperty(0.0);
     private final SimpleDoubleProperty fovDeg = new SimpleDoubleProperty(KepplrConstants.CAMERA_FOV_Y_DEG);
+    private final SimpleStringProperty fovText = new SimpleStringProperty("—");
     private final SimpleDoubleProperty currentEt = new SimpleDoubleProperty(0.0);
 
     // ── Step 19 additions ────────────────────────────────────────────────────
@@ -139,9 +143,11 @@ public final class SimulationStateFxBridge {
         cameraBodyFixedText.set(
                 formatBodyFixed(state.cameraBodyFixedSphericalProperty().get()));
         bodiesInViewText.set(formatBodiesInView(state.bodiesInViewProperty().get()));
+        inViewNaifIds.set(extractNaifIds(state.bodiesInViewProperty().get()));
         transitionActive.set(state.transitionActiveProperty().get());
         transitionProgress.set(state.transitionProgressProperty().get());
         fovDeg.set(state.fovDegProperty().get());
+        fovText.set(formatFov(state.fovDegProperty().get()));
         selectedBodyName.set(formatBodyNameWithId(state.selectedBodyIdProperty().get()));
         focusedBodyName.set(formatBodyNameWithId(state.focusedBodyIdProperty().get()));
         targetedBodyName.set(formatBodyNameWithId(state.targetedBodyIdProperty().get()));
@@ -234,7 +240,11 @@ public final class SimulationStateFxBridge {
         state.bodiesInViewProperty().addListener((obs, oldVal, newVal) -> {
             if (polling) return;
             String s = formatBodiesInView(newVal);
-            dispatcher.accept(() -> bodiesInViewText.set(s));
+            Set<Integer> ids = extractNaifIds(newVal);
+            dispatcher.accept(() -> {
+                bodiesInViewText.set(s);
+                if (!ids.equals(inViewNaifIds.get())) inViewNaifIds.set(ids);
+            });
         });
         state.transitionActiveProperty().addListener((obs, oldVal, newVal) -> {
             if (polling) return;
@@ -246,7 +256,11 @@ public final class SimulationStateFxBridge {
         });
         state.fovDegProperty().addListener((obs, oldVal, newVal) -> {
             if (polling) return;
-            dispatcher.accept(() -> fovDeg.set(newVal.doubleValue()));
+            double v = newVal.doubleValue();
+            dispatcher.accept(() -> {
+                fovDeg.set(v);
+                fovText.set(formatFov(v));
+            });
         });
         state.selectedBodyIdProperty().addListener((obs, oldVal, newVal) -> {
             if (polling) return;
@@ -292,6 +306,16 @@ public final class SimulationStateFxBridge {
         state.cameraFrameFallbackActiveProperty().addListener((obs, oldVal, newVal) -> {
             if (polling) return;
             dispatcher.accept(() -> cameraFrameFallbackActive.set(newVal));
+        });
+        state.synodicFrameFocusIdProperty().addListener((obs, oldVal, newVal) -> {
+            if (polling) return;
+            String s = currentCameraFrameText();
+            dispatcher.accept(() -> cameraFrameText.set(s));
+        });
+        state.synodicFrameSelectedIdProperty().addListener((obs, oldVal, newVal) -> {
+            if (polling) return;
+            String s = currentCameraFrameText();
+            dispatcher.accept(() -> cameraFrameText.set(s));
         });
         state.hudTimeVisibleProperty().addListener((obs, oldVal, newVal) -> {
             if (polling) return;
@@ -358,9 +382,12 @@ public final class SimulationStateFxBridge {
         cameraBodyFixedText.set(
                 formatBodyFixed(state.cameraBodyFixedSphericalProperty().get()));
         bodiesInViewText.set(formatBodiesInView(state.bodiesInViewProperty().get()));
+        Set<Integer> newIds = extractNaifIds(state.bodiesInViewProperty().get());
+        if (!newIds.equals(inViewNaifIds.get())) inViewNaifIds.set(newIds);
         transitionActive.set(state.transitionActiveProperty().get());
         transitionProgress.set(state.transitionProgressProperty().get());
         fovDeg.set(state.fovDegProperty().get());
+        fovText.set(formatFov(state.fovDegProperty().get()));
         selectedBodyName.set(formatBodyNameWithId(state.selectedBodyIdProperty().get()));
         focusedBodyName.set(formatBodyNameWithId(state.focusedBodyIdProperty().get()));
         targetedBodyName.set(formatBodyNameWithId(state.targetedBodyIdProperty().get()));
@@ -463,6 +490,16 @@ public final class SimulationStateFxBridge {
     /** Current camera field of view in degrees. */
     public ReadOnlyDoubleProperty fovDegProperty() {
         return fovDeg;
+    }
+
+    /** Current camera field of view formatted for display, e.g. {@code "45.0°"}. */
+    public ReadOnlyStringProperty fovTextProperty() {
+        return fovText;
+    }
+
+    /** Set of NAIF IDs currently visible in the scene (non-culled bodies). Updates each frame. */
+    public ReadOnlyObjectProperty<Set<Integer>> inViewNaifIdsProperty() {
+        return inViewNaifIds;
     }
 
     public ReadOnlyDoubleProperty currentEtProperty() {
@@ -681,11 +718,18 @@ public final class SimulationStateFxBridge {
     private String currentCameraFrameText() {
         CameraFrame frame = state.cameraFrameProperty().get();
         if (frame == CameraFrame.SYNODIC) {
-            int focusId = state.focusedBodyIdProperty().get();
-            int selectedId = state.selectedBodyIdProperty().get();
-            String focusStr = focusId == -1 ? "—" : "NAIF " + focusId;
-            String targetStr = (selectedId == -1 || selectedId == focusId) ? "NAIF 10 (Sun)" : "NAIF " + selectedId;
-            return "SYNODIC [" + focusStr + " → " + targetStr + "]";
+            int synodicFocusId = state.synodicFrameFocusIdProperty().get();
+            int synodicSelectedId = state.synodicFrameSelectedIdProperty().get();
+            // Fall back to interaction state when explicit synodic IDs are not set
+            int focusId = synodicFocusId != -1
+                    ? synodicFocusId
+                    : state.focusedBodyIdProperty().get();
+            int selectedId = synodicSelectedId != -1
+                    ? synodicSelectedId
+                    : state.selectedBodyIdProperty().get();
+            String focusStr = focusId == -1 ? "—" : formatBodyName(focusId);
+            String selectedStr = selectedId == -1 ? "—" : formatBodyName(selectedId);
+            return "SYNODIC [" + focusStr + " → " + selectedStr + "]";
         }
         return formatCameraFrame(frame);
     }
@@ -735,6 +779,29 @@ public final class SimulationStateFxBridge {
         } catch (Exception e) {
             return Double.NaN;
         }
+    }
+
+    /**
+     * Format a field-of-view angle for display.
+     *
+     * @param degrees FOV in degrees
+     * @return formatted string, e.g. {@code "45.0°"}
+     */
+    static String formatFov(double degrees) {
+        return String.format("%.1f°", degrees);
+    }
+
+    /**
+     * Extract the set of NAIF IDs from a bodies-in-view list.
+     *
+     * @param bodies list from {@link SimulationState#bodiesInViewProperty()}; may be null
+     * @return unmodifiable set of NAIF IDs, empty if the list is null or empty
+     */
+    static Set<Integer> extractNaifIds(List<BodyInView> bodies) {
+        if (bodies == null || bodies.isEmpty()) return Set.of();
+        Set<Integer> ids = new HashSet<>(bodies.size() * 2);
+        for (BodyInView b : bodies) ids.add(b.naifId());
+        return ids;
     }
 
     /**

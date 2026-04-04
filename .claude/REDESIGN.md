@@ -173,13 +173,8 @@ At any time, the application maintains at most:
 switching the camera frame to Synodic with the selected body as the
 "other body."
 
-* Pressing **F** while a selected body is set switches the camera frame to
-  Synodic. If the camera frame is already Synodic, F switches back to
-  Inertial. If no selected body is set and the frame is Inertial, F is a
-  no-op.
-* Selecting **Inertial** in the Camera Frame submenu exits the Synodic frame
-  via the menu. Stop Tracking no longer exists as a separate menu item.
-* The Camera Frame submenu and F are always kept in sync.
+* The Camera Frame submenu in the View menu is used to switch frames.
+  Stop Tracking no longer exists as a separate menu item.
 * There is no separate "tracked body" property. The synodic "other body"
   is always the currently selected body (see §5).
 
@@ -424,7 +419,7 @@ The JavaFX menu bar must include an **Overlays** menu with:
 
   * Sun Direction
   * Earth Direction
-  * Velocity Direction
+  * Velocity Direction — relative to parent body (barycenter for satellites, Sun for planets), matching the orbital trail direction
   * Trajectory (trail for focused body)
   * Axes
 
@@ -497,6 +492,32 @@ All menu items call `SimulationCommands` only — no rendering logic in `ui/`.
 * Commands with `durationSeconds > 0` are always recorded verbatim.
 * `VectorType` arguments are serialized via `VectorType.toScript()` — see
   D-026.
+
+### 11.5 Execution Semantics [D-056]
+
+* Every public method on `KepplrScript` must have an **execution semantics**
+  label in its Javadoc, using one of:
+  * **Immediate** — takes effect on the calling thread; no JME thread
+    involvement. State mutations are visible on the next JME frame.
+  * **Queued** — enqueued to the JME thread's transition inbox; returns
+    immediately. Use `waitTransition()` to block until completion.
+  * **Blocking** — blocks the script thread until the operation completes.
+  * **Immediate + Queued** — hybrid: state mutations are immediate, camera
+    transitions are queued. Use `waitTransition()` to ensure the camera
+    arrives before issuing dependent commands.
+* Hybrid methods (`focusBody`, `targetBody`, `setStateString`) must document
+  which effects are immediate and which are queued.
+
+### 11.6 Configuration Reload [D-057, D-058]
+
+* `loadConfiguration(path)` is **Blocking**: it blocks the script thread
+  until the first full `simpleUpdate()` with the new configuration completes.
+  This guarantees body positions are computed before the script resumes.
+* A configuration reload clears all overlay visibility state (labels, trails,
+  vectors, frustums, body visibility) to give scripts a clean slate. Scripts
+  must re-enable desired overlays after each `loadConfiguration()` call.
+* All render managers (`VectorManager`, `StarFieldManager`, etc.) are disposed
+  before reconstruction to prevent orphaned geometry in the scene graph.
 
 ---
 
@@ -673,7 +694,7 @@ textures. When `SpacecraftBlock.shapeModel()` returns a non-null path:
   WARN level and fall back to the existing point sprite. The simulation must
   continue normally.
 
-#### 16.6.5 Frame Semantics
+#### 16.6.5 Frame Semantics [D-055]
 
 * `bodyFixedNode` carries the time-varying SPICE body-fixed → J2000 rotation,
   updated each frame by `BodySceneManager`, exactly as it does today for
@@ -682,6 +703,16 @@ textures. When `SpacecraftBlock.shapeModel()` returns a non-null path:
   applied once at load time as the local rotation of `glbModelRoot`. It maps
   glTF model-space into the body-fixed frame expected by SPICE. It is never
   reapplied or updated per-frame.
+* `modelToBodyFixedQuat` defaults to identity for all source formats. JME's
+  glTF loader handles the Y-up basis conversion via the scene graph, so loaded
+  vertices are already in their original frame. No format-based correction is
+  needed.
+* The conversion script (`convert_to_normalized_glb.py`) provides two mutually
+  exclusive options for per-model corrections when the model's vertex frame
+  does not match the SPICE body-fixed frame:
+  - `--apply-rotation x,y,z,a` (axis-angle in degrees)
+  - `--apply-quaternion w,x,y,z` (quaternion; accepts Cosmographia
+    `meshRotation` values directly)
 
 #### 16.6.6 Iteration Scope
 

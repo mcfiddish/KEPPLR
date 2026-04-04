@@ -102,7 +102,7 @@ public interface SimulationState {
      * <p>Set by {@link kepplr.commands.SimulationCommands#setSynodicFrame(int, int)} to decouple the synodic frame from
      * interaction state. Cleared to -1 by {@link kepplr.commands.SimulationCommands#setCameraFrame}.
      */
-    ReadOnlyIntegerProperty synodicFrameTargetIdProperty();
+    ReadOnlyIntegerProperty synodicFrameSelectedIdProperty();
 
     // ── Render quality (§9.4) ──
 

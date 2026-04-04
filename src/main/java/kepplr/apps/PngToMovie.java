@@ -81,8 +81,11 @@ public class PngToMovie implements KEPPLRTool {
         String footer = """
 
                 Notes:
+
                   - Default codec is VP9 WebM.
+
                   - Requires ffmpeg available on PATH, or provide -ffmpeg.
+
                   - Accepts both flat directories of PNGs and legacy manifest+frames/ layouts.
                 """;
         return KEPPLRTool.super.fullDescription(options, header, footer);

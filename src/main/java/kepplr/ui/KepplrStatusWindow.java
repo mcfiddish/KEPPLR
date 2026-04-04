@@ -36,8 +36,10 @@ import javafx.scene.control.SeparatorMenuItem;
 import javafx.scene.control.SplitPane;
 import javafx.scene.control.TextArea;
 import javafx.scene.control.TextField;
+import javafx.scene.control.ToggleButton;
 import javafx.scene.control.ToggleGroup;
 import javafx.scene.control.Tooltip;
+import javafx.scene.control.TreeCell;
 import javafx.scene.control.TreeItem;
 import javafx.scene.control.TreeView;
 import javafx.scene.input.Clipboard;
@@ -115,6 +117,9 @@ public final class KepplrStatusWindow {
     private CustomMenuItem saveScreenshotItem;
     private volatile Thread captureSequenceThread;
     private volatile Thread consoleThread;
+    /** Set by {@link #signalConfigRefresh()} from any thread; drained by the AnimationTimer on the FX thread. */
+    private volatile boolean pendingConfigRefresh = false;
+
     private TextArea consoleInput;
     private LogWindow logWindow;
 
@@ -174,6 +179,16 @@ public final class KepplrStatusWindow {
     }
 
     /**
+     * Signal that the body tree and instruments menu should be refreshed on the next animation frame.
+     *
+     * <p>Thread-safe; may be called from any thread (script thread, background load thread, etc.). The actual UI
+     * refresh runs on the JavaFX thread inside the {@code AnimationTimer}.
+     */
+    public void signalConfigRefresh() {
+        pendingConfigRefresh = true;
+    }
+
+    /**
      * Create and show the control window.
      *
      * <p>Must be called on the JavaFX application thread. Safe to call multiple times — subsequent calls bring the
@@ -194,7 +209,7 @@ public final class KepplrStatusWindow {
         VBox bodyReadout = buildBodyReadout();
         VBox statusSection = buildStatusSection();
         VBox bodyListSection = buildBodyListSection();
-        VBox scriptPanel = buildScriptOutputPanel();
+        SplitPane scriptPanel = buildScriptOutputPanel();
 
         SplitPane splitPane = new SplitPane(bodyListSection, scriptPanel);
         splitPane.setOrientation(Orientation.VERTICAL);
@@ -232,6 +247,7 @@ public final class KepplrStatusWindow {
             public void handle(long now) {
                 drainScriptOutput();
                 checkCaptureThreadDone();
+                drainConfigRefresh();
                 logWindow.drain();
             }
         }.start();
@@ -342,6 +358,7 @@ public final class KepplrStatusWindow {
         row = addStatusRow(grid, row, "Time rate:", bridge.timeRateTextProperty());
         row = addStatusRow(grid, row, "Clock:", bridge.pausedTextProperty());
         row = addStatusRow(grid, row, "Cam frame:", bridge.cameraFrameTextProperty());
+        row = addStatusRow(grid, row, "FOV:", bridge.fovTextProperty());
         row = addStatusRow(grid, row, "Cam pos:", bridge.cameraPositionTextProperty());
         addStatusRow(grid, row, "BF pos:", bridge.cameraBodyFixedTextProperty());
 
@@ -357,17 +374,50 @@ public final class KepplrStatusWindow {
         TextField searchField = new TextField();
         searchField.setPromptText("Filter...");
 
-        // Live filtering: rebuild visible tree on each keystroke
-        searchField.textProperty().addListener((obs, oldText, newText) -> {
-            String filter = newText == null ? "" : newText.trim().toLowerCase();
-            if (filter.isEmpty()) {
-                bodyTree.setRoot(masterRoot);
-            } else {
-                bodyTree.setRoot(buildFilteredRoot(filter));
+        ToggleButton inViewToggle = new ToggleButton("In View");
+        inViewToggle.setStyle("-fx-font-size: 10px; -fx-padding: 2 6 2 6;");
+        Tooltip.install(inViewToggle, new Tooltip("Show only bodies currently in the camera's field of view"));
+
+        bodyTree = new TreeView<>();
+        bodyTree.setShowRoot(false);
+        populateBodyTree();
+        VBox.setVgrow(bodyTree, Priority.ALWAYS);
+
+        // Cell factory: highlight bodies currently in the camera FOV
+        bodyTree.setCellFactory(tv -> new TreeCell<>() {
+            @Override
+            protected void updateItem(BodyTreeEntry item, boolean empty) {
+                super.updateItem(item, empty);
+                if (empty || item == null) {
+                    setText(null);
+                    setStyle("");
+                } else {
+                    setText(item.displayName());
+                    boolean inView = item.naifId() != -1
+                            && bridge.inViewNaifIdsProperty().get().contains(item.naifId());
+                    setStyle(inView ? "-fx-font-weight: bold; -fx-text-fill: #4d9eff;" : "");
+                }
             }
         });
 
-        // Enter still resolves and selects (useful for exact NAIF ID entry)
+        // Shared filter logic: reads current text + toggle state, rebuilds tree root
+        Runnable applyFilters = () -> {
+            String raw = searchField.getText();
+            String textFilter =
+                    (raw == null || raw.trim().isEmpty()) ? null : raw.trim().toLowerCase();
+            Set<Integer> inViewConstraint =
+                    inViewToggle.isSelected() ? bridge.inViewNaifIdsProperty().get() : null;
+            if (textFilter == null && inViewConstraint == null) {
+                bodyTree.setRoot(masterRoot);
+            } else {
+                bodyTree.setRoot(buildFilteredRoot(textFilter, inViewConstraint));
+            }
+        };
+
+        // Live filtering on text changes
+        searchField.textProperty().addListener((obs, oldText, newText) -> applyFilters.run());
+
+        // Enter resolves by body name or exact NAIF ID
         searchField.setOnAction(e -> {
             String text = searchField.getText().trim();
             if (text.isEmpty()) return;
@@ -380,10 +430,14 @@ public final class KepplrStatusWindow {
             }
         });
 
-        bodyTree = new TreeView<>();
-        bodyTree.setShowRoot(false);
-        populateBodyTree();
-        VBox.setVgrow(bodyTree, Priority.ALWAYS);
+        // Toggle: switch between all bodies and in-view only
+        inViewToggle.selectedProperty().addListener((obs, wasOn, isOn) -> applyFilters.run());
+
+        // When the in-view set changes: repaint cells and re-filter if toggle is on
+        bridge.inViewNaifIdsProperty().addListener((obs, oldIds, newIds) -> {
+            bodyTree.refresh();
+            if (inViewToggle.isSelected()) applyFilters.run();
+        });
 
         // Single click → select; double-click → focus
         bodyTree.setOnMouseClicked(evt -> {
@@ -410,10 +464,11 @@ public final class KepplrStatusWindow {
             }
         });
 
-        VBox searchBox = new VBox(searchField);
-        searchBox.setPadding(new Insets(0, 10, 4, 10));
+        HBox searchRow = new HBox(4, searchField, inViewToggle);
+        HBox.setHgrow(searchField, Priority.ALWAYS);
+        searchRow.setPadding(new Insets(0, 10, 4, 10));
 
-        VBox section = new VBox(4, header, searchBox, bodyTree);
+        VBox section = new VBox(4, header, searchRow, bodyTree);
         VBox.setVgrow(section, Priority.ALWAYS);
         return section;
     }
@@ -469,25 +524,40 @@ public final class KepplrStatusWindow {
     }
 
     /**
-     * Build a filtered copy of the master tree, keeping only items whose display name or NAIF ID matches the filter.
-     * Parent groups are included (expanded) if any child matches.
+     * Build a filtered copy of the master tree.
+     *
+     * <p>Items are included only when they satisfy both constraints:
+     *
+     * <ul>
+     *   <li>{@code textFilter} — display name or NAIF ID contains the string (null = no text filter)
+     *   <li>{@code inViewConstraint} — NAIF ID is in the set (null = no in-view filter)
+     * </ul>
+     *
+     * Group nodes are included (expanded) if any child passes both constraints. When a group name matches the text
+     * filter, all its children are candidates for the in-view constraint only.
      */
-    private TreeItem<BodyTreeEntry> buildFilteredRoot(String filter) {
+    private TreeItem<BodyTreeEntry> buildFilteredRoot(String textFilter, Set<Integer> inViewConstraint) {
         TreeItem<BodyTreeEntry> filteredRoot = new TreeItem<>(masterRoot.getValue());
         filteredRoot.setExpanded(true);
 
         for (TreeItem<BodyTreeEntry> topItem : masterRoot.getChildren()) {
             if (topItem.getChildren().isEmpty()) {
-                // Leaf (Sun, spacecraft, etc.)
-                if (matchesFilter(topItem.getValue(), filter)) {
+                // Leaf node (Sun, spacecraft, etc.)
+                boolean textOk = textFilter == null || matchesFilter(topItem.getValue(), textFilter);
+                boolean inViewOk = inViewConstraint == null
+                        || inViewConstraint.contains(topItem.getValue().naifId());
+                if (textOk && inViewOk) {
                     filteredRoot.getChildren().add(new TreeItem<>(topItem.getValue()));
                 }
             } else {
-                // Group node — include if group name matches or any child matches
-                boolean groupMatches = matchesFilter(topItem.getValue(), filter);
+                // Group node — include expanded if any child passes all constraints
+                boolean groupMatchesText = textFilter == null || matchesFilter(topItem.getValue(), textFilter);
                 List<TreeItem<BodyTreeEntry>> matchingChildren = new ArrayList<>();
                 for (TreeItem<BodyTreeEntry> child : topItem.getChildren()) {
-                    if (groupMatches || matchesFilter(child.getValue(), filter)) {
+                    boolean childTextOk = groupMatchesText || matchesFilter(child.getValue(), textFilter);
+                    boolean childInViewOk = inViewConstraint == null
+                            || inViewConstraint.contains(child.getValue().naifId());
+                    if (childTextOk && childInViewOk) {
                         matchingChildren.add(new TreeItem<>(child.getValue()));
                     }
                 }
@@ -692,7 +762,7 @@ public final class KepplrStatusWindow {
 
     // ── Script Output Panel ────────────────────────────────────────────────
 
-    private VBox buildScriptOutputPanel() {
+    private SplitPane buildScriptOutputPanel() {
         Label header = boldLabel("Script Console");
         header.setPadding(new Insets(4, 10, 2, 10));
 
@@ -701,6 +771,7 @@ public final class KepplrStatusWindow {
         consoleInput.setStyle("-fx-font-family: monospace; -fx-font-size: 11px;");
         consoleInput.setPrefRowCount(4);
         consoleInput.setWrapText(true);
+        VBox.setVgrow(consoleInput, Priority.ALWAYS);
         // Enter runs the console; Shift+Enter inserts a newline
         consoleInput.addEventFilter(KeyEvent.KEY_PRESSED, e -> {
             if (e.getCode() == KeyCode.ENTER) {
@@ -724,14 +795,17 @@ public final class KepplrStatusWindow {
         HBox buttonBar = new HBox(6, runButton, clearButton);
         buttonBar.setPadding(new Insets(0, 10, 0, 10));
 
+        VBox inputPane = new VBox(4, header, consoleInput, buttonBar);
+
         scriptOutputArea = new TextArea();
         scriptOutputArea.setEditable(false);
         scriptOutputArea.setWrapText(true);
         scriptOutputArea.setStyle("-fx-font-family: monospace; -fx-font-size: 10px;");
-        VBox.setVgrow(scriptOutputArea, Priority.ALWAYS);
 
-        VBox box = new VBox(4, header, consoleInput, buttonBar, scriptOutputArea);
-        return box;
+        SplitPane innerSplit = new SplitPane(inputPane, scriptOutputArea);
+        innerSplit.setOrientation(Orientation.VERTICAL);
+        innerSplit.setDividerPositions(0.35);
+        return innerSplit;
     }
 
     private void evaluateConsoleInput() {
@@ -850,18 +924,31 @@ public final class KepplrStatusWindow {
         }
     }
 
+    /**
+     * Called from the AnimationTimer (FX thread) to refresh the body tree and instruments menu after a configuration
+     * reload. The flag is set by {@link #signalConfigRefresh()} from any thread.
+     */
+    private void drainConfigRefresh() {
+        if (!pendingConfigRefresh) return;
+        pendingConfigRefresh = false;
+        populateBodyTree();
+        populateInstrumentsMenu();
+        if (labelsCheckItem != null) {
+            applyLabelVisibility(labelsCheckItem.isSelected());
+        }
+    }
+
     // ── Menu Bar ─────────────────────────────────────────────────────────────
 
     private MenuBar buildMenuBar() {
         Menu fileMenu = buildFileMenu();
-        Menu editMenu = buildEditMenu();
         Menu viewMenu = buildViewMenu();
         Menu timeMenu = buildTimeMenu();
         Menu overlaysMenu = buildOverlaysMenu();
         instrumentsMenu = buildInstrumentsMenu();
         Menu windowMenu = buildWindowMenu();
 
-        MenuBar bar = new MenuBar(fileMenu, editMenu, viewMenu, timeMenu, overlaysMenu, instrumentsMenu, windowMenu);
+        MenuBar bar = new MenuBar(fileMenu, viewMenu, timeMenu, overlaysMenu, instrumentsMenu, windowMenu);
         bar.setUseSystemMenuBar(false);
         return bar;
     }
@@ -874,15 +961,15 @@ public final class KepplrStatusWindow {
             chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("All Files", "*.*"));
             File file = chooser.showOpenDialog(stage);
             if (file != null) {
-                // Route through commands so CommandRecorder can capture the call when recording.
-                // DefaultSimulationCommands.loadConfiguration() handles the JME scene rebuild;
-                // we then refresh the UI tree on the FX thread after it returns.
-                commands.loadConfiguration(file.getAbsolutePath());
-                populateBodyTree();
-                populateInstrumentsMenu();
-                if (labelsCheckItem != null) {
-                    applyLabelVisibility(labelsCheckItem.isSelected());
-                }
+                // Run on a background thread so the FX thread is never blocked by the
+                // latch inside DefaultSimulationCommands.loadConfiguration().  The
+                // postReloadCallback wired by KepplrApp will call signalConfigRefresh()
+                // when the scene rebuild completes, and the AnimationTimer will then call
+                // populateBodyTree() / populateInstrumentsMenu() on the next FX frame.
+                String path = file.getAbsolutePath();
+                Thread loadThread = new Thread(() -> commands.loadConfiguration(path), "config-load");
+                loadThread.setDaemon(true);
+                loadThread.start();
             }
         });
 
@@ -997,6 +1084,37 @@ public final class KepplrStatusWindow {
         CustomMenuItem showLog = tipItem("Show Log", "Show the application log window");
         showLog.setOnAction(e -> logWindow.show());
 
+        CustomMenuItem copyState = tipItem("Copy State", "Copy the current simulation state to the clipboard");
+        copyState.setOnAction(e -> {
+            String stateString = commands.getStateString();
+            ClipboardContent content = new ClipboardContent();
+            content.putString(stateString);
+            Clipboard.getSystemClipboard().setContent(content);
+            logger.info("State string copied to clipboard ({} chars)", stateString.length());
+        });
+
+        CustomMenuItem pasteState = tipItem("Paste State", "Restore simulation state from the clipboard");
+        pasteState.setOnAction(e -> {
+            String text = Clipboard.getSystemClipboard().getString();
+            if (text == null || text.isBlank()) {
+                Alert warn = new Alert(Alert.AlertType.WARNING, "Clipboard is empty.", ButtonType.OK);
+                warn.setTitle("Paste State");
+                warn.setHeaderText(null);
+                warn.showAndWait();
+                return;
+            }
+            try {
+                commands.setStateString(text.strip());
+                logger.info("State restored from clipboard");
+            } catch (IllegalArgumentException ex) {
+                Alert warn =
+                        new Alert(Alert.AlertType.WARNING, "Invalid state string: " + ex.getMessage(), ButtonType.OK);
+                warn.setTitle("Paste State");
+                warn.setHeaderText(null);
+                warn.showAndWait();
+            }
+        });
+
         return new Menu(
                 "File",
                 null,
@@ -1007,6 +1125,9 @@ public final class KepplrStatusWindow {
                 new SeparatorMenuItem(),
                 saveScreenshot,
                 captureSeq,
+                new SeparatorMenuItem(),
+                copyState,
+                pasteState,
                 new SeparatorMenuItem(),
                 showLog,
                 new SeparatorMenuItem(),
@@ -1129,41 +1250,6 @@ public final class KepplrStatusWindow {
         thread.setDaemon(true);
         captureSequenceThread = thread;
         thread.start();
-    }
-
-    private Menu buildEditMenu() {
-        CustomMenuItem copyState = tipItem("Copy State", "Copy the current simulation state to the clipboard");
-        copyState.setOnAction(e -> {
-            String stateString = commands.getStateString();
-            ClipboardContent content = new ClipboardContent();
-            content.putString(stateString);
-            Clipboard.getSystemClipboard().setContent(content);
-            logger.info("State string copied to clipboard ({} chars)", stateString.length());
-        });
-
-        CustomMenuItem pasteState = tipItem("Paste State", "Restore simulation state from the clipboard");
-        pasteState.setOnAction(e -> {
-            String text = Clipboard.getSystemClipboard().getString();
-            if (text == null || text.isBlank()) {
-                Alert warn = new Alert(Alert.AlertType.WARNING, "Clipboard is empty.", ButtonType.OK);
-                warn.setTitle("Paste State");
-                warn.setHeaderText(null);
-                warn.showAndWait();
-                return;
-            }
-            try {
-                commands.setStateString(text.strip());
-                logger.info("State restored from clipboard");
-            } catch (IllegalArgumentException ex) {
-                Alert warn =
-                        new Alert(Alert.AlertType.WARNING, "Invalid state string: " + ex.getMessage(), ButtonType.OK);
-                warn.setTitle("Paste State");
-                warn.setHeaderText(null);
-                warn.showAndWait();
-            }
-        });
-
-        return new Menu("Edit", null, copyState, pasteState);
     }
 
     private Menu buildViewMenu() {

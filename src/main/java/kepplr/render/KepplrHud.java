@@ -201,18 +201,25 @@ public final class KepplrHud {
         }
     }
 
-    /** Format distance with appropriate units (km, AU, or scientific notation). */
+    /** Format distance with appropriate units (m, km, or AU). Matches SimulationStateFxBridge.formatDistance. */
     static String formatDistance(double km) {
-        if (km < 1e6) {
-            return String.format("%.0f km", km);
-        } else if (km < 1.496e8 * 10) {
-            // Under 10 AU, show AU
-            double au = km / 1.496e8;
-            return String.format("%.3f AU", au);
-        } else {
-            double au = km / 1.496e8;
-            return String.format("%.1f AU", au);
+        if (km < KepplrConstants.DISTANCE_DISPLAY_M_THRESHOLD_KM) {
+            double metres = km * 1000.0;
+            if (metres < 0.1) {
+                return String.format("%.3f m", metres);
+            }
+            return String.format("%.1f m", metres);
         }
+
+        double au = km / KepplrConstants.KM_PER_AU;
+        if (au >= KepplrConstants.DISTANCE_DISPLAY_AU_THRESHOLD_AU) {
+            return String.format("%.4f AU", au);
+        }
+
+        if (km < 1000.0) {
+            return String.format("%.2f km", km);
+        }
+        return String.format("%.3e km", km);
     }
 
     private static String formatEt(double et) {

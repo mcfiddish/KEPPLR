@@ -18,7 +18,7 @@ import picante.math.vectorspace.VectorIJK;
  * causing the camera to co-rotate with the focus→selected direction. From the camera's perspective, the selected body
  * remains at a fixed screen position.
  *
- * <p>Effective-target rule: if {@code targetId == -1} or {@code targetId == focusId}, NAIF 10 (Sun) is used as the
+ * <p>Effective-target rule: if {@code selectedId == -1} or {@code selectedId == focusId}, NAIF 10 (Sun) is used as the
  * effective synodic target.
  *
  * <p>Implementation note: the synodic basis is stored as a {@code double[3][3]} defensive copy (row = axis index, col =
@@ -43,8 +43,8 @@ public class SynodicFrameApplier {
     /** Focus NAIF ID for which {@link #prevBasis} was computed; -1 if unknown. */
     private int prevFocusId = -1;
 
-    /** Effective target NAIF ID for which {@link #prevBasis} was computed; -1 if unknown. */
-    private int prevEffectiveTargetId = -1;
+    /** Effective selected NAIF ID for which {@link #prevBasis} was computed; -1 if unknown. */
+    private int prevEffectiveSelectedId = -1;
 
     /**
      * Apply one frame of synodic co-rotation.
@@ -54,24 +54,25 @@ public class SynodicFrameApplier {
      * @param cameraHelioJ2000 current camera heliocentric J2000 position in km (length 3; not modified)
      * @param camOrientation current camera orientation quaternion
      * @param focusId NAIF ID of the focused body, or -1 if none
-     * @param targetId NAIF ID of the selected body, or -1 if none
+     * @param selectedId NAIF ID of the selected body, or -1 if none
      * @param et current simulation ET
      * @return updated pose and fallback flag
      */
     public ApplyResult apply(
-            double[] cameraHelioJ2000, Quaternion camOrientation, int focusId, int targetId, double et) {
+            double[] cameraHelioJ2000, Quaternion camOrientation, int focusId, int selectedId, double et) {
         if (focusId == -1) {
             return fallback(cameraHelioJ2000, camOrientation);
         }
 
-        int effectiveTargetId = (targetId == -1 || targetId == focusId) ? KepplrConstants.SUN_NAIF_ID : targetId;
+        int effectiveSelectedId =
+                (selectedId == -1 || selectedId == focusId) ? KepplrConstants.SUN_NAIF_ID : selectedId;
 
-        SynodicFrame.Basis basis = SynodicFrame.compute(focusId, effectiveTargetId, et);
+        SynodicFrame.Basis basis = SynodicFrame.compute(focusId, effectiveSelectedId, et);
         if (basis == null) {
             logger.warn(
                     "SynodicFrame.compute({}, {}, {}) returned null — falling back to INERTIAL",
                     focusId,
-                    effectiveTargetId,
+                    effectiveSelectedId,
                     et);
             return fallback(cameraHelioJ2000, camOrientation);
         }
@@ -79,10 +80,10 @@ public class SynodicFrameApplier {
         double[][] curr = basisToMatrix(basis);
 
         // Reset on focus or effective-target change
-        if (prevFocusId != focusId || prevEffectiveTargetId != effectiveTargetId) {
+        if (prevFocusId != focusId || prevEffectiveSelectedId != effectiveSelectedId) {
             prevBasis = null;
             prevFocusId = focusId;
-            prevEffectiveTargetId = effectiveTargetId;
+            prevEffectiveSelectedId = effectiveSelectedId;
         }
 
         // First frame for this focus/target pair — store basis and return unchanged pose
@@ -151,7 +152,7 @@ public class SynodicFrameApplier {
     public void reset() {
         prevBasis = null;
         prevFocusId = -1;
-        prevEffectiveTargetId = -1;
+        prevEffectiveSelectedId = -1;
     }
 
     // ── Private helpers ───────────────────────────────────────────────────────

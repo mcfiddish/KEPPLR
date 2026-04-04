@@ -19,6 +19,7 @@ import kepplr.state.StateSnapshotCodec;
 import kepplr.util.KepplrConstants;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import picante.math.vectorspace.VectorIJK;
 
 /**
  * Concrete implementation of {@link SimulationCommands} that applies state-transition rules directly to a
@@ -53,6 +54,21 @@ public final class DefaultSimulationCommands implements SimulationCommands {
      * rebuild finishes. Set by {@code KepplrApp} after construction; {@code null} in unit tests.
      */
     private Consumer<CountDownLatch> sceneRebuildCallback;
+
+    /**
+     * Called on the caller's thread after {@link #loadConfiguration} completes (whether via the scene-rebuild latch or
+     * timeout). Used to notify the UI to refresh the body tree and instruments menu. Set by {@code KepplrApp};
+     * {@code null} in unit tests.
+     */
+    private Runnable postReloadCallback;
+
+    /**
+     * When {@code true}, {@link #setStateString} creates a {@link CountDownLatch} embedded in the
+     * {@link DefaultSimulationState.PendingCameraRestore} and blocks until the JME render thread counts it down after
+     * fully applying the restore. Set to {@code true} by {@code KepplrApp} after construction; left {@code false} in
+     * unit tests (where no JME thread is running to count down the latch).
+     */
+    private boolean restoreSyncEnabled = false;
 
     /**
      * Accepts an output path and a {@link CountDownLatch}, enqueues a JME-thread framebuffer capture, and counts the
@@ -189,7 +205,7 @@ public final class DefaultSimulationCommands implements SimulationCommands {
     @Override
     public void setSynodicFrame(int focusNaifId, int targetNaifId) {
         state.setSynodicFrameFocusId(focusNaifId);
-        state.setSynodicFrameTargetId(targetNaifId);
+        state.setSynodicFrameSelectedId(targetNaifId);
         state.setCameraFrame(CameraFrame.SYNODIC);
     }
 
@@ -229,12 +245,17 @@ public final class DefaultSimulationCommands implements SimulationCommands {
 
     /**
      * Switch the active camera frame (§1.5). Clears synodic frame override IDs so the frame reverts to using
-     * interaction state for focus/target.
+     * interaction state for focus/selected.
      */
     @Override
     public void setCameraFrame(CameraFrame frame) {
-        state.setSynodicFrameFocusId(-1);
-        state.setSynodicFrameTargetId(-1);
+        if (frame == CameraFrame.SYNODIC) {
+            state.setSynodicFrameFocusId(state.focusedBodyIdProperty().get());
+            state.setSynodicFrameSelectedId(state.selectedBodyIdProperty().get());
+        } else {
+            state.setSynodicFrameFocusId(-1);
+            state.setSynodicFrameSelectedId(-1);
+        }
         state.setCameraFrame(frame);
     }
 
@@ -299,7 +320,50 @@ public final class DefaultSimulationCommands implements SimulationCommands {
 
     @Override
     public String getStateString() {
-        return StateSnapshotCodec.encode(StateSnapshot.capture(state));
+        double et = state.currentEtProperty().get();
+        double[] camPos = state.cameraPositionJ2000Property().get();
+        float[] camOrient = state.cameraOrientationJ2000Property().get();
+        int focusId = state.focusedBodyIdProperty().get();
+
+        // Store camera position relative to the focused body so that restoration places the camera
+        // at the same apparent position near the body, even when time has advanced between capture
+        // and restore (the camera is parked in J2000 after a goTo; the body moves, but the offset
+        // from the body at the snapshot ET is preserved).
+        double[] posToEncode;
+        boolean relativeToFocus = false;
+        double[] safeCamPos = camPos != null ? camPos : new double[3];
+
+        if (focusId != -1) {
+            VectorIJK bodyPos =
+                    KEPPLRConfiguration.getInstance().getEphemeris().getHeliocentricPositionJ2000(focusId, et);
+            if (bodyPos != null) {
+                posToEncode = new double[] {
+                    safeCamPos[0] - bodyPos.getI(), safeCamPos[1] - bodyPos.getJ(), safeCamPos[2] - bodyPos.getK()
+                };
+                relativeToFocus = true;
+            } else {
+                posToEncode = safeCamPos.clone();
+            }
+        } else {
+            posToEncode = safeCamPos.clone();
+        }
+
+        float[] safeOrient = camOrient != null ? camOrient.clone() : new float[] {0f, 0f, 0f, 1f};
+
+        StateSnapshot snap = new StateSnapshot(
+                et,
+                state.timeRateProperty().get(),
+                state.pausedProperty().get(),
+                posToEncode,
+                safeOrient,
+                state.cameraFrameProperty().get(),
+                focusId,
+                state.targetedBodyIdProperty().get(),
+                state.selectedBodyIdProperty().get(),
+                state.fovDegProperty().get(),
+                relativeToFocus);
+
+        return StateSnapshotCodec.encode(snap);
     }
 
     @Override
@@ -314,17 +378,68 @@ public final class DefaultSimulationCommands implements SimulationCommands {
         // Restore camera frame
         state.setCameraFrame(snap.cameraFrame());
 
-        // Restore time state via clock (atomic anchor replacement, no ET jump artifacts)
+        // Restore time state via clock (atomic anchor replacement, no ET jump artifacts).
+        // Paused flag is intentionally NOT restored: callers that explicitly paused the simulation
+        // (e.g. a scripted slideshow) should not have their pause state overridden by the snapshot.
         clock.setET(snap.et());
         clock.setTimeRate(snap.timeRate());
-        clock.setPaused(snap.paused());
 
         // Cancel any in-progress transitions before restoring camera
         transitionController.requestCancel();
 
-        // Post camera restore for the JME thread (position, orientation, FOV)
+        // Resolve camera position: body-relative offset → absolute J2000
+        double[] camPosAbsolute;
+        double followDist = -1;
+        if (snap.camPosRelativeToFocus() && snap.focusedBodyId() != -1) {
+            VectorIJK bodyPos = KEPPLRConfiguration.getInstance()
+                    .getEphemeris()
+                    .getHeliocentricPositionJ2000(snap.focusedBodyId(), snap.et());
+            if (bodyPos != null) {
+                double[] off = snap.camPosJ2000();
+                camPosAbsolute =
+                        new double[] {bodyPos.getI() + off[0], bodyPos.getJ() + off[1], bodyPos.getK() + off[2]};
+                // Preserve the follow distance so body-following is re-established after restore
+                followDist = Math.sqrt(off[0] * off[0] + off[1] * off[1] + off[2] * off[2]);
+            } else {
+                // Focused body unavailable at snap ET — use the stored offset as-is
+                camPosAbsolute = snap.camPosJ2000().clone();
+            }
+        } else {
+            camPosAbsolute = snap.camPosJ2000().clone();
+        }
+
+        // Embed a latch in the restore record so the JME thread can signal completion.
+        // The latch travels with the record: the JME thread counts it down at the end of the
+        // simpleUpdate() that consumes the restore, after all state properties are written.
+        // This eliminates the race where a separately-stored latch could be counted down in a frame
+        // that ran before PendingCameraRestore was even posted.
+        CountDownLatch restoreDone = restoreSyncEnabled ? new CountDownLatch(1) : null;
+
+        // Post camera restore for the JME thread (position, orientation, FOV, latch)
         state.setPendingCameraRestore(new DefaultSimulationState.PendingCameraRestore(
-                snap.camPosJ2000().clone(), snap.camOrientJ2000().clone(), snap.fovDeg()));
+                camPosAbsolute, snap.camOrientJ2000().clone(), snap.fovDeg(), restoreDone));
+
+        // Re-establish body-following so the camera continues to track the focused body after restore.
+        // Queued after requestCancel so the follow state is set once cancellation is processed.
+        if (followDist > 0) {
+            transitionController.requestFollow(snap.focusedBodyId(), followDist);
+        }
+
+        // Block the script thread until the JME render thread has consumed the restore and updated
+        // all state properties (currentEtProperty, cameraBodyFixedSphericalProperty, etc.).
+        if (restoreDone != null) {
+            try {
+                boolean done = restoreDone.await(KepplrConstants.CONFIG_RELOAD_TIMEOUT_SEC, TimeUnit.SECONDS);
+                if (!done) {
+                    logger.warn(
+                            "setStateString: camera restore did not complete within {} s",
+                            KepplrConstants.CONFIG_RELOAD_TIMEOUT_SEC);
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                logger.warn("setStateString: interrupted while waiting for camera restore");
+            }
+        }
     }
 
     // ── Screenshot capture (Step 25) ──────────────────────────────────────────
@@ -395,7 +510,42 @@ public final class DefaultSimulationCommands implements SimulationCommands {
     }
 
     /**
-     * Reload the configuration from {@code path} and block until the JME scene rebuild completes (Step 27).
+     * Enable synchronous camera restore in {@link #setStateString}.
+     *
+     * <p>When enabled, {@code setStateString} embeds a {@link CountDownLatch} in the
+     * {@link DefaultSimulationState.PendingCameraRestore} and blocks the calling thread until the JME render thread
+     * counts it down after fully applying the restore. This guarantees that all state properties (ET, camera position,
+     * body-fixed spherical, orientation, FOV) reflect the restored snapshot before the script thread resumes.
+     *
+     * <p>Disabled by default so that unit tests — which have no JME thread to count down the latch — are unaffected.
+     * Called by {@code KepplrApp} after construction.
+     *
+     * @param enabled {@code true} to block until the JME thread applies the restore; {@code false} (default) for
+     *     fire-and-forget (tests only)
+     */
+    public void setRestoreSyncEnabled(boolean enabled) {
+        this.restoreSyncEnabled = enabled;
+    }
+
+    /**
+     * Set the callback invoked after {@link #loadConfiguration} completes.
+     *
+     * <p>Called on whichever thread invoked {@code loadConfiguration} (script thread, background thread, etc.). The
+     * implementation must be thread-safe. In practice this callback sets a volatile flag that the JavaFX
+     * {@code AnimationTimer} polls to refresh the body tree on the FX thread.
+     *
+     * @param callback the post-reload notification; may be null
+     */
+    public void setPostReloadCallback(Runnable callback) {
+        this.postReloadCallback = callback;
+    }
+
+    /**
+     * Reload the configuration from {@code path} and block until the first full {@code simpleUpdate()} with the new
+     * configuration completes (Step 27).
+     *
+     * <p>This ensures that body positions are computed for the new scene before the script thread resumes, so
+     * subsequent commands like {@code focusBody()} can immediately queue transitions against valid body positions.
      *
      * <p>If {@link KEPPLRConfiguration#reload} throws for any reason (file not found, parse error, etc.) the error is
      * logged and this method returns immediately — no rebuild is enqueued and the previous configuration remains
@@ -431,6 +581,10 @@ public final class DefaultSimulationCommands implements SimulationCommands {
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             logger.warn("loadConfiguration: interrupted while waiting for scene rebuild");
+        }
+
+        if (postReloadCallback != null) {
+            postReloadCallback.run();
         }
     }
 

@@ -245,14 +245,14 @@ public final class CameraInputHandler implements ActionListener, AnalogListener,
 
             case TILT_UP -> {
                 if (!shiftDown) {
-                    double degrees = -Math.toDegrees(value * KepplrConstants.CAMERA_KEYBOARD_ROTATE_RATE_RAD_PER_SEC);
+                    double degrees = Math.toDegrees(value * KepplrConstants.CAMERA_KEYBOARD_ROTATE_RATE_RAD_PER_SEC);
                     commands.tilt(degrees, 0);
                     manualNavigationThisFrame = true;
                 }
             }
             case TILT_DOWN -> {
                 if (!shiftDown) {
-                    double degrees = Math.toDegrees(value * KepplrConstants.CAMERA_KEYBOARD_ROTATE_RATE_RAD_PER_SEC);
+                    double degrees = -Math.toDegrees(value * KepplrConstants.CAMERA_KEYBOARD_ROTATE_RATE_RAD_PER_SEC);
                     commands.tilt(degrees, 0);
                     manualNavigationThisFrame = true;
                 }
@@ -367,28 +367,6 @@ public final class CameraInputHandler implements ActionListener, AnalogListener,
         if (!evt.isPressed() || commands == null) return;
 
         switch (evt.getKeyCode()) {
-            case KeyInput.KEY_G -> {
-                // G — goTo focused body
-                int focusId = state.focusedBodyIdProperty().get();
-                if (focusId != -1) {
-                    commands.goTo(
-                            focusId,
-                            KepplrConstants.DEFAULT_GOTO_APPARENT_RADIUS_DEG,
-                            KepplrConstants.DEFAULT_GOTO_DURATION_SECONDS);
-                }
-            }
-            case KeyInput.KEY_F -> {
-                // F — toggle camera frame between SYNODIC and INERTIAL (§4.6)
-                CameraFrame current = state.cameraFrameProperty().get();
-                commands.setCameraFrame(current == CameraFrame.SYNODIC ? CameraFrame.INERTIAL : CameraFrame.SYNODIC);
-            }
-            case KeyInput.KEY_T -> {
-                // T — target selected body
-                int selectedId = state.selectedBodyIdProperty().get();
-                if (selectedId != -1) {
-                    commands.targetBody(selectedId);
-                }
-            }
             case KeyInput.KEY_SPACE ->
                 commands.setPaused(!state.pausedProperty().get());
             case KeyInput.KEY_LBRACKET -> {
@@ -442,6 +420,18 @@ public final class CameraInputHandler implements ActionListener, AnalogListener,
             commands.orbit(rightDeg, upDeg, 0);
             manualNavigationThisFrame = true;
         }
+    }
+
+    /**
+     * Resets the focus-tracking anchor so that {@link #applyFocusTracking()} skips the delta on the next frame.
+     *
+     * <p>Called from {@code KepplrApp.simpleUpdate()} immediately after consuming a {@code PendingCameraRestore}: the
+     * ET jump between the previous frame and the restored ET would otherwise cause {@code applyFocusTracking()} to
+     * apply a large spurious displacement (the focus body's motion over the elapsed simulation time) to the freshly
+     * restored camera position.
+     */
+    public void resetFocusTrackingAnchor() {
+        prevFocusPos = null;
     }
 
     /**

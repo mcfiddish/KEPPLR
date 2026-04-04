@@ -166,6 +166,14 @@ public class KepplrApp extends SimpleApplication {
 
     private volatile PendingCapture pendingCapture;
 
+    // ── Post-rebuild latch (Step 27 fix) ─────────────────────────────────────────────────────
+    // When loadConfiguration() triggers a scene rebuild, the latch is stored here (by the
+    // enqueued callable) and counted down at the END of simpleUpdate() — guaranteeing that the
+    // first full update cycle with the new configuration has completed before the script thread
+    // unblocks.  Without this, the script thread could queue transitions against bodies whose
+    // positions have not yet been computed in the new scene.
+    private volatile java.util.concurrent.CountDownLatch postRebuildLatch;
+
     @Override
     public void simpleInitApp() {
         setLostFocusBehavior(LostFocusBehavior.Disabled);
@@ -201,12 +209,18 @@ public class KepplrApp extends SimpleApplication {
         DefaultSimulationCommands commands =
                 new DefaultSimulationCommands(simulationState, simulationClock, transitionController);
         // Wire the scene rebuild callback so loadConfiguration() can block the script thread
-        // until rebuildBodyScene() finishes on the JME render thread.
+        // until the first full simpleUpdate() after rebuildBodyScene() completes.  The latch is
+        // stored in postRebuildLatch and counted down at the end of simpleUpdate(), ensuring body
+        // positions are computed before the script thread resumes.
         commands.setSceneRebuildCallback(latch -> enqueue(() -> {
             rebuildBodyScene();
-            latch.countDown();
+            postRebuildLatch = latch;
             return null;
         }));
+        // Enable synchronous restore: setStateString() will embed a latch in PendingCameraRestore
+        // and block until simpleUpdate() counts it down after applying the restore and updating
+        // all state properties.
+        commands.setRestoreSyncEnabled(true);
         // Wire the screenshot callback: store a pending capture that will be processed after the
         // render pass completes (see update() override). This ensures the framebuffer reflects the
         // current frame's scene graph, including focus-body tracking from simpleUpdate().
@@ -237,7 +251,10 @@ public class KepplrApp extends SimpleApplication {
                     GLFW.glfwSetWindowSize(glfwWindowHandle, w, h);
                 }
             }));
-            statusWindow.setConfigReloadCallback(() -> appRef.enqueue(appRef::rebuildBodyScene));
+            // Wire the post-reload notification: after loadConfiguration() finishes the JME scene
+            // rebuild (from either a script or the File menu), signal the status window to refresh
+            // the body tree and instruments menu on the next animation frame.
+            commands.setPostReloadCallback(statusWindow::signalConfigRefresh);
             statusWindow.setScriptRunner(scriptRunner);
             statusWindow.setCommandRecorder(recorder);
             statusWindow.show();
@@ -384,8 +401,11 @@ public class KepplrApp extends SimpleApplication {
 
         simulationClock.advance();
 
-        // Apply pending camera restore from setStateString() (Step 26)
+        // Apply pending camera restore from setStateString() (Step 26).
+        // Save the latch (if any) — it is counted down at the END of this frame, after all state
+        // properties have been written, so setStateString() sees consistent values when it unblocks.
         DefaultSimulationState.PendingCameraRestore restore = simulationState.consumePendingCameraRestore();
+        java.util.concurrent.CountDownLatch restoreLatch = null;
         if (restore != null) {
             cameraHelioJ2000[0] = restore.posJ2000()[0];
             cameraHelioJ2000[1] = restore.posJ2000()[1];
@@ -395,6 +415,12 @@ public class KepplrApp extends SimpleApplication {
                     restore.orientJ2000()[2], restore.orientJ2000()[3]));
             cam.setFov((float)
                     Math.max(KepplrConstants.FOV_MIN_DEG, Math.min(restore.fovDeg(), KepplrConstants.FOV_MAX_DEG)));
+            restoreLatch = restore.restoreDone();
+            // Reset focus-tracking anchor so applyFocusTracking() skips the delta this frame.
+            // The ET jumps to the snapshot's ET, so prevFocusPos (from the last frame at the
+            // prior ET) would otherwise cause a large spurious displacement equal to the focus
+            // body's motion over the elapsed simulation time.
+            cameraInputHandler.resetFocusTrackingAnchor();
         }
 
         try {
@@ -428,16 +454,17 @@ public class KepplrApp extends SimpleApplication {
             bodyFixedFrame.reset();
             // Step 19c: synodic frame override IDs take precedence over interaction state
             int synodicFocus = simulationState.synodicFrameFocusIdProperty().get();
-            int synodicTarget = simulationState.synodicFrameTargetIdProperty().get();
+            int synodicSelected =
+                    simulationState.synodicFrameSelectedIdProperty().get();
             int focusId = (synodicFocus != -1)
                     ? synodicFocus
                     : simulationState.focusedBodyIdProperty().get();
-            int targetId = (synodicTarget != -1)
-                    ? synodicTarget
+            int selectedId = (synodicSelected != -1)
+                    ? synodicSelected
                     : simulationState.selectedBodyIdProperty().get();
             double et = simulationState.currentEtProperty().get();
             SynodicFrameApplier.ApplyResult sr =
-                    synodicFrameApplier.apply(cameraHelioJ2000, cam.getRotation(), focusId, targetId, et);
+                    synodicFrameApplier.apply(cameraHelioJ2000, cam.getRotation(), focusId, selectedId, et);
             cameraHelioJ2000[0] = sr.newCamHelioJ2000()[0];
             cameraHelioJ2000[1] = sr.newCamHelioJ2000()[1];
             cameraHelioJ2000[2] = sr.newCamHelioJ2000()[2];
@@ -521,6 +548,20 @@ public class KepplrApp extends SimpleApplication {
         farNode.updateGeometricState();
         midNode.updateGeometricState();
         nearNode.updateGeometricState();
+
+        // Signal loadConfiguration() that the first full update with the new config is done
+        java.util.concurrent.CountDownLatch rebuildLatch = postRebuildLatch;
+        if (rebuildLatch != null) {
+            postRebuildLatch = null;
+            rebuildLatch.countDown();
+        }
+
+        // Signal setStateString() that the restore has been fully applied: ET advanced by advance(),
+        // camera position set by PendingCameraRestore, body-following adjusted by transitionController,
+        // and all state properties (cameraPositionJ2000, cameraBodyFixedSpherical, etc.) written above.
+        if (restoreLatch != null) {
+            restoreLatch.countDown();
+        }
     }
 
     @Override
@@ -726,19 +767,22 @@ public class KepplrApp extends SimpleApplication {
      * Rebuild all render managers after a configuration reload. Must run on the JME render thread.
      *
      * <p>A config reload is treated as an application restart: all managers that hold scene-graph state are disposed
-     * and reconstructed from scratch. {@link VectorManager} and {@link StarFieldManager} are reconstructed without a
-     * separate dispose step because they detach all geometry on every {@link #simpleUpdate} call and hold no persistent
-     * scene nodes. {@code activeTrailIds} and {@code activeVectorDefs} are cleared so the next
-     * {@link #syncTrails}/{@link #syncVectors} call rebuilds them from the current state.
+     * and reconstructed from scratch. {@code activeTrailIds} and {@code activeVectorDefs} are cleared so the next
+     * {@link #syncTrails}/{@link #syncVectors} call rebuilds them from the current state. Overlay visibility state is
+     * also cleared so scripts start with a clean slate.
      */
     private void rebuildBodyScene() {
         // Tear down managers that hold persistent scene-graph state
         bodySceneManager.dispose();
         trailManager.dispose();
+        vectorManager.dispose();
+        starFieldManager.dispose();
         sunHaloRenderer.dispose();
         labelManager.dispose();
         activeTrailIds.clear();
         activeVectorDefs.clear();
+        // Clear overlay visibility state so scripts start with a clean slate
+        simulationState.clearOverlayState();
 
         // Clear the asset cache so GLB shape models and textures are reloaded from disk
         // rather than served from the stale cache left by the previous configuration.

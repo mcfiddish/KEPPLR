@@ -175,6 +175,9 @@ public class BodySceneManager {
             RotationMatrixIJK rotation = null;
             if (decision == CullDecision.DRAW_FULL) {
                 rotation = eph.getJ2000ToBodyFixedRotation(bodyId, et);
+                if (rotation == null) {
+                    decision = CullDecision.DRAW_SPRITE;
+                }
             }
 
             frames.add(new BodyFrame(bodyId, naifId, dx, dy, dz, dist, bodyRadius, decision, rotation));

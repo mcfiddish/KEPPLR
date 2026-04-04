@@ -84,6 +84,40 @@ class VectorTypesTest {
         }
 
         @Test
+        @DisplayName("satellite velocity is relative to barycenter, not heliocentric")
+        void satelliteVelocityIsRelativeToBarycenter() {
+            KEPPLREphemeris eph = KEPPLRConfiguration.getInstance().getEphemeris();
+
+            // Moon (301) is a satellite — barycenter is 3 (Earth-Moon system)
+            StateVector moonState = eph.getHeliocentricStateJ2000(MOON, et);
+            StateVector baryState = eph.getHeliocentricStateJ2000(MOON / 100, et);
+            assertNotNull(moonState);
+            assertNotNull(baryState);
+
+            // Expected: barycenter-relative velocity, normalized
+            VectorIJK moonVel = moonState.getVelocity();
+            VectorIJK baryVel = baryState.getVelocity();
+            double rx = moonVel.getI() - baryVel.getI();
+            double ry = moonVel.getJ() - baryVel.getJ();
+            double rz = moonVel.getK() - baryVel.getK();
+            double len = Math.sqrt(rx * rx + ry * ry + rz * rz);
+            double ex = rx / len;
+            double ey = ry / len;
+            double ez = rz / len;
+
+            VectorIJK dir = VectorTypes.velocity().computeDirection(MOON, et);
+            assertNotNull(dir, "velocity() must return non-null for Moon at the test epoch");
+            assertEquals(1.0, dir.getLength(), UNIT_LENGTH_TOL, "velocity direction must be a unit vector");
+
+            double dot = dir.getI() * ex + dir.getJ() * ey + dir.getK() * ez;
+            assertEquals(
+                    1.0,
+                    dot,
+                    DIRECTION_TOL,
+                    "Moon velocity direction must match barycenter-relative velocity, not heliocentric");
+        }
+
+        @Test
         @DisplayName("returns null for a body not in the SPK")
         void returnsNullForUnknownBody() {
             VectorIJK dir = VectorTypes.velocity().computeDirection(-999999, et);

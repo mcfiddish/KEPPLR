@@ -56,7 +56,7 @@ public final class DefaultSimulationState implements SimulationState {
     // ── Synodic frame overrides (Step 19c) ──
 
     private final SimpleIntegerProperty synodicFrameFocusId = new SimpleIntegerProperty(-1);
-    private final SimpleIntegerProperty synodicFrameTargetId = new SimpleIntegerProperty(-1);
+    private final SimpleIntegerProperty synodicFrameSelectedId = new SimpleIntegerProperty(-1);
 
     // ── Render state (§7.3, §10.2) ──
 
@@ -95,8 +95,17 @@ public final class DefaultSimulationState implements SimulationState {
 
     // ── HUD message (Step 28) ──
 
-    /** An immutable snapshot of a pending camera restore from a state string (Step 26). */
-    public record PendingCameraRestore(double[] posJ2000, float[] orientJ2000, double fovDeg) {}
+    /**
+     * An immutable snapshot of a pending camera restore from a state string (Step 26).
+     *
+     * @param posJ2000 absolute heliocentric J2000 camera position in km [x, y, z]
+     * @param orientJ2000 camera orientation quaternion [x, y, z, w]
+     * @param fovDeg camera field of view in degrees
+     * @param restoreDone optional latch to count down after the restore is applied and all state properties have been
+     *     updated; {@code null} when no synchronisation is needed (e.g. tests)
+     */
+    public record PendingCameraRestore(
+            double[] posJ2000, float[] orientJ2000, double fovDeg, java.util.concurrent.CountDownLatch restoreDone) {}
 
     private final AtomicReference<PendingCameraRestore> pendingCameraRestore = new AtomicReference<>();
 
@@ -211,8 +220,8 @@ public final class DefaultSimulationState implements SimulationState {
     }
 
     @Override
-    public ReadOnlyIntegerProperty synodicFrameTargetIdProperty() {
-        return synodicFrameTargetId;
+    public ReadOnlyIntegerProperty synodicFrameSelectedIdProperty() {
+        return synodicFrameSelectedId;
     }
 
     @Override
@@ -335,8 +344,8 @@ public final class DefaultSimulationState implements SimulationState {
     }
 
     /** Set the explicit synodic frame target NAIF ID, or -1 to use interaction state (Step 19c). */
-    public void setSynodicFrameTargetId(int id) {
-        synodicFrameTargetId.set(id);
+    public void setSynodicFrameSelectedId(int id) {
+        synodicFrameSelectedId.set(id);
     }
 
     /** Set the render quality preset (§9.4). */
@@ -492,5 +501,24 @@ public final class DefaultSimulationState implements SimulationState {
     /** Returns the body visibility map. */
     public ConcurrentHashMap<Integer, SimpleBooleanProperty> getBodyVisibilityMap() {
         return bodyVisibility;
+    }
+
+    /**
+     * Clear all overlay visibility state — labels, trails, trail durations, vectors, frustums, and body visibility.
+     *
+     * <p>Called during configuration reload to give scripts a clean slate. After clearing, barycenters (NAIF 0–9) are
+     * re-hidden by default.
+     */
+    public void clearOverlayState() {
+        labelVisibility.clear();
+        trailVisibility.clear();
+        trailDuration.clear();
+        vectorVisibility.clear();
+        frustumVisibility.clear();
+        bodyVisibility.clear();
+        // Restore default: barycenters hidden
+        for (int i = 0; i <= 9; i++) {
+            bodyVisibility.put(i, new SimpleBooleanProperty(false));
+        }
     }
 }

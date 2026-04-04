@@ -287,7 +287,7 @@ class DefaultSimulationCommandsTest {
             commands.setSynodicFrame(EARTH, MOON);
 
             assertEquals(EARTH, state.synodicFrameFocusIdProperty().get(), "synodic focus override");
-            assertEquals(MOON, state.synodicFrameTargetIdProperty().get(), "synodic target override");
+            assertEquals(MOON, state.synodicFrameSelectedIdProperty().get(), "synodic selected override");
             assertEquals(CameraFrame.SYNODIC, state.cameraFrameProperty().get(), "frame should be SYNODIC");
             // Interaction state untouched
             assertEquals(SUN, state.selectedBodyIdProperty().get(), "selected should not change");
@@ -304,7 +304,7 @@ class DefaultSimulationCommandsTest {
             commands.setCameraFrame(CameraFrame.INERTIAL);
 
             assertEquals(-1, state.synodicFrameFocusIdProperty().get(), "override focus should be cleared");
-            assertEquals(-1, state.synodicFrameTargetIdProperty().get(), "override target should be cleared");
+            assertEquals(-1, state.synodicFrameSelectedIdProperty().get(), "override selected should be cleared");
         }
     }
 
@@ -478,17 +478,21 @@ class DefaultSimulationCommandsTest {
         }
 
         @Test
-        @DisplayName("setStateString restores time state")
+        @DisplayName("setStateString restores time rate but not paused flag")
         void setStateStringRestoresTimeState() {
             clock.setTimeRate(100.0);
             clock.setPaused(true);
             String snapshot = commands.getStateString();
 
             clock.setTimeRate(1.0);
+            // Explicitly unpause so we can verify the paused flag is NOT overridden
             clock.setPaused(false);
             commands.setStateString(snapshot);
             assertEquals(100.0, state.timeRateProperty().get());
-            assertTrue(state.pausedProperty().get());
+            // Paused flag is intentionally not restored — the caller's pause state takes precedence
+            assertFalse(
+                    state.pausedProperty().get(),
+                    "setStateString must not restore paused flag; caller controls pause state");
         }
 
         @Test

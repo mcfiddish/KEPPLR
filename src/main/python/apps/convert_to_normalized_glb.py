@@ -34,24 +34,17 @@ metadata quaternion into the exported GLB at:
 This quaternion maps from exported glTF model-space into the "body-fixed" model-space
 you intend to use in KEPPLR (i.e., the intrinsic basis as imported into Blender).
 
-Current policy (no new CLI flags)
----------------------------------
-- For OBJ and CMOD sources (imported into Blender's Z-up space), the exported GLB will
-  typically include Blender's glTF basis conversion. We record the inverse conversion as:
+Coordinate handling
+-------------------
+JME's glTF loader handles the glTF Y-up basis conversion via the scene graph, so
+vertices loaded from the exported GLB are already in their original frame (e.g., the
+body-fixed frame of an OBJ). No format-based basis correction quaternion is needed.
 
-    Rx(+90°) as a quaternion (x,y,z,w) = (sin(45°), 0, 0, cos(45°)).
+The default modelToBodyFixedQuat is therefore identity (0,0,0,1) for all source formats.
 
-  This maps glTF-space vectors back into the original imported model basis.
-
-- For GLB/GLTF sources, Blender import/export generally round-trips the basis conversion,
-  so the recorded quaternion is identity (0,0,0,1).
-
-- For 3DS sources, we first convert to GLB via assimp, then import as glTF; thus we also
-  record identity.
-
-If you later discover a particular asset needs an additional fixed alignment relative to
-its NAIF frame definition, that should be handled in KEPPLR (or by extending this script)
-as an explicit "model-to-frame" constant rotation—separate from the exporter basis conversion.
+If a particular model's vertex frame does not match the expected SPICE body-fixed frame,
+use --apply-rotation x,y,z,angle_deg to inject a correction quaternion. KEPPLR applies
+this quaternion once at load time via glbModelRoot.setLocalRotation().
 
 Supported input formats
 -----------------------
@@ -124,6 +117,15 @@ Optional:
   --texture-dir <dir>           (Repeatable) Add search roots for CMOD-referenced textures
   --texture-recursive           If set, search each --texture-dir recursively
   --missing-texture-mode <mode> CMOD-only: 'strip' (default) or 'swatch'
+  --apply-rotation x,y,z,a      Rotation to inject as modelToBodyFixedQuat (axis-angle form).
+                                  x,y,z is the rotation axis (need not be unit length),
+                                  a is the angle in degrees. Use this when a model's vertex
+                                  coordinates are not in the expected SPICE body-fixed frame.
+                                  Mutually exclusive with --apply-quaternion.
+  --apply-quaternion w,x,y,z    Rotation to inject as modelToBodyFixedQuat (quaternion form).
+                                  Components are in w,x,y,z order. Cosmographia's "meshRotation"
+                                  values from SSC/JSON config files can be used directly here.
+                                  Mutually exclusive with --apply-rotation.
 
 Behavior notes
 --------------
@@ -195,6 +197,7 @@ import re
 import zlib
 import struct
 import json
+import math
 
 
 def log(msg: str):
@@ -216,6 +219,8 @@ def parse_args(argv):
     texture_recursive = False
     missing_texture_mode = "strip"  # strip | swatch
     scale_factor = 1.0
+    apply_rotation = None  # None or (x, y, z, angle_deg)
+    apply_quaternion = None  # None or (w, x, y, z)
 
     i = 0
     while i < len(user_args):
@@ -255,6 +260,24 @@ def parse_args(argv):
                 raise SystemExit("--scale must be a floating point number")
             if not (scale_factor > 0.0):
                 raise SystemExit("--scale must be > 0")
+        elif a == "--apply-rotation":
+            i += 1
+            try:
+                parts = user_args[i].split(",")
+                if len(parts) != 4:
+                    raise ValueError
+                apply_rotation = (float(parts[0]), float(parts[1]), float(parts[2]), float(parts[3]))
+            except (ValueError, IndexError):
+                raise SystemExit("--apply-rotation must be x,y,z,angle_deg (e.g. 1,0,0,90)")
+        elif a == "--apply-quaternion":
+            i += 1
+            try:
+                parts = user_args[i].split(",")
+                if len(parts) != 4:
+                    raise ValueError
+                apply_quaternion = (float(parts[0]), float(parts[1]), float(parts[2]), float(parts[3]))
+            except (ValueError, IndexError):
+                raise SystemExit("--apply-quaternion must be w,x,y,z (e.g. 0.707,-0.707,0,0)")
         else:
             raise SystemExit(f"Unknown arg: {a}")
         i += 1
@@ -264,8 +287,12 @@ def parse_args(argv):
             "Usage: --input <file|dir> --output <file|dir> [--recursive] "
             "[--cmodconvert <path>] [--assimp <path>] [--magick <path>] "
             "[--texture-dir <dir>]... [--texture-recursive] "
-            "[--missing-texture-mode strip|swatch] [--scale <float>]"
+            "[--missing-texture-mode strip|swatch] [--scale <float>] "
+            "[--apply-rotation x,y,z,angle_deg] [--apply-quaternion w,x,y,z]"
         )
+
+    if apply_rotation is not None and apply_quaternion is not None:
+        raise SystemExit("--apply-rotation and --apply-quaternion are mutually exclusive")
 
     return (
         input_path,
@@ -278,6 +305,8 @@ def parse_args(argv):
         texture_recursive,
         missing_texture_mode,
         scale_factor,
+        apply_rotation,
+        apply_quaternion,
     )
 
 
@@ -853,13 +882,35 @@ def export_glb(out_file: Path):
     bpy.ops.export_scene.gltf(**filtered)
 
 
-def model_to_bodyfixed_quat_for_source(src_ext: str) -> list[float]:
-    """Return quaternion to map exported glTF model-space back into imported intrinsic basis."""
-    src_ext = src_ext.lower()
-    if src_ext in (".obj", ".cmod"):
-        s = 0.7071067811865476
-        c = 0.7071067811865476
-        return [-s, 0.0, 0.0, c]  # Rx(-90°)
+def axis_angle_to_quat(x: float, y: float, z: float, angle_deg: float) -> list[float]:
+    """Convert axis-angle (axis need not be unit) to quaternion [x, y, z, w]."""
+    length = math.sqrt(x * x + y * y + z * z)
+    if length < 1e-12:
+        return [0.0, 0.0, 0.0, 1.0]
+    ux, uy, uz = x / length, y / length, z / length
+    half = math.radians(angle_deg) / 2.0
+    s = math.sin(half)
+    c = math.cos(half)
+    return [ux * s, uy * s, uz * s, c]
+
+
+def compute_model_to_bodyfixed_quat(
+    apply_rotation: tuple[float, float, float, float] | None,
+    apply_quaternion: tuple[float, float, float, float] | None,
+) -> list[float]:
+    """Compute the modelToBodyFixedQuat for the exported GLB.
+
+    By default this is identity — JME's glTF loader handles the Y-up basis conversion
+    via the scene graph, so the loaded vertices are already in their original frame.
+
+    If --apply-rotation is specified (axis-angle), the quaternion is computed from it.
+    If --apply-quaternion is specified (w,x,y,z), it is converted to glTF/JME order (x,y,z,w).
+    """
+    if apply_rotation is not None:
+        return axis_angle_to_quat(*apply_rotation)
+    if apply_quaternion is not None:
+        w, x, y, z = apply_quaternion
+        return [x, y, z, w]
     return [0.0, 0.0, 0.0, 1.0]
 
 
@@ -947,6 +998,8 @@ def convert_one(
     texture_index: dict[str, Path],
     missing_texture_mode: str,
     scale_factor: float,
+    apply_rotation: tuple[float, float, float, float] | None = None,
+    apply_quaternion: tuple[float, float, float, float] | None = None,
 ):
     log(f"Converting: {src.name}")
     reset_scene()
@@ -968,7 +1021,7 @@ def convert_one(
     normalize_images_to_png(tmp_root / "png_textures")
     export_glb(out_file)
 
-    quat = model_to_bodyfixed_quat_for_source(src.suffix)
+    quat = compute_model_to_bodyfixed_quat(apply_rotation, apply_quaternion)
     try:
         inject_kepplr_asset_extras(out_file, quat)
         log(f"Injected asset.extras.kepplr.modelToBodyFixedQuat = {quat}")
@@ -994,6 +1047,8 @@ def main():
         texture_recursive,
         missing_texture_mode,
         scale_factor,
+        apply_rotation,
+        apply_quaternion,
     ) = parsed
 
     input_path = input_path.expanduser().resolve()
@@ -1035,6 +1090,8 @@ def main():
             texture_index,
             missing_texture_mode,
             scale_factor,
+            apply_rotation,
+            apply_quaternion,
         )
         log("Done.")
         return
@@ -1059,6 +1116,8 @@ def main():
                 texture_index,
                 missing_texture_mode,
                 scale_factor,
+                apply_rotation,
+                apply_quaternion,
             )
         except Exception as e:
             log(f"ERROR converting {src}: {e}")

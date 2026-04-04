@@ -1056,9 +1056,196 @@ would cause a compilation error since `toScript()` has no default implementation
 
 ---
 
-*Last updated: Step 28 + bug fix (branch 50-clock-update-bug), Step 26, D-053/D-054*
+## D-055: modelToBodyFixedQuat defaults to identity; no format-based basis correction
+**Status:** Accepted
+**Roadmap step:** N/A (conversion tooling fix)
+
+**Context:** The Python conversion script (`convert_to_normalized_glb.py`) injected an `Rx(-90°)` quaternion as `modelToBodyFixedQuat` for OBJ/CMOD sources, based on the assumption that Blender's `export_yup=True` bakes an `Rx(-90°)` rotation into GLB vertex data and KEPPLR would need to undo it. Empirical testing showed this was wrong: JME's glTF loader handles the Y-up basis conversion via the scene graph, so loaded vertices are already in their original frame. The injected rotation was doubling the conversion, producing incorrect orientation.
+
+**Decision:**
+1. `modelToBodyFixedQuat` defaults to identity `(0,0,0,1)` for all source formats. No format-based basis correction is applied.
+2. Two new mutually exclusive CLI options allow per-model correction when a model's vertex frame does not match the expected SPICE body-fixed frame:
+   - `--apply-rotation x,y,z,a` (axis-angle, degrees)
+   - `--apply-quaternion w,x,y,z` (quaternion in Cosmographia `meshRotation` order; reordered to `x,y,z,w` for glTF/JME)
+3. No changes to the Java side — `GLTFUtils`, `BodyNodeFactory`, and `GlbModelViewer` are correct as-is.
+
+**Consequences:**
+- All previously converted GLB files from OBJ/CMOD sources that had the erroneous `Rx(-90°)` quaternion must be reconverted.
+- CMOD models that need alignment (e.g., authored with +Y up) can use `--apply-quaternion` with the `meshRotation` value from Cosmographia's SSC/JSON config files directly.
+- OBJ models with vertices already in body-fixed coordinates need no flags.
+
+---
+
+## D-056: KepplrScript execution semantics labels
+**Status:** Accepted
+**Roadmap step:** N/A (scripting API documentation)
+
+**Context:** Users writing scripts had no way to know which `KepplrScript` methods execute immediately, which are queued to the JME thread, and which block the script thread. This led to subtle bugs — for example, calling `focusBody()` immediately after `loadConfiguration()` without realizing the camera transitions were queued while the JME thread hadn't yet computed body positions. The prototype's `EngineApi` labelled every method clearly.
+
+**Decision:** Every public method on `KepplrScript` now has an `<b>Execution semantics:</b>` label in its Javadoc, using one of four categories:
+- **Immediate** — takes effect on the calling thread; no JME involvement.
+- **Queued** — enqueued to the JME thread's transition inbox; returns immediately.
+- **Blocking** — blocks the script thread until the operation completes.
+- **Immediate + Queued** — hybrid: state mutations are immediate, camera transitions are queued.
+
+The class-level Javadoc summarizes all four categories.
+
+**Consequences:** Script authors can determine whether they need `waitTransition()` or `waitWall()` between calls. Hybrid methods (`focusBody`, `targetBody`, `setStateString`) are flagged so users understand that state is visible immediately but the camera arrives asynchronously.
+
+---
+
+## D-057: loadConfiguration blocks until first simpleUpdate completes
+**Status:** Accepted
+**Roadmap step:** N/A (scripting reliability fix)
+
+**Context:** `loadConfiguration()` blocked the script thread via a `CountDownLatch` until `rebuildBodyScene()` finished on the JME thread. However, the latch was counted down inside the enqueued callable that runs during `super.update()` — *before* `simpleUpdate()`. This meant the script thread could resume and queue camera transitions (via `focusBody`) before the JME thread had computed body positions for the new scene, causing transitions to target stale or missing positions.
+
+**Decision:** The latch is no longer counted down inside the enqueued callable. Instead, it is stored in a `volatile postRebuildLatch` field and counted down at the end of `simpleUpdate()`. This guarantees that the first full update cycle with the new configuration (body positions computed, scene graph updated) has completed before the script thread unblocks.
+
+**Alternatives considered:** Adding `waitWall(5)` in scripts as a workaround — functional but fragile and violates the "Blocking means truly blocking" contract.
+
+**Consequences:** Scripts can safely call `focusBody()` immediately after `loadConfiguration()` without any artificial delay. The `loadConfiguration` Javadoc labelled as "Blocking" now accurately reflects its behavior.
+
+---
+
+## D-058: Scene rebuild clears overlay state and disposes all render managers
+**Status:** Accepted
+**Roadmap step:** N/A (scene rebuild correctness fix)
+
+**Context:** Running a script that called `loadConfiguration()` multiple times left orphaned geometry in the scene graph. Two bugs:
+1. `VectorManager` and `StarFieldManager` were reconstructed without disposing the old instances. The old geometry remained attached to the frustum layer nodes — the new manager's `detachAll()` only knew about its own geometry, not the predecessor's.
+2. Overlay visibility state in `DefaultSimulationState` (vectors, trails, labels, frustums, body visibility) was not cleared on rebuild, so flags set by a previous script run survived and caused the new managers to immediately re-enable stale overlays.
+
+**Decision:**
+1. Added `dispose()` methods to `VectorManager` and `StarFieldManager` that detach all geometry and clear internal state. Both are called in `rebuildBodyScene()` before constructing replacements.
+2. Added `clearOverlayState()` to `DefaultSimulationState` that clears all overlay visibility maps and re-applies the default barycenter hiding. Called in `rebuildBodyScene()`.
+
+**Consequences:** Scripts that call `loadConfiguration()` (including re-running the same script) get a clean slate — no orphaned geometry, no stale overlay flags. The script must re-enable any desired overlays after each `loadConfiguration()` call, which matches user expectation and the script's own flow.
+
+---
+
+## D-059: Remove G/F/T keyboard shortcuts; reverse tilt sense
+**Status:** Accepted
+**Roadmap step:** N/A (UX refinement)
+
+**Context:** The G (goTo focused body), F (toggle synodic/inertial frame), and T (target selected body) keybindings in `CameraInputHandler` were not useful in practice. Additionally, the Up arrow tilted the camera down and Down arrow tilted up, which was counterintuitive.
+
+**Decision:** Removed G, F, and T keybindings from `CameraInputHandler.onKeyEvent()`. Reversed the tilt direction so Up arrow tilts the camera up (positive degrees) and Down arrow tilts down (negative degrees). Frame switching is done via the Camera Frame submenu in the View menu. REDESIGN.md §4.6 updated to remove the F-key reference.
+
+**Consequences:** Keyboard shortcuts are now: arrow keys (tilt/orbit), Page Up/Down (zoom), Space (pause), `[`/`]` (time rate). Frame switching is menu-only.
+
+---
+
+## D-060: Move Copy/Paste State from Edit menu to File menu
+**Status:** Accepted
+**Roadmap step:** N/A (UX refinement)
+
+**Context:** The Edit menu contained only Copy State and Paste State — not enough to justify a dedicated menu. Moving them into the File menu reduces menu bar clutter.
+
+**Decision:** Moved Copy State and Paste State into the File menu (between Capture Sequence and Show Log, with separators). Removed the Edit menu entirely. `buildEditMenu()` deleted from `KepplrStatusWindow`.
+
+**Consequences:** Menu bar is: File, View, Time, Overlays, Instruments, Window. One fewer top-level menu.
+
+---
+
+## D-061: Velocity vector overlay uses parent-relative velocity
+**Status:** Accepted
+**Roadmap step:** N/A (correctness fix)
+
+**Context:** `VectorTypes.velocity()` computed the heliocentric velocity for all bodies. For satellites (e.g. the Moon), this showed the velocity relative to the Sun, which did not match the orbital trail direction and was not useful for understanding the body's orbit around its parent.
+
+**Decision:** `VelocityVectorType` now subtracts the parent barycenter's velocity for satellites (NAIF IDs 100–999 not ending in 99, plus Pluto 999). For planets and other bodies, the heliocentric velocity is used. This matches the trail direction convention in `TrailSampler`.
+
+**Consequences:** The velocity overlay arrow now points along the orbital trail for all bodies. REDESIGN.md §10.3 updated to document this.
+
+---
+
+## D-062: Bodies without body-fixed frames render as sprites instead of crashing
+**Status:** Accepted
+**Roadmap step:** N/A (robustness fix)
+
+**Context:** `BodySceneManager.update()` called `eph.getJ2000ToBodyFixedRotation()` for any body with `DRAW_FULL` decision. Bodies like Hyperion (NAIF 607) have no PCK orientation data, causing `getJ2000ToBodyFixedRotation()` to return null and a subsequent NullPointerException.
+
+**Decision:** When `getJ2000ToBodyFixedRotation()` returns null for a `DRAW_FULL` body, the decision is downgraded to `DRAW_SPRITE`. The body is still visible as a point sprite rather than crashing.
+
+**Consequences:** All bodies in the SPK are renderable regardless of PCK coverage. Bodies without orientation data appear as sprites even at close range, which is acceptable since there is no texture to orient anyway.
+
+---
+
+## D-063: Focus-tracking anchor must be reset on state restore to prevent ET-jump displacement
+**Status:** Accepted
+**Roadmap step:** 26 (State Snapshot Strings — bug fix)
+
+**Context:** `CameraInputHandler.applyFocusTracking()` maintains a `prevFocusPos` anchor
+(the focus body's J2000 position at the previous frame's ET). Each frame it computes the
+delta `currentPos − prevFocusPos` and adds it to `cameraHelioJ2000`, keeping the camera
+centred on the focus body as its orbit advances. When `setStateString()` restores a state
+from an earlier ET (e.g., the simulation advanced from `et0` to `et1`, then a snapshot
+taken at `et0` is restored), `advance()` jumps the ET back to `et0`. On the next frame,
+`applyFocusTracking()` computes `delta = earthPos(et0) − prevFocusPos(et1) ≈ −108,000 km`
+and adds it to the freshly restored `cameraHelioJ2000` *before* `transitionController.update()`
+runs. Body-following then moved the camera to the correct distance but in the wrong
+body-fixed direction, producing a wrong latitude in every restored snapshot except the
+most recent one (where the ET did not jump backward).
+
+**Decision:** `CameraInputHandler.resetFocusTrackingAnchor()` nulls `prevFocusPos`. It is
+called from `KepplrApp.simpleUpdate()` immediately after consuming a `PendingCameraRestore`
+and before `cameraInputHandler.update()`. On the restore frame, `applyFocusTracking()` finds
+`prevFocusPos == null`, skips the delta, and sets `prevFocusPos` to the current body position
+as a fresh anchor.
+
+**Alternatives considered:** Moving `cameraInputHandler.update()` before
+`consumePendingCameraRestore()` — rejected because `applyFocusTracking()` reads the focused
+body ID from `SimulationState`, which may already reflect the restored focus body, making the
+ordering fragile. Skipping `applyFocusTracking()` entirely on the restore frame — equivalent
+but requires a separate flag rather than reusing the existing null-anchor guard.
+
+**Consequences:** State restore correctly preserves body-fixed spherical coordinates across
+ET jumps. The `resetFocusTrackingAnchor()` call is paired with `consumePendingCameraRestore()`
+— any future code that posts a `PendingCameraRestore` should also call
+`resetFocusTrackingAnchor()`.
+
+---
+
+## D-064: Synodic frame override state is seeded from focus + selected on setCameraFrame(SYNODIC)
+**Status:** Accepted
+**Roadmap step:** 19c / 28 follow-up (state consistency fix)
+
+**Context:** KEPPLR has two scripting paths into the synodic frame:
+`setSynodicFrame(int, int)` and `setCameraFrame(CameraFrame.SYNODIC)`.
+The underlying frame implementation already used the correct semantics: the
+synodic frame origin is the focused body and the "other body" is the selected
+body, not the targeted body. However, the state exposed through
+`SimulationState` was inconsistent across the two entry points. The explicit
+path seeded the synodic override IDs, while `setCameraFrame(SYNODIC)` did not,
+leaving the override state unset even though the camera had entered the synodic
+frame. This made the observable state disagree with the effective frame source.
+The old `synodicFrameTargetId` label also encoded the wrong mental model.
+
+**Decision:** Rename the second synodic override property from
+`synodicFrameTargetId` to `synodicFrameSelectedId` throughout the state/API
+surface to match the actual frame semantics. Update
+`DefaultSimulationCommands.setCameraFrame(CameraFrame frame)` so that when
+`frame == CameraFrame.SYNODIC`, it seeds:
+1. `synodicFrameFocusId` from the current focused body
+2. `synodicFrameSelectedId` from the current selected body
+
+For non-synodic frames, both override IDs are still cleared. The explicit
+`setSynodicFrame(...)` path remains the scripting API for supplying a custom
+focus/selected pair without disturbing interaction state.
+
+**Consequences:** `SimulationState` now reflects synodic-frame state
+consistently regardless of whether the frame was entered via
+`setSynodicFrame(...)` or `setCameraFrame(CameraFrame.SYNODIC)`. UI bindings,
+debug output, and scripts that inspect synodic override state now see values
+that match the actual frame semantics. The naming change also removes the
+incorrect implication that the synodic "other body" is tied to
+`targetedBodyId`.
+
+---
+
+*Last updated: D-064 (synodic frame override state seeded from focus + selected), D-063 (focus-tracking anchor reset on state restore), D-062 (sprite fallback for missing body-fixed frames), D-061 (parent-relative velocity), D-060 (Edit menu removal)*
 *Backfill note: Entries D-001 through D-009 were reconstructed retrospectively.
 D-010 onwards recorded in real time.*
-
 
 

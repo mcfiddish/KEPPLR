@@ -77,26 +77,47 @@ public class GlbModelViewer implements KEPPLRTool {
         String header = "\nRender a single GLB model in a standalone JME window.";
         String footer = """
                 Controls:
+
                   - Rotate model: Arrow keys (up, down, left, right)
-                  - Toggle axes: X
+
+                  - Toggle axes (+X:Red, +Y:Green, +Z:Blue): X
+
                   - Zoom: Page Up / Page Down
+
                   - Sampler preset (QualityDefault): F6
+
                   - Sampler preset (NoMipmapsDebug): F7
+
                   - Sampler preset (NearestDebug): F8
+
                   - Sampler preset (previous/next): 9 / 0
+
                   - UV debug mode cycle: U
+
                   - UV transform mode cycle: G
+
                   - Atlas tile select U (dec/inc): J / L
+
                   - Atlas tile select V (inc/dec): I / K
+
                   - Debug tile tint toggle: T
+
                   - Unlit albedo debug: Y
+
                   - Dump materials/textures: P
+
                   - Cycle isolate geometry: 8
+
                   - Clear isolation: 7
+
                   - Dump albedo textures: 6
+
                   - Dump all PBR textures: 5
+
                   - Albedo sampling (nearest): ,
+
                   - Albedo sampling (linear): .
+
                   - Dump isolated provenance: O
                 """;
         return KEPPLRTool.super.fullDescription(options, header, footer);
@@ -215,6 +236,7 @@ public class GlbModelViewer implements KEPPLRTool {
 
         private float orbitDistance;
         private Quaternion orbitRot = new Quaternion(); // camera orientation around target
+        private DirectionalLight dirLight; // updated every frame to track the camera
         private SamplerPreset samplerPreset = SamplerPreset.QUALITY_DEFAULT;
         private boolean unlitDebugEnabled = false;
         private final Map<Geometry, Material> originalMaterials = new IdentityHashMap<>();
@@ -2899,15 +2921,31 @@ public class GlbModelViewer implements KEPPLRTool {
             cam.lookAt(Vector3f.ZERO, up);
         }
 
+        /**
+         * Compute the directional-light direction so the light always comes from behind the camera, slightly above and
+         * to the right. Uses camera basis vectors directly to avoid quaternion sign-convention ambiguity.
+         *
+         * <p>{@code cam.getDirection()} points from the camera toward the model. Adding a fraction of
+         * {@code cam.getUp()} shifts the effective source upward; subtracting a fraction of {@code cam.getLeft()}
+         * shifts it to the right.
+         */
+        private Vector3f cameraAlignedLightDir() {
+            return cam.getDirection()
+                    .add(cam.getUp().mult(0.4f))
+                    .add(cam.getLeft().mult(-0.3f))
+                    .normalizeLocal();
+        }
+
         private void addLights() {
             AmbientLight ambient = new AmbientLight();
             ambient.setColor(ColorRGBA.White.mult(0.4f));
             rootNode.addLight(ambient);
 
-            DirectionalLight dir = new DirectionalLight();
-            dir.setColor(ColorRGBA.White);
-            dir.setDirection(new Vector3f(-1f, -1f, -1f).normalizeLocal());
-            rootNode.addLight(dir);
+            dirLight = new DirectionalLight();
+            dirLight.setColor(ColorRGBA.White);
+            // Initial direction set from camera basis; updated every frame in simpleUpdate.
+            dirLight.setDirection(cameraAlignedLightDir());
+            rootNode.addLight(dirLight);
         }
 
         private void setupInput() {
@@ -2977,6 +3015,9 @@ public class GlbModelViewer implements KEPPLRTool {
         public void simpleUpdate(float tpf) {
             if (sizeText == null) {
                 return;
+            }
+            if (dirLight != null) {
+                dirLight.setDirection(cameraAlignedLightDir());
             }
             sizeText.setLocalTranslation(10f, cam.getHeight() - 10f, 0f);
             updateDebugHud();
