@@ -152,22 +152,24 @@ public class KEPPLREphemeris {
             if (id != null) {
                 FrameID frame =
                         sb.frame().isBlank() ? spiceBundle.getBodyFixedFrame(id) : spiceBundle.getFrame(sb.frame());
-                if (frame == null) logger.warn("Could not find body fixed frame for {}", id.getName());
-                else {
-                    spacecraftMap.put(
-                            id,
-                            ImmutableSpacecraft.builder()
-                                    .id(id)
-                                    .code(sb.naifID())
-                                    .frameID(frame)
-                                    .shapeModel(sb.shapeModel())
-                                    .build());
-                    stateTransformMap.put(
-                            frame,
-                            spiceBundle
-                                    .getAbProvider()
-                                    .createStateTransformFunction(CelestialFrames.J2000, frame, Coverage.ALL_TIME));
+                if (frame == null) {
+                    logger.warn("Could not find body fixed frame for {}, setting to J2000", id.getName());
+                    frame = CelestialFrames.J2000;
                 }
+
+                spacecraftMap.put(
+                        id,
+                        ImmutableSpacecraft.builder()
+                                .id(id)
+                                .code(sb.naifID())
+                                .frameID(frame)
+                                .shapeModel(sb.shapeModel())
+                                .build());
+                stateTransformMap.put(
+                        frame,
+                        spiceBundle
+                                .getAbProvider()
+                                .createStateTransformFunction(CelestialFrames.J2000, frame, Coverage.ALL_TIME));
             }
         });
         spacecraftMap = Collections.unmodifiableMap(spacecraftMap);
