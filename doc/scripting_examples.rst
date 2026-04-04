@@ -42,7 +42,7 @@ Focus on a body, enable its trail, and fast-forward through one orbital period.
     kepplr.waitTransition()
     kepplr.selectBody("Mars")
 
-    def marsYeal = 687*86400
+    def marsYear = 687*86400
     kepplr.setTrailVisible("Mars", true)
     kepplr.setTrailDuration("Mars", marsYear)
 
@@ -274,12 +274,13 @@ Use a Groovy map to associate bodies with display settings, then iterate over it
 
 .. code-block:: groovy
 
+    // set trails about 1/4 of orbital period
     def year = 365.25 * 86400
     def bodies = [
-        "Jupiter": 3 * year,     // 3 year trail
-        "Saturn" : 7 * year,     // 60-day trail
-        "Uranus" : 20 * year,    // 180-day trail
-        "Neptune": 40 * year,    // 365-day trail
+        "Jupiter": 3 * year,
+        "Saturn" : 7 * year,
+        "Uranus" : 20 * year,
+        "Neptune": 40 * year,
     ]
 
     bodies.each { name, trailDuration ->
