@@ -167,7 +167,7 @@ Add it to your configuration file:
 
 Look at it with the :doc:`tools/GlbModelViewer`.  Hit `X` to display the body fixed axes and use the arrow keys to rotate the model.
 
-.. image:: /_static/images/GlbModelViewer_01_phobos.png
+.. image:: /_static/images/GlbModelViewer_02_phobos.png
     :alt: Phobos shape model
     :align: center
 
