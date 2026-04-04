@@ -114,7 +114,13 @@ public class TrailManager {
                     : Math.min(
                             KepplrConstants.TRAIL_STALENESS_THRESHOLD_SEC,
                             state.durationSec() * KepplrConstants.TRAIL_STALENESS_FRACTION);
-            boolean stale = state == null || Math.abs(currentEt - state.sampledEt()) > stalenessThreshold;
+            // Resolve effective reference body: configured override, then NAIF heuristic.
+            int configuredRef = this.state.trailReferenceBodyProperty(naifId).get();
+            int effectiveRef = (configuredRef != -1) ? configuredRef : (isSatellite(naifId) ? naifId / 100 : -1);
+
+            boolean stale = state == null
+                    || Math.abs(currentEt - state.sampledEt()) > stalenessThreshold
+                    || state.barycenterId() != effectiveRef; // reference body changed
 
             if (stale) {
                 try {
@@ -124,17 +130,22 @@ public class TrailManager {
                             ? customDuration
                             : TrailSampler.computeTrailDurationSec(naifId, currentEt);
                     int maxSamples = this.state.renderQualityProperty().get().trailSamplesPerPeriod();
-                    List<double[]> samples = TrailSampler.sample(naifId, currentEt, duration, "J2000", maxSamples);
-                    int barycenterId = -1;
+                    int barycenterId = effectiveRef;
                     double[] baryAnchorKm = null;
-                    if (isSatellite(naifId)) {
-                        barycenterId = naifId / 100;
+                    if (barycenterId != -1) {
                         KEPPLREphemeris eph = KEPPLRConfiguration.getInstance().getEphemeris();
                         VectorIJK anchor = eph.getHeliocentricPositionJ2000(barycenterId, currentEt);
                         if (anchor != null) {
                             baryAnchorKm = new double[] {anchor.getI(), anchor.getJ(), anchor.getK()};
                         }
                     }
+                    // Use sampleWithExplicitRef when a reference body is known so that non-satellite
+                    // bodies (e.g. spacecraft) also get correctly anchored samples.  For natural
+                    // satellites the result is identical to sample() since the same anchor is used.
+                    List<double[]> samples = (barycenterId != -1 && baryAnchorKm != null)
+                            ? TrailSampler.sampleWithExplicitRef(
+                                    naifId, barycenterId, baryAnchorKm, currentEt, duration, "J2000", maxSamples)
+                            : TrailSampler.sample(naifId, currentEt, duration, "J2000", maxSamples);
                     state = new TrailState(currentEt, duration, samples, barycenterId, baryAnchorKm);
                     trailStates.put(naifId, state);
                     liveFixedMap.put(naifId, new ArrayList<>()); // clear live segment on resample

@@ -198,6 +198,16 @@ public interface SimulationState {
     ReadOnlyDoubleProperty trailDurationProperty(int naifId);
 
     /**
+     * Reference body NAIF ID for the trail (and velocity vector) of the given body (§7.5).
+     *
+     * <p>{@code -1} means use the default heuristic: natural satellites use their system barycenter; all other bodies
+     * use heliocentric (Sun-relative) coordinates.
+     *
+     * @param naifId NAIF ID of the body whose trail reference to query
+     */
+    ReadOnlyIntegerProperty trailReferenceBodyProperty(int naifId);
+
+    /**
      * Whether the vector overlay of the given type is visible for the given body (§7.6).
      *
      * @param naifId NAIF ID of the body

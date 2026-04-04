@@ -364,6 +364,18 @@ public interface SimulationCommands {
     void setTrailDuration(int naifId, double seconds);
 
     /**
+     * Set the reference body for the trail (and velocity vector) of a specific body (§7.5, D-065).
+     *
+     * <p>Both the orbital trail and the velocity direction arrow for {@code naifId} are drawn relative to
+     * {@code referenceBodyId}. Use {@code -1} to restore the default heuristic (natural satellites use their system
+     * barycenter; all other bodies use heliocentric coordinates).
+     *
+     * @param naifId NAIF ID of the body whose trail reference to set
+     * @param referenceBodyId NAIF ID of the reference body, or {@code -1} for auto
+     */
+    void setTrailReferenceBody(int naifId, int referenceBodyId);
+
+    /**
      * Toggle vector overlay visibility for a specific body and vector type (§7.6).
      *
      * @param naifId NAIF ID of the body

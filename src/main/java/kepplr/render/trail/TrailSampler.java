@@ -193,6 +193,45 @@ public final class TrailSampler {
             }
         }
 
+        return doSample(naifId, barycenterId, baryAnchor, centerEt, durationSec, maxSamples, eph);
+    }
+
+    /**
+     * Sample trail positions using an explicit reference body and anchor, bypassing the {@code isSatellite} heuristic.
+     *
+     * <p>Called by {@link TrailManager} when a reference body has been configured via
+     * {@code SimulationState.setTrailReferenceBody()} for a body that would not normally be treated as a satellite
+     * (e.g. a spacecraft). Positions are computed as:
+     *
+     * <pre>
+     *   baryAnchor + (bodyHelio(et) − refBodyHelio(et))
+     * </pre>
+     *
+     * <p>which places each sample relative to the reference body's position at the resample epoch.
+     *
+     * @param baryAnchor reference body's heliocentric J2000 position at {@code centerEt} (the resample epoch)
+     */
+    static List<double[]> sampleWithExplicitRef(
+            int naifId,
+            int barycenterId,
+            double[] baryAnchor,
+            double centerEt,
+            double durationSec,
+            String frame,
+            int maxSamples) {
+        KEPPLREphemeris eph = KEPPLRConfiguration.getInstance().getEphemeris();
+        return doSample(naifId, barycenterId, baryAnchor, centerEt, durationSec, maxSamples, eph);
+    }
+
+    /** Common sampling loop shared by {@link #sample} and {@link #sampleWithExplicitRef}. */
+    private static List<double[]> doSample(
+            int naifId,
+            int barycenterId,
+            double[] baryAnchor,
+            double centerEt,
+            double durationSec,
+            int maxSamples,
+            KEPPLREphemeris eph) {
         double omega = 2.0 * Math.PI / durationSec;
         double minArcRad = Math.toRadians(KepplrConstants.TRAIL_MIN_ARC_DEG);
         double maxArcRad = Math.toRadians(KepplrConstants.TRAIL_MAX_ARC_DEG);

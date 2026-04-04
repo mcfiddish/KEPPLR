@@ -36,6 +36,7 @@ import kepplr.render.label.LabelManager;
 import kepplr.render.trail.TrailManager;
 import kepplr.render.vector.VectorDefinition;
 import kepplr.render.vector.VectorManager;
+import kepplr.render.vector.VectorTypes;
 import kepplr.scripting.CommandRecorder;
 import kepplr.scripting.ScriptRunner;
 import kepplr.stars.catalogs.yaleBSC.YaleBrightStarCatalog;
@@ -203,6 +204,7 @@ public class KepplrApp extends SimpleApplication {
         // ── Simulation clock and commands ─────────────────────────────────────────────────────
         double startET = KEPPLRConfiguration.getInstance().getTimeConversion().instantToTDB(Instant.now());
         simulationState = new DefaultSimulationState();
+        VectorTypes.setSimulationState(simulationState);
         simulationClock = new SimulationClock(simulationState, startET);
         transitionController = new TransitionController(simulationState);
 

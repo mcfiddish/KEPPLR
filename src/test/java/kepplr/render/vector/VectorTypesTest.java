@@ -123,6 +123,37 @@ class VectorTypesTest {
             VectorIJK dir = VectorTypes.velocity().computeDirection(-999999, et);
             assertNull(dir, "velocity() must return null when no ephemeris is available");
         }
+
+        @Test
+        @DisplayName("configured reference body overrides NAIF heuristic")
+        void configuredReferenceBodyOverridesHeuristic() {
+            // Earth (399) is not a satellite, so the heuristic gives heliocentric velocity.
+            // Configure the Moon (301) as the reference body for Earth's velocity.
+            kepplr.state.DefaultSimulationState testState = new kepplr.state.DefaultSimulationState();
+            testState.setTrailReferenceBody(EARTH, MOON);
+            VectorTypes.setSimulationState(testState);
+
+            try {
+                KEPPLREphemeris eph = KEPPLRConfiguration.getInstance().getEphemeris();
+                VectorIJK earthVel = eph.getHeliocentricStateJ2000(EARTH, et).getVelocity();
+                VectorIJK moonVel = eph.getHeliocentricStateJ2000(MOON, et).getVelocity();
+                double rx = earthVel.getI() - moonVel.getI();
+                double ry = earthVel.getJ() - moonVel.getJ();
+                double rz = earthVel.getK() - moonVel.getK();
+                double len = Math.sqrt(rx * rx + ry * ry + rz * rz);
+
+                VectorIJK dir = VectorTypes.velocity().computeDirection(EARTH, et);
+                assertNotNull(dir);
+                double dot = dir.getI() * (rx / len) + dir.getJ() * (ry / len) + dir.getK() * (rz / len);
+                assertEquals(
+                        1.0,
+                        dot,
+                        DIRECTION_TOL,
+                        "velocity direction must use configured reference body (Moon), not heliocentric");
+            } finally {
+                VectorTypes.setSimulationState(null);
+            }
+        }
     }
 
     // ─────────────────────────────────────────────────────────────────

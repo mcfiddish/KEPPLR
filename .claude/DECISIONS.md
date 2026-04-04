@@ -1244,7 +1244,42 @@ incorrect implication that the synodic "other body" is tied to
 
 ---
 
-*Last updated: D-064 (synodic frame override state seeded from focus + selected), D-063 (focus-tracking anchor reset on state restore), D-062 (sprite fallback for missing body-fixed frames), D-061 (parent-relative velocity), D-060 (Edit menu removal)*
+## D-065: Trail reference body is configurable per body; velocity vector is coupled
+**Status:** Accepted
+**Roadmap step:** §7.5 follow-up (trail coordinate system)
+
+**Context:** All orbital trails were drawn relative to a reference body derived from the NAIF ID
+heuristic: natural satellites used their system barycenter; everything else used heliocentric (Sun)
+coordinates. For spacecraft with negative NAIF IDs the heuristic always gave heliocentric, which
+made their trails drift across the scene as the reference planet moved — useless for viewing a lunar
+approach trajectory. The velocity direction arrow (D-047/D-061) was designed to match the trail
+reference convention, so changing the trail reference without also changing the velocity arrow would
+make the arrow point in a direction inconsistent with the trail.
+
+**Decision:** Add `setTrailReferenceBody(int naifId, int referenceBodyId)` to `SimulationCommands`
+and expose it in `KepplrScript`. The command stores the reference body in `SimulationState` as a
+per-body `ReadOnlyIntegerProperty` (default `-1` = use NAIF heuristic). `TrailManager` reads this
+property at resample time; a change in reference body forces an immediate resample. `VelocityVectorType`
+reads the same property at point-of-use via a package-private `SimulationState` reference held in
+`VectorTypes`, set once during `KepplrApp.simpleInitApp()`. This couples both the trail and velocity
+arrow to the configured reference body without changing the `VectorType` interface or the `VectorKey`
+scheme. `clearOverlayState()` clears the reference body map on config reload.
+
+**Alternatives considered:** Parameterizing `VelocityVectorType` with a reference body and updating
+`VectorKey` — rejected because changing the reference body would require removing and re-adding the
+vector definition, requiring `DefaultSimulationCommands` to reach into render-layer state. A separate
+`setVelocityReferenceBody` command — rejected per discussion (option 2: trail and velocity should
+always agree).
+
+**Consequences:** Scripting: `kepplr.setTrailReferenceBody("Artemis II", "Moon")` makes both the
+trail and velocity arrow for Artemis II Moon-relative. The NAIF heuristic remains the default;
+existing scripts are unaffected. The `TrailState.barycenterId` field now stores the effective reference
+body (not just the satellite-barycenter special case), enabling the reference-body-change staleness
+trigger.
+
+---
+
+*Last updated: D-065 (configurable trail reference body), D-064 (synodic frame override state seeded from focus + selected), D-063 (focus-tracking anchor reset on state restore), D-062 (sprite fallback for missing body-fixed frames), D-061 (parent-relative velocity), D-060 (Edit menu removal)*
 *Backfill note: Entries D-001 through D-009 were reconstructed retrospectively.
 D-010 onwards recorded in real time.*
 

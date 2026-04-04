@@ -2,6 +2,7 @@ package kepplr.render.vector;
 
 import kepplr.config.KEPPLRConfiguration;
 import kepplr.ephemeris.KEPPLREphemeris;
+import kepplr.state.SimulationState;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import picante.math.vectorspace.RotationMatrixIJK;
@@ -25,6 +26,26 @@ import picante.mechanics.StateVector;
 public final class VectorTypes {
 
     private VectorTypes() {}
+
+    /**
+     * Simulation state reference used by {@link VelocityVectorType} to look up per-body trail reference bodies.
+     *
+     * <p>Set once during {@code KepplrApp.simpleInitApp()} and never replaced. {@code null} during tests that do not
+     * need per-body reference body lookup; in that case {@link VelocityVectorType} falls back to the NAIF heuristic.
+     */
+    static SimulationState simulationState;
+
+    /**
+     * Set the simulation state used by {@link VelocityVectorType} for per-body reference body lookup.
+     *
+     * <p>Called once from {@code KepplrApp.simpleInitApp()} after the state is constructed. Not called again on config
+     * reload because the state object is not replaced.
+     *
+     * @param state the active simulation state
+     */
+    public static void setSimulationState(SimulationState state) {
+        simulationState = state;
+    }
 
     /**
      * Returns a {@link VectorType} whose direction is the unit velocity vector of the origin body relative to its
@@ -106,16 +127,23 @@ public final class VectorTypes {
                 }
                 VectorIJK vel = bodyState.getVelocity();
 
-                // Satellites: subtract parent barycenter velocity to get orbit-relative velocity
-                if (isSatellite(originNaifId)) {
-                    int barycenterId = originNaifId / 100;
-                    StateVector parentState = eph.getHeliocentricStateJ2000(barycenterId, et);
-                    if (parentState != null) {
-                        VectorIJK parentVel = parentState.getVelocity();
+                // Resolve reference body: prefer per-body configured value, fall back to NAIF heuristic.
+                int refBodyId = -1;
+                if (simulationState != null) {
+                    refBodyId = simulationState
+                            .trailReferenceBodyProperty(originNaifId)
+                            .get();
+                }
+                if (refBodyId == -1 && isSatellite(originNaifId)) {
+                    refBodyId = originNaifId / 100;
+                }
+
+                if (refBodyId != -1) {
+                    StateVector refState = eph.getHeliocentricStateJ2000(refBodyId, et);
+                    if (refState != null) {
+                        VectorIJK refVel = refState.getVelocity();
                         vel = new VectorIJK(
-                                vel.getI() - parentVel.getI(),
-                                vel.getJ() - parentVel.getJ(),
-                                vel.getK() - parentVel.getK());
+                                vel.getI() - refVel.getI(), vel.getJ() - refVel.getJ(), vel.getK() - refVel.getK());
                     }
                 }
 

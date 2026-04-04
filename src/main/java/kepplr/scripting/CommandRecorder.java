@@ -499,6 +499,12 @@ public final class CommandRecorder implements SimulationCommands {
     }
 
     @Override
+    public void setTrailReferenceBody(int naifId, int referenceBodyId) {
+        recordCommand("kepplr.setTrailReferenceBody(" + naifId + ", " + referenceBodyId + ")");
+        delegate.setTrailReferenceBody(naifId, referenceBodyId);
+    }
+
+    @Override
     public void setVectorVisible(int naifId, VectorType type, boolean visible) {
         recordCommand("kepplr.setVectorVisible(" + naifId + ", " + type.toScript() + ", " + fmtBool(visible) + ")");
         delegate.setVectorVisible(naifId, type, visible);
