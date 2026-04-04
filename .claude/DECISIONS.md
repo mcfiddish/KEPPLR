@@ -1207,9 +1207,45 @@ ET jumps. The `resetFocusTrackingAnchor()` call is paired with `consumePendingCa
 
 ---
 
-*Last updated: D-063 (focus-tracking anchor reset on state restore), D-062 (sprite fallback for missing body-fixed frames), D-061 (parent-relative velocity), D-060 (Edit menu removal), D-059 (keyboard shortcut cleanup)*
+## D-064: Synodic frame override state is seeded from focus + selected on setCameraFrame(SYNODIC)
+**Status:** Accepted
+**Roadmap step:** 19c / 28 follow-up (state consistency fix)
+
+**Context:** KEPPLR has two scripting paths into the synodic frame:
+`setSynodicFrame(int, int)` and `setCameraFrame(CameraFrame.SYNODIC)`.
+The underlying frame implementation already used the correct semantics: the
+synodic frame origin is the focused body and the "other body" is the selected
+body, not the targeted body. However, the state exposed through
+`SimulationState` was inconsistent across the two entry points. The explicit
+path seeded the synodic override IDs, while `setCameraFrame(SYNODIC)` did not,
+leaving the override state unset even though the camera had entered the synodic
+frame. This made the observable state disagree with the effective frame source.
+The old `synodicFrameTargetId` label also encoded the wrong mental model.
+
+**Decision:** Rename the second synodic override property from
+`synodicFrameTargetId` to `synodicFrameSelectedId` throughout the state/API
+surface to match the actual frame semantics. Update
+`DefaultSimulationCommands.setCameraFrame(CameraFrame frame)` so that when
+`frame == CameraFrame.SYNODIC`, it seeds:
+1. `synodicFrameFocusId` from the current focused body
+2. `synodicFrameSelectedId` from the current selected body
+
+For non-synodic frames, both override IDs are still cleared. The explicit
+`setSynodicFrame(...)` path remains the scripting API for supplying a custom
+focus/selected pair without disturbing interaction state.
+
+**Consequences:** `SimulationState` now reflects synodic-frame state
+consistently regardless of whether the frame was entered via
+`setSynodicFrame(...)` or `setCameraFrame(CameraFrame.SYNODIC)`. UI bindings,
+debug output, and scripts that inspect synodic override state now see values
+that match the actual frame semantics. The naming change also removes the
+incorrect implication that the synodic "other body" is tied to
+`targetedBodyId`.
+
+---
+
+*Last updated: D-064 (synodic frame override state seeded from focus + selected), D-063 (focus-tracking anchor reset on state restore), D-062 (sprite fallback for missing body-fixed frames), D-061 (parent-relative velocity), D-060 (Edit menu removal)*
 *Backfill note: Entries D-001 through D-009 were reconstructed retrospectively.
 D-010 onwards recorded in real time.*
-
 
 

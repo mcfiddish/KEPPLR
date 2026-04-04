@@ -56,7 +56,7 @@ public final class DefaultSimulationState implements SimulationState {
     // ── Synodic frame overrides (Step 19c) ──
 
     private final SimpleIntegerProperty synodicFrameFocusId = new SimpleIntegerProperty(-1);
-    private final SimpleIntegerProperty synodicFrameTargetId = new SimpleIntegerProperty(-1);
+    private final SimpleIntegerProperty synodicFrameSelectedId = new SimpleIntegerProperty(-1);
 
     // ── Render state (§7.3, §10.2) ──
 
@@ -220,8 +220,8 @@ public final class DefaultSimulationState implements SimulationState {
     }
 
     @Override
-    public ReadOnlyIntegerProperty synodicFrameTargetIdProperty() {
-        return synodicFrameTargetId;
+    public ReadOnlyIntegerProperty synodicFrameSelectedIdProperty() {
+        return synodicFrameSelectedId;
     }
 
     @Override
@@ -344,8 +344,8 @@ public final class DefaultSimulationState implements SimulationState {
     }
 
     /** Set the explicit synodic frame target NAIF ID, or -1 to use interaction state (Step 19c). */
-    public void setSynodicFrameTargetId(int id) {
-        synodicFrameTargetId.set(id);
+    public void setSynodicFrameSelectedId(int id) {
+        synodicFrameSelectedId.set(id);
     }
 
     /** Set the render quality preset (§9.4). */

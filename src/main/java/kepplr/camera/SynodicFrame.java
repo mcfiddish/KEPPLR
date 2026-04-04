@@ -58,17 +58,17 @@ public final class SynodicFrame {
      * correction), as the frame definition is a geometric construction.
      *
      * @param focusBodyId NAIF ID of the focus body, or -1 if none
-     * @param targetBodyId NAIF ID of the selected body (the "other body"), or -1 if none
+     * @param selectedBodyId NAIF ID of the selected body (the "other body"), or -1 if none
      * @param et current simulation epoch (TDB seconds past J2000)
      * @return orthonormal {@link Basis} in J2000, or {@code null} if either body is absent or the ephemeris query fails
      *     — caller must fall back to inertial frame
      */
-    public static Basis compute(int focusBodyId, int targetBodyId, double et) {
-        if (focusBodyId == -1 || targetBodyId == -1) {
+    public static Basis compute(int focusBodyId, int selectedBodyId, double et) {
+        if (focusBodyId == -1 || selectedBodyId == -1) {
             logger.warn(
-                    "Synodic frame requires both focus ({}) and target ({}) — falling back to inertial",
+                    "Synodic frame requires both focus ({}) and selected ({}) — falling back to inertial",
                     focusBodyId,
-                    targetBodyId);
+                    selectedBodyId);
             return null;
         }
 
@@ -76,23 +76,23 @@ public final class SynodicFrame {
         KEPPLREphemeris ephemeris = KEPPLRConfiguration.getInstance().getEphemeris();
 
         // +X = normalized geometric focus→target (no aberration correction — frame is a geometric construction)
-        VectorIJK focusToTarget =
-                ephemeris.getObserverToTargetJ2000(focusBodyId, targetBodyId, et, AberrationCorrection.NONE);
-        if (focusToTarget == null) {
+        VectorIJK focusToSelected =
+                ephemeris.getObserverToTargetJ2000(focusBodyId, selectedBodyId, et, AberrationCorrection.NONE);
+        if (focusToSelected == null) {
             logger.warn(
-                    "Could not obtain focus→target vector for synodic frame (focus={}, target={}) — falling back to inertial",
+                    "Could not obtain focus→selected vector for synodic frame (focus={}, selected={}) — falling back to inertial",
                     focusBodyId,
-                    targetBodyId);
+                    selectedBodyId);
             return null;
         }
-        double xLen = focusToTarget.getLength();
+        double xLen = focusToSelected.getLength();
         if (Double.isNaN(xLen) || !(xLen > 0.0)) {
             logger.warn(
-                    "focus→target vector has zero or invalid length for synodic frame (focus={}) — falling back to inertial",
+                    "focus→selected vector has zero or invalid length for synodic frame (focus={}) — falling back to inertial",
                     focusBodyId);
             return null;
         }
-        VectorIJK xAxis = focusToTarget.createScaled(1. / xLen);
+        VectorIJK xAxis = focusToSelected.createScaled(1. / xLen);
 
         return computeFromXAxis(xAxis);
     }

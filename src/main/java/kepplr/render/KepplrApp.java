@@ -454,16 +454,17 @@ public class KepplrApp extends SimpleApplication {
             bodyFixedFrame.reset();
             // Step 19c: synodic frame override IDs take precedence over interaction state
             int synodicFocus = simulationState.synodicFrameFocusIdProperty().get();
-            int synodicTarget = simulationState.synodicFrameTargetIdProperty().get();
+            int synodicSelected =
+                    simulationState.synodicFrameSelectedIdProperty().get();
             int focusId = (synodicFocus != -1)
                     ? synodicFocus
                     : simulationState.focusedBodyIdProperty().get();
-            int targetId = (synodicTarget != -1)
-                    ? synodicTarget
+            int selectedId = (synodicSelected != -1)
+                    ? synodicSelected
                     : simulationState.selectedBodyIdProperty().get();
             double et = simulationState.currentEtProperty().get();
             SynodicFrameApplier.ApplyResult sr =
-                    synodicFrameApplier.apply(cameraHelioJ2000, cam.getRotation(), focusId, targetId, et);
+                    synodicFrameApplier.apply(cameraHelioJ2000, cam.getRotation(), focusId, selectedId, et);
             cameraHelioJ2000[0] = sr.newCamHelioJ2000()[0];
             cameraHelioJ2000[1] = sr.newCamHelioJ2000()[1];
             cameraHelioJ2000[2] = sr.newCamHelioJ2000()[2];

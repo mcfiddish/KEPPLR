@@ -205,7 +205,7 @@ public final class DefaultSimulationCommands implements SimulationCommands {
     @Override
     public void setSynodicFrame(int focusNaifId, int targetNaifId) {
         state.setSynodicFrameFocusId(focusNaifId);
-        state.setSynodicFrameTargetId(targetNaifId);
+        state.setSynodicFrameSelectedId(targetNaifId);
         state.setCameraFrame(CameraFrame.SYNODIC);
     }
 
@@ -245,12 +245,17 @@ public final class DefaultSimulationCommands implements SimulationCommands {
 
     /**
      * Switch the active camera frame (§1.5). Clears synodic frame override IDs so the frame reverts to using
-     * interaction state for focus/target.
+     * interaction state for focus/selected.
      */
     @Override
     public void setCameraFrame(CameraFrame frame) {
-        state.setSynodicFrameFocusId(-1);
-        state.setSynodicFrameTargetId(-1);
+        if (frame == CameraFrame.SYNODIC) {
+            state.setSynodicFrameFocusId(state.focusedBodyIdProperty().get());
+            state.setSynodicFrameSelectedId(state.selectedBodyIdProperty().get());
+        } else {
+            state.setSynodicFrameFocusId(-1);
+            state.setSynodicFrameSelectedId(-1);
+        }
         state.setCameraFrame(frame);
     }
 

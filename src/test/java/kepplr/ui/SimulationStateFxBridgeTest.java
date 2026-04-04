@@ -215,9 +215,9 @@ class SimulationStateFxBridgeTest {
         @Test
         @DisplayName("cameraFrameTextProperty falls back to interaction state when synodic IDs not set")
         void cameraFrameUpdatesSynodicWithFocus() {
-            // Explicit synodic IDs not set → falls back to focusedBodyId / targetedBodyId
+            // Explicit synodic IDs not set → falls back to focusedBodyId / selectedBodyId
             state.setFocusedBodyId(399);
-            state.setTargetedBodyId(301);
+            state.setSelectedBodyId(301);
             state.setCameraFrame(CameraFrame.SYNODIC);
             assertEquals(
                     "SYNODIC [Earth → Moon]", bridge.cameraFrameTextProperty().get());
@@ -228,7 +228,7 @@ class SimulationStateFxBridgeTest {
         void cameraFrameUpdatesSynodicWithExplicitIds() {
             state.setFocusedBodyId(399);
             state.setSynodicFrameFocusId(-98);
-            state.setSynodicFrameTargetId(999);
+            state.setSynodicFrameSelectedId(999);
             state.setCameraFrame(CameraFrame.SYNODIC);
             assertEquals(
                     "SYNODIC [New Horizons → Pluto]",

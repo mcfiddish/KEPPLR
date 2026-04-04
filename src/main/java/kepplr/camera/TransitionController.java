@@ -880,14 +880,14 @@ public final class TransitionController {
 
         if (frame == CameraFrame.SYNODIC) {
             int synodicFocus = state.synodicFrameFocusIdProperty().get();
-            int synodicTarget = state.synodicFrameTargetIdProperty().get();
+            int synodicSelected = state.synodicFrameSelectedIdProperty().get();
             int focusId = (synodicFocus != -1)
                     ? synodicFocus
                     : state.focusedBodyIdProperty().get();
-            int targetId = (synodicTarget != -1)
-                    ? synodicTarget
+            int selectedId = (synodicSelected != -1)
+                    ? synodicSelected
                     : state.selectedBodyIdProperty().get();
-            SynodicFrame.Basis basis = SynodicFrame.compute(focusId, targetId, et);
+            SynodicFrame.Basis basis = SynodicFrame.compute(focusId, selectedId, et);
             if (basis != null) {
                 RotationMatrixIJK synodicToJ2000 = new RotationMatrixIJK(basis.xAxis(), basis.yAxis(), basis.zAxis());
                 VectorIJK result = new VectorIJK();

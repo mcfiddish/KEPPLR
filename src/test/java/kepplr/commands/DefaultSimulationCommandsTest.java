@@ -287,7 +287,7 @@ class DefaultSimulationCommandsTest {
             commands.setSynodicFrame(EARTH, MOON);
 
             assertEquals(EARTH, state.synodicFrameFocusIdProperty().get(), "synodic focus override");
-            assertEquals(MOON, state.synodicFrameTargetIdProperty().get(), "synodic target override");
+            assertEquals(MOON, state.synodicFrameSelectedIdProperty().get(), "synodic selected override");
             assertEquals(CameraFrame.SYNODIC, state.cameraFrameProperty().get(), "frame should be SYNODIC");
             // Interaction state untouched
             assertEquals(SUN, state.selectedBodyIdProperty().get(), "selected should not change");
@@ -304,7 +304,7 @@ class DefaultSimulationCommandsTest {
             commands.setCameraFrame(CameraFrame.INERTIAL);
 
             assertEquals(-1, state.synodicFrameFocusIdProperty().get(), "override focus should be cleared");
-            assertEquals(-1, state.synodicFrameTargetIdProperty().get(), "override target should be cleared");
+            assertEquals(-1, state.synodicFrameSelectedIdProperty().get(), "override selected should be cleared");
         }
     }
 

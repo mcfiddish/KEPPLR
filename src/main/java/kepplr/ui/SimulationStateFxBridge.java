@@ -312,7 +312,7 @@ public final class SimulationStateFxBridge {
             String s = currentCameraFrameText();
             dispatcher.accept(() -> cameraFrameText.set(s));
         });
-        state.synodicFrameTargetIdProperty().addListener((obs, oldVal, newVal) -> {
+        state.synodicFrameSelectedIdProperty().addListener((obs, oldVal, newVal) -> {
             if (polling) return;
             String s = currentCameraFrameText();
             dispatcher.accept(() -> cameraFrameText.set(s));
@@ -719,17 +719,17 @@ public final class SimulationStateFxBridge {
         CameraFrame frame = state.cameraFrameProperty().get();
         if (frame == CameraFrame.SYNODIC) {
             int synodicFocusId = state.synodicFrameFocusIdProperty().get();
-            int synodicTargetId = state.synodicFrameTargetIdProperty().get();
+            int synodicSelectedId = state.synodicFrameSelectedIdProperty().get();
             // Fall back to interaction state when explicit synodic IDs are not set
             int focusId = synodicFocusId != -1
                     ? synodicFocusId
                     : state.focusedBodyIdProperty().get();
-            int targetId = synodicTargetId != -1
-                    ? synodicTargetId
-                    : state.targetedBodyIdProperty().get();
+            int selectedId = synodicSelectedId != -1
+                    ? synodicSelectedId
+                    : state.selectedBodyIdProperty().get();
             String focusStr = focusId == -1 ? "—" : formatBodyName(focusId);
-            String targetStr = targetId == -1 ? "—" : formatBodyName(targetId);
-            return "SYNODIC [" + focusStr + " → " + targetStr + "]";
+            String selectedStr = selectedId == -1 ? "—" : formatBodyName(selectedId);
+            return "SYNODIC [" + focusStr + " → " + selectedStr + "]";
         }
         return formatCameraFrame(frame);
     }
