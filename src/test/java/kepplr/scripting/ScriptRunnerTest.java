@@ -220,6 +220,9 @@ class ScriptRunnerTest {
         public void setTrailDuration(int id, double s) {}
 
         @Override
+        public void setTrailReferenceBody(int naifId, int referenceBodyId) {}
+
+        @Override
         public void setVectorVisible(int id, VectorType t, boolean v) {}
 
         @Override

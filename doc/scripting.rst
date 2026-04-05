@@ -200,6 +200,13 @@ Overlays and Visibility
    * - ``setTrailDuration(int/String body, double seconds)``
      - Set the duration of a body's orbit trail in seconds.
      - ``kepplr.setTrailDuration("Earth", 31557600.0)``
+   * - ``setTrailReferenceBody(int/String body, int/String referenceBody)``
+     - Set the reference body for a trail and its velocity arrow.  The trail shows the body's
+       position relative to ``referenceBody``.  Pass ``-1`` (integer form) to restore the
+       default heuristic: natural satellites use their system barycenter; planets, barycenters,
+       and spacecraft have no reference body and are drawn in inertial J2000.  The velocity
+       arrow always points in the same direction as the trail.
+     - ``kepplr.setTrailReferenceBody("Europa", "Io")``
    * - ``setVectorVisible(int/String body, VectorType type, boolean visible)``
      - Show or hide a vector overlay.  Vector types include ``VectorTypes.velocity()``,
        ``VectorTypes.towardBody(int naifId)``, ``VectorTypes.bodyAxisX()``, etc.
@@ -226,6 +233,41 @@ Overlays and Visibility
      - Set the render quality.  Use ``RenderQuality.LOW``, ``RenderQuality.MEDIUM``, or
        ``RenderQuality.HIGH``.
      - ``kepplr.setRenderQuality(RenderQuality.HIGH)``
+
+
+.. note::
+
+   **Trail coordinate frame and reference body.**
+
+   Trails are only drawn in a rotating frame (SYNODIC or BODY_FIXED) when the body has
+   a **reference body** — either the default heuristic or one set explicitly with
+   ``setTrailReferenceBody``.
+
+   *Default reference bodies:*
+
+   * **Natural satellites** (NAIF 100–999, not ending in 99, plus Pluto) — their system
+     barycenter is used automatically (e.g. Europa → Jupiter Barycenter).
+   * **Major planets** (e.g. Earth = 399, Mars = 499), **barycenters**, and **spacecraft** —
+     no reference body by default.  These trails are always drawn in inertial J2000
+     **regardless of the active camera frame**, even when SYNODIC or BODY_FIXED is active.
+
+   *Effect of the camera frame:*
+
+   * ``INERTIAL`` — trail is drawn relative to the reference body (if any) in J2000.  Bodies
+     without a reference body are drawn in absolute heliocentric J2000.
+   * ``SYNODIC`` — for bodies *with* a reference body, sample positions are projected into the
+     co-rotating frame at each sample epoch and re-expressed at render time, so the trail
+     appears frozen in the rotating frame.  Bodies *without* a reference body are unaffected
+     and still render in inertial J2000.
+   * ``BODY_FIXED`` — same condition as SYNODIC; additionally, the reference body is forced
+     to the focus body, overriding any ``setTrailReferenceBody`` setting.
+
+   *Using* ``setTrailReferenceBody`` *with planets or spacecraft:*
+   Call ``setTrailReferenceBody`` to assign a reference body to any body that lacks one.
+   Once set, the rotating-frame paths activate for that body just as they do for satellites.
+   For example, ``kepplr.setTrailReferenceBody("Europa", "Io")`` overrides Europa's default
+   (Jupiter Barycenter) and draws its trail relative to Io; switching to SYNODIC then freezes
+   that relative trajectory in the co-rotating frame, revealing the Laplace resonance loops.
 
 
 Output

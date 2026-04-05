@@ -293,6 +293,11 @@ public final class DefaultSimulationCommands implements SimulationCommands {
     }
 
     @Override
+    public void setTrailReferenceBody(int naifId, int referenceBodyId) {
+        state.setTrailReferenceBody(naifId, referenceBodyId);
+    }
+
+    @Override
     public void setVectorVisible(int naifId, VectorType type, boolean visible) {
         state.setVectorVisible(naifId, type, visible);
     }

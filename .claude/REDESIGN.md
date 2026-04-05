@@ -272,13 +272,25 @@ switching the camera frame to Synodic with the selected body as the
   * if an orbital period cannot be calculated from orbital elements, default trail duration is **30 days**.
 * The trail API must allow the **duration** to be supplied as an argument, per body.
 * Trails must update with simulation time (dynamic).
-* Trails must be drawable in:
+* Trails must be drawable in the current active camera frame [D-066]:
 
-  * default: heliocentric J2000
-  * optionally: other frames (for resonance visualization)
+  * **INERTIAL** — heliocentric J2000 (default), or barycenter-anchored for
+    natural satellites and bodies with a configured reference body (D-065).
+  * **SYNODIC** — relative position `dP = body − ref` projected onto the synodic
+    basis at each sample ET; re-expressed via the current basis at render time so
+    the trail appears frozen in the rotating frame. Focus/selected body IDs follow
+    the synodic override pattern (same as the camera).
+  * **BODY_FIXED** — `dP` rotated into the focus body's fixed frame at each sample
+    ET; restored to J2000 at render time via the current rotation transpose. In
+    BODY_FIXED mode the reference body is **always the focus body** and
+    `setTrailReferenceBody` is ignored (D-067).
+* Trails read the *active* (post-fallback) camera frame, not the *requested* frame,
+  so they are automatically consistent when SYNODIC or BODY_FIXED falls back to
+  INERTIAL.
 * Trails must be renderable in **segments** such that different segments can be drawn in different frustums if needed.
 * Trail visibility must be togglable **per body** via `SimulationCommands.setTrailVisible(int naifId, boolean visible)`.
 * Trail duration must be settable **per body** via `SimulationCommands.setTrailDuration(int naifId, double seconds)`.
+* Trail reference body must be settable **per body** via `SimulationCommands.setTrailReferenceBody(int naifId, int referenceBodyId)`. Default `-1` uses the NAIF ID heuristic (natural satellites → system barycenter; everything else → Sun). In BODY_FIXED camera mode this setting is overridden by the focus body (D-067).
 * **Decluttering policy:** trails for satellite bodies are suppressed when the satellite's screen position is within
   `TRAIL_DECLUTTER_MIN_SEPARATION_PX` of its primary body's screen position. As the camera zooms in and the satellite
   separates from its primary on screen, its trail becomes visible. This threshold is defined in `KepplrConstants`.

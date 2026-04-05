@@ -352,6 +352,13 @@ class DefaultSimulationCommandsTest {
         }
 
         @Test
+        @DisplayName("setTrailReferenceBody delegates to state")
+        void setTrailReferenceBody() {
+            commands.setTrailReferenceBody(EARTH, MOON);
+            assertEquals(MOON, state.trailReferenceBodyProperty(EARTH).get());
+        }
+
+        @Test
         @DisplayName("setVectorVisible delegates to state")
         void setVectorVisible() {
             commands.setVectorVisible(EARTH, VectorTypes.velocity(), true);

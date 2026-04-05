@@ -443,6 +443,12 @@ class KepplrScriptTest {
         }
 
         @Override
+        public void setTrailReferenceBody(int naifId, int referenceBodyId) {
+            lastMethod = "setTrailReferenceBody";
+            lastIntArg = naifId;
+        }
+
+        @Override
         public void setVectorVisible(int id, VectorType t, boolean v) {
             lastMethod = "setVectorVisible";
             lastIntArg = id;

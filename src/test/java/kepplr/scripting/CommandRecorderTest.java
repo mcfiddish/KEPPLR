@@ -569,6 +569,11 @@ class CommandRecorderTest {
         }
 
         @Override
+        public void setTrailReferenceBody(int naifId, int referenceBodyId) {
+            lastMethod = "setTrailReferenceBody";
+        }
+
+        @Override
         public void setVectorVisible(int id, VectorType t, boolean v) {
             lastMethod = "setVectorVisible";
         }

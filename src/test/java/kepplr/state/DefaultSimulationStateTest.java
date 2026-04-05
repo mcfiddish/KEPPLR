@@ -295,6 +295,37 @@ class DefaultSimulationStateTest {
         }
 
         @Test
+        @DisplayName("trailReferenceBodyProperty defaults to -1")
+        void trailReferenceBodyDefault() {
+            assertEquals(-1, state.trailReferenceBodyProperty(EARTH).get());
+        }
+
+        @Test
+        @DisplayName("setTrailReferenceBody persists the reference body")
+        void setTrailReferenceBody() {
+            state.setTrailReferenceBody(EARTH, MOON);
+            assertEquals(MOON, state.trailReferenceBodyProperty(EARTH).get());
+        }
+
+        @Test
+        @DisplayName("setTrailReferenceBody is independent per body")
+        void trailReferenceBodyIndependent() {
+            state.setTrailReferenceBody(EARTH, MOON);
+            assertEquals(
+                    -1,
+                    state.trailReferenceBodyProperty(MOON).get(),
+                    "Moon's reference body should still be -1 (auto)");
+        }
+
+        @Test
+        @DisplayName("clearOverlayState resets trail reference body to default")
+        void clearOverlayStateClearsReferenceBody() {
+            state.setTrailReferenceBody(EARTH, MOON);
+            state.clearOverlayState();
+            assertEquals(-1, state.trailReferenceBodyProperty(EARTH).get());
+        }
+
+        @Test
         @DisplayName("vectorVisibleProperty defaults to false")
         void vectorVisibleDefault() {
             assertFalse(

@@ -798,6 +798,39 @@ public final class KepplrScript {
     }
 
     /**
+     * Set the reference body for the trail and velocity vector of a body by NAIF ID.
+     *
+     * <p><b>Execution semantics:</b> <em>Immediate</em>. The trail is resampled on the next render frame.
+     *
+     * <p>Both the orbital trail and the velocity direction arrow for {@code naifId} are drawn relative to
+     * {@code referenceBodyId}. Use {@code -1} to restore the default heuristic (natural satellites use their system
+     * barycenter; all other bodies use heliocentric coordinates).
+     *
+     * <p>Example: {@code kepplr.setTrailReferenceBody(-1234, 301)} — show Artemis II's trail relative to the Moon.
+     *
+     * @param naifId NAIF ID of the body whose trail reference to set
+     * @param referenceBodyId NAIF ID of the reference body, or {@code -1} for auto
+     */
+    public void setTrailReferenceBody(int naifId, int referenceBodyId) {
+        commands.setTrailReferenceBody(naifId, referenceBodyId);
+    }
+
+    /**
+     * Set the reference body for the trail and velocity vector of a body by name.
+     *
+     * <p><b>Execution semantics:</b> <em>Immediate</em>. The trail is resampled on the next render frame.
+     *
+     * <p>Example: {@code kepplr.setTrailReferenceBody("Artemis II", "Moon")}
+     *
+     * @param bodyName name of the body whose trail reference to set; case-insensitive
+     * @param referenceBodyName name of the reference body; case-insensitive
+     * @throws IllegalArgumentException if either name cannot be resolved
+     */
+    public void setTrailReferenceBody(String bodyName, String referenceBodyName) {
+        commands.setTrailReferenceBody(resolve(bodyName), resolve(referenceBodyName));
+    }
+
+    /**
      * Toggle vector overlay visibility by NAIF ID.
      *
      * <p><b>Execution semantics:</b> <em>Immediate</em>.

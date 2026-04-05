@@ -806,13 +806,13 @@ would cause a compilation error since `toScript()` has no default implementation
 
 ---
 
-## D-037: Status window layout: wider, always-on-top, section separators, live body filter
+## D-037: Status window layout: wider, section separators, live body filter
 **Status:** Accepted
 **Roadmap step:** 27 (status window layout improvements)
 
 **Context:** The status window at 380px was too narrow for name + distance on one row. The body tree search field only resolved on Enter, requiring exact names. No visual separation existed between the body readout and status section. The transition progress bar was rarely noticed.
 
-**Decision:** Window width increased to 440px. `stage.setAlwaysOnTop(true)` — user can minimise if needed. JavaFX `Separator` nodes inserted between body readout, status section, and body list. Transition progress bar removed. Body tree search field replaced with live filtering: on each keystroke, a filtered copy of the master tree is built, keeping items whose display name or NAIF ID contains the filter text (case-insensitive). Parent groups are included (expanded) if any child matches, or if the group name itself matches. Enter still resolves exact NAIF IDs via `BodyLookupService.resolve()`. The Clear button on the Selected row was removed; only Focus and Target buttons remain.
+**Decision:** Window width increased to 440px. The stage remains a normal non-always-on-top window, consistent with D-016. JavaFX `Separator` nodes inserted between body readout, status section, and body list. Transition progress bar removed. Body tree search field replaced with live filtering: on each keystroke, a filtered copy of the master tree is built, keeping items whose display name or NAIF ID contains the filter text (case-insensitive). Parent groups are included (expanded) if any child matches, or if the group name itself matches. Enter still resolves exact NAIF IDs via `BodyLookupService.resolve()`. The Clear button on the Selected row was removed; only Focus and Target buttons remain.
 
 **Alternatives considered:** CSS stylesheet instead of inline styles — deferred to a future polish pass. Collapsible status section — rejected as over-engineering for the current use case.
 
@@ -1244,8 +1244,101 @@ incorrect implication that the synodic "other body" is tied to
 
 ---
 
-*Last updated: D-064 (synodic frame override state seeded from focus + selected), D-063 (focus-tracking anchor reset on state restore), D-062 (sprite fallback for missing body-fixed frames), D-061 (parent-relative velocity), D-060 (Edit menu removal)*
+## D-065: Trail reference body is configurable per body; velocity vector is coupled
+**Status:** Accepted
+**Roadmap step:** §7.5 follow-up (trail coordinate system)
+
+**Context:** All orbital trails were drawn relative to a reference body derived from the NAIF ID
+heuristic: natural satellites used their system barycenter; everything else used heliocentric (Sun)
+coordinates. For spacecraft with negative NAIF IDs the heuristic always gave heliocentric, which
+made their trails drift across the scene as the reference planet moved — useless for viewing a lunar
+approach trajectory. The velocity direction arrow (D-047/D-061) was designed to match the trail
+reference convention, so changing the trail reference without also changing the velocity arrow would
+make the arrow point in a direction inconsistent with the trail.
+
+**Decision:** Add `setTrailReferenceBody(int naifId, int referenceBodyId)` to `SimulationCommands`
+and expose it in `KepplrScript`. The command stores the reference body in `SimulationState` as a
+per-body `ReadOnlyIntegerProperty` (default `-1` = use NAIF heuristic). `TrailManager` reads this
+property at resample time; a change in reference body forces an immediate resample. `VelocityVectorType`
+reads the same property at point-of-use via a package-private `SimulationState` reference held in
+`VectorTypes`, set once during `KepplrApp.simpleInitApp()`. This couples both the trail and velocity
+arrow to the configured reference body without changing the `VectorType` interface or the `VectorKey`
+scheme. `clearOverlayState()` clears the reference body map on config reload.
+
+**Alternatives considered:** Parameterizing `VelocityVectorType` with a reference body and updating
+`VectorKey` — rejected because changing the reference body would require removing and re-adding the
+vector definition, requiring `DefaultSimulationCommands` to reach into render-layer state. A separate
+`setVelocityReferenceBody` command — rejected per discussion (option 2: trail and velocity should
+always agree).
+
+**Consequences:** Scripting: `kepplr.setTrailReferenceBody("Artemis II", "Moon")` makes both the
+trail and velocity arrow for Artemis II Moon-relative. The NAIF heuristic remains the default;
+existing scripts are unaffected. The `TrailState.barycenterId` field now stores the effective reference
+body (not just the satellite-barycenter special case), enabling the reference-body-change staleness
+trigger.
+
+---
+
+## D-066: Synodic trail rendering uses active frame and synodic override IDs
+**Status:** Accepted
+**Roadmap step:** Branch 58 (trail camera-frame rendering)
+
+**Context:** The camera in SYNODIC mode uses `synodicFrameFocusIdProperty()` /
+`synodicFrameSelectedIdProperty()` override IDs (set by `setSynodicFrame()`) rather
+than the raw `focusedBodyIdProperty()` / `selectedBodyIdProperty()`. Trail rendering
+needed to mirror this resolution to stay consistent with what the camera is actually
+showing. Additionally, `cameraFrameProperty()` reflects the *requested* frame, which
+may differ from the *actual* frame when SYNODIC or BODY_FIXED falls back to INERTIAL
+(e.g., no selected body or missing PCK data).
+
+**Decision:** Trail rendering reads `activeCameraFrameProperty()` (the post-fallback
+actual frame) and resolves synodic body IDs using the same override-first logic as
+KepplrApp: `synodicFrameFocusId != -1 ? synodicFrameFocusId : focusedBodyId`, and
+similarly for selected. This ensures the trail frame is always consistent with the
+camera frame.
+
+**Alternatives considered:** Always reading `focusedBodyId` / `selectedBodyId` —
+rejected because it would draw trails in a different synodic frame than the camera when
+`setSynodicFrame()` overrides are active.
+
+**Consequences:** Synodic trail rendering is automatically correct for both the
+interactive case (F key toggles synodic with focus+selected) and the scripted case
+(`setSynodicFrame()` with explicit body IDs).
+
+---
+
+## D-067: In BODY_FIXED mode, trail reference body is always the focus body
+**Status:** Accepted
+**Roadmap step:** Branch 58 (trail camera-frame rendering)
+
+**Context:** Body-fixed trail rendering requires a reference body to define the
+coordinate system origin for `dP = body − ref`. In BODY_FIXED mode the camera is
+already rotating with the focus body's fixed frame, so the natural and only sensible
+reference is the focus body itself. The per-body `setTrailReferenceBody()` override
+(D-065) is not meaningful in this context — a Phobos trail drawn in Mars body-fixed
+coordinates should always be anchored to Mars, not to a user-configured reference body.
+
+**Decision:** In BODY_FIXED mode `TrailManager` always uses `focusId` as the
+barycenter/reference body, ignoring any per-body `setTrailReferenceBody`
+configuration. This is determined before the staleness check (computing
+`barycenterId = bodyFixed ? focusId : effectiveRef`) to avoid a mismatch where
+`TrailState.barycenterId` stores `focusId` but the check compares against
+`effectiveRef`.
+
+**Alternatives considered:** Honoring `setTrailReferenceBody` in BODY_FIXED mode —
+rejected because no meaningful use case exists and it would require projecting `dP`
+into a frame whose origin differs from the rotation pivot, producing a trail that
+orbits the wrong point in body-fixed space.
+
+**Consequences:** In BODY_FIXED mode, satellite and spacecraft trails are always
+centered on the focus body. Scripts using `setTrailReferenceBody` for spacecraft
+approach trajectories will see the BODY_FIXED path take precedence when the camera
+is in that frame; switching back to INERTIAL or SYNODIC restores the configured
+reference body.
+
+---
+
+*Last updated: D-067 (BODY_FIXED trail reference always focus body), D-066 (synodic trail uses active frame and override IDs), D-065 (configurable trail reference body), D-064 (synodic frame override state seeded from focus + selected), D-063 (focus-tracking anchor reset on state restore), D-062 (sprite fallback for missing body-fixed frames)*
 *Backfill note: Entries D-001 through D-009 were reconstructed retrospectively.
 D-010 onwards recorded in real time.*
-
 

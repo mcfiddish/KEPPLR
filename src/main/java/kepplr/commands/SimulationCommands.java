@@ -245,21 +245,21 @@ public interface SimulationCommands {
             double lookX, double lookY, double lookZ, double upX, double upY, double upZ, double durationSeconds);
 
     /**
-     * Switch to the synodic camera frame defined by explicit focus and target bodies, without changing focused,
+     * Switch to the synodic camera frame defined by explicit focus and selected bodies, without changing focused,
      * targeted, or selected body state.
      *
      * <p>Use this when a script needs a specific synodic view without disturbing interaction state. To switch to the
-     * synodic frame using the current SimulationState focus and target, use {@code setCameraFrame(CameraFrame.SYNODIC)}
-     * instead.
+     * synodic frame using the current SimulationState focus and selected body, use
+     * {@code setCameraFrame(CameraFrame.SYNODIC)} instead.
      *
      * <p>Example — Earth-Moon synodic view:
      *
      * <pre>
-     *   setSynodicFrame(399, 301); // focus=Earth, target=Moon
+     *   setSynodicFrame(399, 301); // focus=Earth, selected=Moon
      * </pre>
      *
      * @param focusNaifId NAIF ID of the focus body defining the frame origin
-     * @param targetNaifId NAIF ID of the target body defining the +X axis
+     * @param targetNaifId NAIF ID of the selected body defining the +X axis
      */
     void setSynodicFrame(int focusNaifId, int targetNaifId);
 
@@ -362,6 +362,18 @@ public interface SimulationCommands {
      * @param seconds trail duration in simulation seconds; use {@code -1} for the default (orbital period or 30 days)
      */
     void setTrailDuration(int naifId, double seconds);
+
+    /**
+     * Set the reference body for the trail (and velocity vector) of a specific body (§7.5, D-065).
+     *
+     * <p>Both the orbital trail and the velocity direction arrow for {@code naifId} are drawn relative to
+     * {@code referenceBodyId}. Use {@code -1} to restore the default heuristic (natural satellites use their system
+     * barycenter; all other bodies use heliocentric coordinates).
+     *
+     * @param naifId NAIF ID of the body whose trail reference to set
+     * @param referenceBodyId NAIF ID of the reference body, or {@code -1} for auto
+     */
+    void setTrailReferenceBody(int naifId, int referenceBodyId);
 
     /**
      * Toggle vector overlay visibility for a specific body and vector type (§7.6).

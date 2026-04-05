@@ -82,6 +82,7 @@ public final class DefaultSimulationState implements SimulationState {
     private final SimpleBooleanProperty hudInfoVisible = new SimpleBooleanProperty(true);
     private final ConcurrentHashMap<Integer, SimpleBooleanProperty> trailVisibility = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<Integer, SimpleDoubleProperty> trailDuration = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<Integer, SimpleIntegerProperty> trailReferenceBody = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<VectorKey, SimpleBooleanProperty> vectorVisibility = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<Integer, SimpleBooleanProperty> frustumVisibility = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<Integer, SimpleBooleanProperty> bodyVisibility = new ConcurrentHashMap<>();
@@ -413,6 +414,11 @@ public final class DefaultSimulationState implements SimulationState {
     }
 
     @Override
+    public ReadOnlyIntegerProperty trailReferenceBodyProperty(int naifId) {
+        return trailReferenceBody.computeIfAbsent(naifId, id -> new SimpleIntegerProperty(-1));
+    }
+
+    @Override
     public ReadOnlyBooleanProperty vectorVisibleProperty(int naifId, VectorType type) {
         return vectorVisibility.computeIfAbsent(new VectorKey(naifId, type), k -> new SimpleBooleanProperty(false));
     }
@@ -443,6 +449,12 @@ public final class DefaultSimulationState implements SimulationState {
         trailDuration
                 .computeIfAbsent(naifId, id -> new SimpleDoubleProperty(-1.0))
                 .set(seconds);
+    }
+
+    public void setTrailReferenceBody(int naifId, int referenceBodyId) {
+        trailReferenceBody
+                .computeIfAbsent(naifId, id -> new SimpleIntegerProperty(-1))
+                .set(referenceBodyId);
     }
 
     public void setVectorVisible(int naifId, VectorType type, boolean visible) {
@@ -513,6 +525,7 @@ public final class DefaultSimulationState implements SimulationState {
         labelVisibility.clear();
         trailVisibility.clear();
         trailDuration.clear();
+        trailReferenceBody.clear();
         vectorVisibility.clear();
         frustumVisibility.clear();
         bodyVisibility.clear();

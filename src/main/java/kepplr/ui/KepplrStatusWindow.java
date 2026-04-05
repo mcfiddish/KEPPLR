@@ -120,6 +120,10 @@ public final class KepplrStatusWindow {
     /** Set by {@link #signalConfigRefresh()} from any thread; drained by the AnimationTimer on the FX thread. */
     private volatile boolean pendingConfigRefresh = false;
 
+    private volatile boolean pendingWindowPosition = false;
+    private volatile double pendingWindowX = 0.0;
+    private volatile double pendingWindowY = 0.0;
+
     private TextArea consoleInput;
     private LogWindow logWindow;
 
@@ -203,7 +207,6 @@ public final class KepplrStatusWindow {
 
         stage = new Stage();
         stage.setTitle("KEPPLR");
-        stage.setAlwaysOnTop(true);
 
         MenuBar menuBar = buildMenuBar();
         VBox bodyReadout = buildBodyReadout();
@@ -238,6 +241,7 @@ public final class KepplrStatusWindow {
 
         stage.show();
         stage.toFront();
+        applyPendingPosition();
         bridge.startPolling();
 
         // Drain script output queue, log window, and check capture thread status on each FX frame
@@ -245,6 +249,7 @@ public final class KepplrStatusWindow {
         new AnimationTimer() {
             @Override
             public void handle(long now) {
+                applyPendingPosition();
                 drainScriptOutput();
                 checkCaptureThreadDone();
                 drainConfigRefresh();
@@ -273,6 +278,25 @@ public final class KepplrStatusWindow {
         if (stage != null) {
             stage.setX(x);
             stage.setY(y);
+        }
+    }
+
+    /**
+     * Request a window position update from any thread.
+     *
+     * <p>The position is applied on the next JavaFX pulse after the window exists.
+     */
+    public void requestPosition(double x, double y) {
+        pendingWindowX = x;
+        pendingWindowY = y;
+        pendingWindowPosition = true;
+    }
+
+    private void applyPendingPosition() {
+        if (pendingWindowPosition && stage != null) {
+            stage.setX(pendingWindowX);
+            stage.setY(pendingWindowY);
+            pendingWindowPosition = false;
         }
     }
 
