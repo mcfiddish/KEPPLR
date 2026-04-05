@@ -2,7 +2,7 @@
 Scripting Examples
 ==================
 
-This page provides ready-to-use Groovy scripts for common KEPPLR tasks.  Copy any example into
+This page provides ready-to-use Groovy scripts for common KEPPLR tasks.  Run any example with
 ``File > Run Script`` or paste it into the Script Console.  For the full API reference, see
 :doc:`scripting`.
 
@@ -18,8 +18,6 @@ Fly the camera to each of the inner planets in sequence.
    kepplr.setTimeRate(1.0)
 
    ["Mercury", "Venus", "Earth", "Mars"].each { body ->
-       kepplr.focusBody(body)
-       kepplr.waitTransition()
        kepplr.goTo(body, 15.0, 4.0)
        kepplr.waitTransition()
        kepplr.displayMessage(body, 3.0)
@@ -34,8 +32,7 @@ Focus on a body, enable its trail, and fast-forward through one orbital period.
 
 .. code-block:: groovy
 
-    kepplr.focusBody("SUN")
-    kepplr.waitTransition()
+    kepplr.centerBody("SUN")
     kepplr.setCameraPosition(0,5e8,0,5)
     kepplr.waitTransition()
     kepplr.setCameraOrientation(0,-1,0,0,1,0,5)
@@ -60,8 +57,7 @@ Zoom in on the Earth and watch the Moon orbit.  Show the Moon's velocity vector.
 
     kepplr.setUTC("2024 Mar 25 00:00:00")
 
-    kepplr.focusBody("Earth")
-    kepplr.waitTransition()
+    kepplr.centerBody("Earth")
     kepplr.setCameraPosition(0,1e6,0,5)
     kepplr.waitTransition()
     kepplr.setCameraOrientation(0,-1,0,0,1,0,5)
@@ -89,8 +85,6 @@ by a fixed time step.
 
    kepplr.setWindowSize(1920, 1080)
 
-   kepplr.focusBody("Jupiter")
-   kepplr.waitTransition()
    kepplr.goTo("Jupiter", 12.0, 3.0)
    kepplr.waitTransition()
 
@@ -112,8 +106,6 @@ Orbit the camera 360 degrees around Saturn for a cinematic sweep.
 
 .. code-block:: groovy
 
-   kepplr.focusBody("Saturn")
-   kepplr.waitTransition()
    kepplr.goTo("Saturn", 10.0, 5.0)
    kepplr.waitTransition()
    kepplr.setPaused(true)
@@ -150,8 +142,6 @@ Switch to the body-fixed frame to watch a planet rotate beneath the camera.
 
 .. code-block:: groovy
 
-   kepplr.focusBody("Earth")
-   kepplr.waitTransition()
    kepplr.goTo("Earth", 20.0, 4.0)
    kepplr.waitTransition()
 
@@ -167,8 +157,7 @@ View the Earth-Moon system from a synodic (co-rotating) frame where both bodies 
 
 .. code-block:: groovy
 
-   kepplr.focusBody("Earth")
-   kepplr.waitTransition()
+   kepplr.centerBody("Earth")
    kepplr.selectBody("Moon")
    kepplr.setCameraFrame(CameraFrame.SYNODIC)
    kepplr.setCameraPosition(-1e6,5e4,0,5)
@@ -198,9 +187,6 @@ two-petalled rose and Ganymede traces a single closed loop — a direct visual
 fingerprint of the Laplace resonance that prevents these three moons from ever
 aligning on the same side of Jupiter.
 
-You can set up a similar script to view the orbits of the minor satellites in
-the Pluto-Charon system!
-
 .. code-block:: groovy
 
     // NAIF IDs for the inner Galilean moons
@@ -212,7 +198,7 @@ the Pluto-Charon system!
     kepplr.setPaused(true)
 
     // ── Camera: looking down at Io from above ──────────
-    kepplr.focusBody(io)
+    kepplr.centerBody(io)
     kepplr.waitTransition()
 
     // Another interesting perspective - view in an Io-Europa synodic frame.
@@ -301,11 +287,15 @@ take action.  This example waits for the New Horizons Pluto closest approach.
 .. code-block:: groovy
 
     kepplr.setUTC("2015 Jul 14 07:00:00")
-    kepplr.focusBody("NH_SPACECRAFT")
+    kepplr.goTo("NH_SPACECRAFT", 20, 5)
     kepplr.waitTransition()
     kepplr.setSynodicFrame("NH_SPACECRAFT", "PLUTO")
+    kepplr.setCameraPosition(-0.050, 0.030, 0, -98, 5)
+    kepplr.waitTransition()
+    // look at Pluto (+X direction in the synodic frame)
+    kepplr.setCameraOrientation(1,0,0,0,0,1,5)
+    kepplr.waitTransition()
 
-    kepplr.setLabelVisible("Pluto", true)
     kepplr.setFrustumVisible("NH_LORRI", true)
 
     kepplr.setTimeRate(600.0)
@@ -313,7 +303,6 @@ take action.  This example waits for the New Horizons Pluto closest approach.
     // slow down the animation just before closest approach
     kepplr.waitUntilSim("2015 Jul 14 11:30:00")
     kepplr.setTimeRate(60.0)
-
 
     // Block until closest approach
     kepplr.waitUntilSim("2015 Jul 14 11:49:57")
@@ -333,8 +322,6 @@ changes on every pass.
 
 .. code-block:: groovy
 
-   kepplr.focusBody("Jupiter")
-   kepplr.waitTransition()
    kepplr.goTo("Jupiter", 5.0, 3.0)
    kepplr.waitTransition()
 
@@ -370,8 +357,7 @@ Use a Groovy map to associate bodies with display settings, then iterate over it
         kepplr.setLabelVisible(name, true)
     }
 
-    kepplr.focusBody("Sun")
-    kepplr.waitTransition()
+    kepplr.centerBody("Sun")
     kepplr.setCameraPosition(0,0,2e10,5)
     kepplr.waitTransition()
     kepplr.setCameraOrientation(0,0,-1,1,0,0,5)
@@ -389,8 +375,6 @@ Groovy closures keep the repetitive boilerplate in one place.
 .. code-block:: groovy
 
    def visit = { String body, double apparentRadius, double holdSeconds ->
-       kepplr.focusBody(body)
-       kepplr.waitTransition()
        kepplr.goTo(body, apparentRadius, 3.0)
        kepplr.waitTransition()
        kepplr.displayMessage(body, holdSeconds)
@@ -424,8 +408,6 @@ This pattern is useful for searching for a geometric event.
 
 .. code-block:: java
 
-   kepplr.focusBody("Earth")
-   kepplr.waitTransition()
    kepplr.goTo("Earth", 3.0, 3.0)
    kepplr.waitTransition()
    kepplr.setLabelVisible("Moon", true)
@@ -490,15 +472,13 @@ Record a state string at regular intervals so you can return to interesting mome
 
    def snapshots = []
 
-   kepplr.focusBody("Mars")
-   kepplr.waitTransition()
    kepplr.goTo("Mars", 10.0, 3.0)
    kepplr.waitTransition()
 
    kepplr.setTimeRate(86400.0)   // 1 day per second
 
    5.times { i ->
-       kepplr.waitSim(86400.0 * 30)   // wait 30 simulated days
+       kepplr.waitSim(86400.0 * 5)   // wait 5 simulated days
        snapshots << kepplr.getStateString()
        kepplr.displayMessage("Snapshot ${i + 1} saved")
    }
