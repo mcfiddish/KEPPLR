@@ -198,61 +198,63 @@ two-petalled rose and Ganymede traces a single closed loop — a direct visual
 fingerprint of the Laplace resonance that prevents these three moons from ever
 aligning on the same side of Jupiter.
 
+You can set up a similar script to view the orbits of the minor satellites in
+the Pluto-Charon system!
+
 .. code-block:: groovy
 
-   // NAIF IDs for the inner Galilean moons and Jupiter's system barycenter
-   def io                = 501
-   def europa            = 502
-   def ganymede          = 503
-   def jupiterBarycenter = 5
+    // NAIF IDs for the inner Galilean moons
+    def io                = 501
+    def europa            = 502
+    def ganymede          = 503
 
-   kepplr.setUTC("2024 Jan 01 00:00:00")
-   kepplr.setPaused(true)
+    kepplr.setUTC("2024 Jan 01 00:00:00")
+    kepplr.setPaused(true)
 
-   // ── Camera: looking down at Jupiter's orbit plane from above ──────────
-   // Focus on Jupiter barycenter; select Io so the synodic frame co-rotates
-   // with Io's orbit (Io stays on the synodic +X axis).
-   kepplr.focusBody(jupiterBarycenter)
-   kepplr.waitTransition()
-   kepplr.selectBody(io)
-   kepplr.setCameraFrame(CameraFrame.SYNODIC)
+    // ── Camera: looking down at Io from above ──────────
+    kepplr.focusBody(io)
+    kepplr.waitTransition()
 
-   // 2.5 million km above the system along the synodic +Z axis
-   // (approximately the orbit-plane normal), giving a top-down view.
-   kepplr.setCameraPosition(0, 0, 2.5e6, 5.0)
-   kepplr.waitTransition()
-   // Look straight down; synodic +X (toward Io) points right in the view.
-   kepplr.setCameraOrientation(0, 0, -1, 1, 0, 0, 5.0)
-   kepplr.waitTransition()
-   kepplr.setFov(55, 3.0)
-   kepplr.waitTransition()
+    // Another interesting perspective - view in an Io-Europa synodic frame.
+    // kepplr.selectBody(europa)
+    // kepplr.setCameraFrame(CameraFrame.SYNODIC)
 
-   // ── Trails: draw Europa and Ganymede relative to Io ───────────────────
-   // setTrailReferenceBody makes each trail show pos(body) - pos(Io).
-   // In the co-rotating synodic frame this reveals the closed loop geometry.
-   kepplr.setTrailReferenceBody(europa, io)
-   kepplr.setTrailReferenceBody(ganymede, io)
+    // 2.5 million km above the system along the synodic +Z axis
+    // (approximately the orbit-plane normal), giving a top-down view.
+    kepplr.setCameraPosition(0, 0, 2.5e6, 5.0)
+    kepplr.waitTransition()
+    // Look straight down; synodic +X (toward Europa) points up in the view.
+    kepplr.setCameraOrientation(0, 0, -1, 1, 0, 0, 5.0)
+    kepplr.waitTransition()
+    kepplr.setFov(55, 3.0)
+    kepplr.waitTransition()
 
-   // Trail duration = 4 Io orbital periods ≈ 611 400 s.
-   // In that time Europa completes exactly 2 orbits and Ganymede exactly 1,
-   // tracing the full resonance pattern.
-   def fourIoPeriods = 4 * 1.769137 * 86400   // ≈ 611 400 s
+    // ── Trails: draw Europa and Ganymede relative to Io ───────────────────
+    // setTrailReferenceBody makes each trail show pos(body) - pos(Io).
+    // In the co-rotating synodic frame this reveals the closed loop geometry.
+    kepplr.setTrailReferenceBody(europa, io)
+    kepplr.setTrailReferenceBody(ganymede, io)
 
-   kepplr.setTrailDuration(europa, fourIoPeriods)
-   kepplr.setTrailDuration(ganymede, fourIoPeriods)
-   kepplr.setTrailVisible(europa, true)
-   kepplr.setTrailVisible(ganymede, true)
-   kepplr.setLabelVisible(io, true)
-   kepplr.setLabelVisible(europa, true)
-   kepplr.setLabelVisible(ganymede, true)
+    // Trail duration = 4 Io orbital periods ≈ 611 400 s.
+    // In that time Europa completes exactly 2 orbits and Ganymede exactly 1,
+    // tracing the full resonance pattern.
+    def fourIoPeriods = 4 * 1.769137 * 86400   // ≈ 611 400 s
 
-   // ── Run for exactly 4 Io periods ──────────────────────────────────────
-   kepplr.displayMessage("Laplace resonance  Io 1 : Europa 2 : Ganymede 4")
-   kepplr.setTimeRate(50000.0)
-   kepplr.setPaused(false)
-   kepplr.waitSim(fourIoPeriods)
-   kepplr.setPaused(true)
-   kepplr.displayMessage("Pattern complete: Europa 2 loops, Ganymede 1 loop", 6.0)
+    kepplr.setTrailDuration(europa, fourIoPeriods)
+    kepplr.setTrailDuration(ganymede, fourIoPeriods)
+    kepplr.setTrailVisible(europa, true)
+    kepplr.setTrailVisible(ganymede, true)
+    kepplr.setLabelVisible(io, true)
+    kepplr.setLabelVisible(europa, true)
+    kepplr.setLabelVisible(ganymede, true)
+
+    // ── Run for exactly 4 Io periods ──────────────────────────────────────
+    kepplr.displayMessage("Laplace resonance  Io 1 : Europa 2 : Ganymede 4")
+    kepplr.setTimeRate(50000.0)
+    kepplr.setPaused(false)
+    kepplr.waitSim(fourIoPeriods)
+    kepplr.setPaused(true)
+    kepplr.displayMessage("Pattern complete: Europa 2 loops, Ganymede 1 loop", 6.0)
 
 
 Toggle Overlays
