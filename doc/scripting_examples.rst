@@ -183,7 +183,7 @@ Visualise the 1:2:4 orbital resonance of Io, Europa, and Ganymede.
 By drawing Europa's and Ganymede's trails **relative to Io** while the camera
 rotates with Io's orbit (synodic frame), the resonance geometry becomes visible
 as closed curves.  Over exactly four Io orbital periods Europa traces a
-two-petalled rose and Ganymede traces a single closed loop — a direct visual
+kidney-bean shape and Ganymede traces a three-petal rose — a direct visual
 fingerprint of the Laplace resonance that prevents these three moons from ever
 aligning on the same side of Jupiter.
 

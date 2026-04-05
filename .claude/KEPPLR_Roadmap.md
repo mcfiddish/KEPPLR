@@ -707,9 +707,9 @@ pass with no architectural impact.
 
 - **Body readout:** Each row now shows "Name (NAIF_ID)" with camera-to-body
   distance right-aligned on the same line. Distance auto-switches units: metres
-  (< 1 km), km (< 0.01 AU), AU (≥ 0.01 AU). Row order changed to Focused →
-  Targeted → Selected (focused is the camera anchor, displayed first). Clear
-  button removed; only Focus and Target buttons remain on the Selected row.
+  (< 1 km), km (< 0.01 AU), AU (≥ 0.01 AU). Row order is Center →
+  Targeted → Selected. The Selected row provides Center, Go To, and Point At
+  buttons.
   (See D-036.)
 
 - **Window:** Width increased from 380px to 440px. JavaFX `Separator` lines
