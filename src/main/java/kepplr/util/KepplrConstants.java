@@ -573,15 +573,14 @@ public final class KepplrConstants {
     /**
      * Default duration for a {@code pointAt} slew (seconds).
      *
-     * <p>Applied when {@code targetBody()} and {@code focusBody()} implicitly call {@code pointAt()} with no explicit
-     * duration.
+     * <p>Used by UI interactions that initiate a default {@code pointAt()} slew with no explicit duration.
      */
     public static final double DEFAULT_SLEW_DURATION_SECONDS = 3.0;
 
     /**
      * Default duration for a {@code goTo} translation (seconds).
      *
-     * <p>Applied when {@code focusBody()} implicitly calls {@code goTo()} with no explicit duration.
+     * <p>Used by UI interactions that initiate a default {@code goTo()} translation with no explicit duration.
      */
     public static final double DEFAULT_GOTO_DURATION_SECONDS = 3.0;
 

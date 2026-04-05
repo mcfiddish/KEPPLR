@@ -24,19 +24,18 @@ public interface SimulationCommands {
     void selectBody(int naifId);
 
     /**
-     * Focus the camera on a body (orbit camera mode, §4.5).
+     * Center the interaction state on a body (orbit-camera pivot, §4.5).
      *
-     * <p>Focusing also selects and targets the body.
+     * <p>Centering also selects and targets the body, but does <b>not</b> change the camera pose.
      *
-     * @param naifId NAIF ID of the body to focus
+     * @param naifId NAIF ID of the body to center
      */
-    void focusBody(int naifId);
+    void centerBody(int naifId);
 
     /**
-     * Target a body — "point at" (§4.4).
+     * Target a body (§4.4).
      *
-     * <p>The camera orientation tracks the target body center while camera position remains fixed. Targeting also
-     * selects the body and disables tracking (§4.6).
+     * <p>Targeting also selects the body, but does <b>not</b> change the camera pose.
      *
      * @param naifId NAIF ID of the body to target
      */
@@ -86,7 +85,8 @@ public interface SimulationCommands {
      * Slew the camera orientation to point at the given body (Step 18).
      *
      * <p>Non-blocking. Initiates a transition and returns immediately. If a transition is already in progress, it is
-     * cancelled and the new slew begins from the camera's current orientation. Camera position is not changed.
+     * cancelled and the new slew begins from the camera's current orientation. Camera position is not changed. Also
+     * updates interaction state so the target and selected bodies match the explicit point-at target.
      *
      * <p>If {@code durationSeconds} is zero or negative, the camera snaps to the end orientation instantly on the next
      * frame.
@@ -100,7 +100,8 @@ public interface SimulationCommands {
      * Translate the camera toward the given body until it subtends the requested apparent radius (Step 18).
      *
      * <p>Non-blocking. If a {@code pointAt} transition is currently in progress, the {@code goTo} is queued and begins
-     * automatically when the {@code pointAt} completes. Otherwise the translation begins immediately.
+     * automatically when the {@code pointAt} completes. Otherwise the translation begins immediately. Also updates
+     * interaction state so the selected, focused, and targeted bodies all match the explicit approach target.
      *
      * <p>No light-time correction is applied to the translation path (per KEPPLR_Roadmap.md).
      *

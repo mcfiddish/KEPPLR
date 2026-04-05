@@ -32,10 +32,10 @@ class SimulationCommandsTest {
     }
 
     @Test
-    @DisplayName("focusBody forwards call")
-    void focusBodyForwards() {
-        commands.focusBody(EARTH);
-        verify(commands).focusBody(EARTH);
+    @DisplayName("centerBody forwards call")
+    void centerBodyForwards() {
+        commands.centerBody(EARTH);
+        verify(commands).centerBody(EARTH);
     }
 
     @Test

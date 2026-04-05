@@ -90,7 +90,8 @@ implementation, not touching the renderer.
 
 ---
 
-## D-005: Body-fixed frame with fallback to inertial; SimulationState reflects actual vs. requested
+## D-005: Body-fixed frame with fallback to inertial; SimulationState reflects actual vs. 
+requested
 **Status:** Accepted  
 **Roadmap step:** 15
 
@@ -126,7 +127,7 @@ confirmation, even though UI work was not the primary focus of that step.
 
 **Consequences:** Establishes the pattern that visual confirmation prerequisites should
 be unblocked within the current step rather than deferred. This was also applied in
-Step 12 (temporary `focusBody(499)` call to enable orbital trail verification).
+Step 12 (temporary `centerBody(499)` call to enable orbital trail verification).
 
 ---
 
@@ -192,7 +193,8 @@ straightforward.
 
 ---
 
-## D-010: Camera transitions are non-blocking; pointAt uses slerp, goTo uses linear interpolation
+## D-010: Camera transitions are non-blocking; pointAt uses slerp, goTo uses linear 
+interpolation
 **Status:** Accepted  
 **Roadmap step:** 18
 
@@ -269,8 +271,9 @@ cancellation.
 **Status:** Accepted  
 **Roadmap step:** 18
 
-**Context:** `goTo` needs a default apparent radius to use when `focusBody` drives the
-transition. The formula `endDistance = bodyRadius / tan(apparentRadiusDeg × π/180)`
+**Context:** `goTo` needs a default apparent radius to use when the default
+center-and-goTo interaction drives the transition. The formula
+`endDistance = bodyRadius / tan(apparentRadiusDeg × π/180)`
 means the choice directly controls how close the camera ends up relative to the target
 body.
 
@@ -283,34 +286,42 @@ constant in `KepplrConstants` and can be adjusted without touching logic code.
 typical FOV), 5.0° (reasonable but less dramatic). 10.0° selected as the most
 immediately satisfying default for interactive use.
 
-**Consequences:** Scripts that call `focusBody` will land at 10° apparent radius by
-default. Scripts requiring a specific distance should call `goTo` directly with an
-explicit value.
+**Consequences:** UI actions that trigger the default center-and-goTo flow will land at
+10° apparent radius by default. Scripts requiring a specific distance should call
+`goTo` directly with an explicit value.
 
 ---
 
-## D-014: focusBody and targetBody compose pointAt/goTo internally; signatures unchanged
+## D-014: explicit `pointAt` and `goTo` also synchronize interaction state
 **Status:** Accepted  
 **Roadmap step:** 18
 
 **Context:** Step 18 introduced `pointAt` and `goTo` as explicit primitives on
-`SimulationCommands`. The existing `focusBody` and `targetBody` methods had direct
-camera manipulation semantics that needed to be expressed through these new primitives.
+`SimulationCommands`. A later interaction-model cleanup separated public
+`centerBody`/`targetBody` setters from camera motion, but in practice `goTo(body)`
+while still focused on another body produced inconsistent end-state behavior because
+focus tracking, camera-frame logic, and aberration policy still used the old focused
+body.
 
-**Decision:** `targetBody` calls `pointAt` internally after updating targeted body
-state. `focusBody` calls `pointAt` then queues `goTo` as a pending transition that
-begins when `pointAt` completes. Neither method's signature changes. Existing call
-sites require no updates.
+**Decision:** Public `centerBody` and `targetBody` remain available as state setters,
+but explicit camera commands now also synchronize interaction state:
+`pointAt(naifId, ...)` sets selected and targeted to `naifId`, and
+`goTo(naifId, ...)` sets selected, focused, and targeted to `naifId` before queueing
+the move. `goTo` also prepends a default `pointAt` so approach paths are centered on
+the target. The internal state/property naming remains `focusedBodyId` for continuity
+with the camera/frame system.
 
-**Alternatives considered:** Removing `focusBody`/`targetBody` and requiring callers to
-compose `pointAt`/`goTo` manually — rejected because it would break existing call sites
-and the Groovy scripting API, and because the composed semantics are the correct default
-behavior that all callers want.
+**Alternatives considered:** Keeping camera commands state-neutral — rejected because
+it lets translation/pointing semantics drift away from focus tracking and camera-frame
+semantics. Making `pointAt`/`goTo` operate on current target/focus slots rather than
+explicit NAIF IDs — rejected because explicit-body camera commands are more flexible
+and less surprising.
 
-**Consequences:** `TransitionController` supports a pending transition queue of depth 1
-to handle the `pointAt`-then-`goTo` sequence initiated by `focusBody`. A second
-`pointAt` or `goTo` issued while one is active cancels the active transition and
-replaces the pending one.
+**Consequences:** Scripts can rely on `goTo("Mars", ...)` to leave Mars as the coherent
+camera center/pivot at the end of the move, and `pointAt("Mars", ...)` to leave Mars as
+the active target. UI workflows may still compose `centerBody` explicitly, but they no
+longer need to do so for correctness. `TransitionController` still supports a pending
+transition queue of depth 1 for explicit `pointAt`-then-`goTo` sequences.
 
 ---
 
@@ -574,7 +585,8 @@ to the scripting layer — the Groovy wrapper calls SimulationCommands only.
 
 ---
 
-## D-024: CommandRecorder uses decorator pattern with hybrid coalescing for instant camera commands
+## D-024: CommandRecorder uses decorator pattern with hybrid coalescing for instant camera 
+commands
 **Status:** Accepted
 **Roadmap step:** 20
 
@@ -677,9 +689,15 @@ would cause a compilation error since `toScript()` has no default implementation
 ** Status:** Accepted
 ** Roadmap step:** 21
 
-** Context:** GLB shape models are sourced from different pipelines with different authoring conventions. A single scale rule would either break body models or spacecraft models.
-**Decision:** BodyBlock shape models are authored in kilometers — no scale transform is applied. SpacecraftBlock shape models are authored in meters — a uniform scale of 0.001 × SpacecraftBlock.scale() is applied at load time to convert to km. SpacecraftBlock.scale() defaults to 1.0 if not configured. These conventions are fixed; do not add runtime scale parameters or auto-detection logic.
-**Consequences:** BodyNodeFactory applies no scale to body GLBs. The spacecraft loading path applies the scale to glbModelRoot at construction time and never updates it per-frame.
+** Context:** GLB shape models are sourced from different pipelines with different authoring 
+conventions. A single scale rule would either break body models or spacecraft models.
+**Decision:** BodyBlock shape models are authored in kilometers — no scale transform is 
+applied. SpacecraftBlock shape models are authored in meters — a uniform scale of 0.001 × 
+SpacecraftBlock.scale() is applied at load time to convert to km. SpacecraftBlock.scale() 
+defaults to 1.0 if not configured. These conventions are fixed; do not add runtime scale 
+parameters or auto-detection logic.
+**Consequences:** BodyNodeFactory applies no scale to body GLBs. The spacecraft loading path 
+applies the scale to glbModelRoot at construction time and never updates it per-frame.
 
 ---
 
@@ -687,24 +705,52 @@ would cause a compilation error since `toScript()` has no default implementation
 ** Status:** Accepted
 ** Roadmap step:** 21
 
-** Context:** Natural bodies go through KEPPLR's material pipeline (equirectangular texture mapping, textureAlignNode, center-longitude adjustment, PCK-driven orientation). Spacecraft models have their own PBR materials, colors, and textures embedded in the GLB, authored by the model creator.
-** Decision:** Spacecraft GLBs use their embedded PBR materials without override. KEPPLR applies only the standard SamplerPreset.QUALITY_DEFAULT (Trilinear min, Bilinear mag, anisotropy 8) for texture quality. Spacecraft are lit by the scene sun DirectionalLight in the same way as natural bodies. KEPPLR's body material pipeline (equirectangular mapping, texture alignment, center-longitude) is never applied to spacecraft.
-** Alternatives considered:** Applying KEPPLR's material pipeline to spacecraft — rejected because spacecraft models do not have equirectangular surface textures and their geometry is not a sphere.
-** Consequences:** BodyNodeFactory (or equivalent) must not apply body material setup to spacecraft nodes. Any future spacecraft material override must be added explicitly and documented here.
+** Context:** Natural bodies go through KEPPLR's material pipeline (equirectangular texture 
+mapping, textureAlignNode, center-longitude adjustment, PCK-driven orientation). Spacecraft 
+models have their own PBR materials, colors, and textures embedded in the GLB, authored by the 
+model creator.
+** Decision:** Spacecraft GLBs use their embedded PBR materials without override. KEPPLR 
+applies only the standard SamplerPreset.QUALITY_DEFAULT (Trilinear min, Bilinear mag, 
+anisotropy 8) for texture quality. Spacecraft are lit by the scene sun DirectionalLight in the 
+same way as natural bodies. KEPPLR's body material pipeline (equirectangular mapping, texture 
+alignment, center-longitude) is never applied to spacecraft.
+** Alternatives considered:** Applying KEPPLR's material pipeline to spacecraft — rejected 
+because spacecraft models do not have equirectangular surface textures and their geometry is 
+not a sphere.
+** Consequences:** BodyNodeFactory (or equivalent) must not apply body material setup to 
+spacecraft nodes. Any future spacecraft material override must be added explicitly and 
+documented here.
 
 ---
 
-## D-029: Spacecraft FK frame unified with PCK body-fixed frames throughout the rendering and camera stack
+## D-029: Spacecraft FK frame unified with PCK body-fixed frames throughout the rendering and 
+camera stack
 **Status:** Accepted
 **Roadmap step:** 21 (post-completion refinement)
 
-**Context:** After step 21, spacecraft have FK frames registered in `KEPPLREphemeris.stateTransformMap` (e.g. `NH_SPACECRAFT`). Two bugs resulted: (1) `BodySceneManager` never called `bsn.updateRotation()` for spacecraft — the GLB model never rotated. (2) `BodyFixedFrame` (camera co-rotation in BODY_FIXED mode) fell back to INERTIAL for spacecraft because `hasBodyFixedFrame()` only checked PCK body-fixed frames, not spacecraft FK frames.
+**Context:** After step 21, spacecraft have FK frames registered in 
+`KEPPLREphemeris.stateTransformMap` (e.g. `NH_SPACECRAFT`). Two bugs resulted: (1) 
+`BodySceneManager` never called `bsn.updateRotation()` for spacecraft — the GLB model never 
+rotated. (2) `BodyFixedFrame` (camera co-rotation in BODY_FIXED mode) fell back to INERTIAL for 
+spacecraft because `hasBodyFixedFrame()` only checked PCK body-fixed frames, not spacecraft FK 
+frames.
 
-**Decision:** `KEPPLREphemeris.hasBodyFixedFrame(EphemerisID)` and `getJ2000ToBodyFixed(EphemerisID)` now prefer `Spacecraft.frameID()` for bodies present in `spacecraftMap`, falling through to `spiceBundle.getBodyFixedFrame()` for natural bodies. Spacecraft FK frames are added to `stateTransformMap` at `KEPPLREphemeris` construction time alongside PCK frames, so the existing `stateTransformMap` lookup returns the correct transform for both. `BodySceneManager` now calls `bsn.updateRotation(rotation)` for spacecraft every frame alongside the position update.
+**Decision:** `KEPPLREphemeris.hasBodyFixedFrame(EphemerisID)` and 
+`getJ2000ToBodyFixed(EphemerisID)` now prefer `Spacecraft.frameID()` for bodies present in 
+`spacecraftMap`, falling through to `spiceBundle.getBodyFixedFrame()` for natural bodies. 
+Spacecraft FK frames are added to `stateTransformMap` at `KEPPLREphemeris` construction time 
+alongside PCK frames, so the existing `stateTransformMap` lookup returns the correct transform 
+for both. `BodySceneManager` now calls `bsn.updateRotation(rotation)` for spacecraft every 
+frame alongside the position update.
 
-**Alternatives considered:** A separate per-frame rotation code path for spacecraft — rejected because it would duplicate the logic already in the natural-body pass and add unnecessary branching.
+**Alternatives considered:** A separate per-frame rotation code path for spacecraft — rejected 
+because it would duplicate the logic already in the natural-body pass and add unnecessary 
+branching.
 
-**Consequences:** `hasBodyFixedFrame(-98)` now returns `true` for spacecraft with configured FK frames. `VectorTypesTest.returnsNullForNoOrientation` was updated to use NAIF -999 (present in no kernel and not configured as a spacecraft) as the no-frame test case, since NAIF -98 now legitimately has a frame.
+**Consequences:** `hasBodyFixedFrame(-98)` now returns `true` for spacecraft with configured FK 
+frames. `VectorTypesTest.returnsNullForNoOrientation` was updated to use NAIF -999 (present in 
+no kernel and not configured as a spacecraft) as the no-frame test case, since NAIF -98 now 
+legitimately has a frame.
 
 ---
 
@@ -712,13 +758,29 @@ would cause a compilation error since `toScript()` has no default implementation
 **Status:** Accepted
 **Roadmap step:** 21 (post-completion refinement)
 
-**Context:** `TransitionController.getBodyMinDist()` and `startGoToNow()` used `BODY_DEFAULT_RADIUS_KM = 1.0 km` as the fallback effective radius for any body with a null PCK shape. This gave spacecraft a minimum zoom distance of 1.1 km and a `goTo` arrival distance of ~6 km — far too large to see a meter-scale model.
+**Context:** `TransitionController.getBodyMinDist()` and `startGoToNow()` used 
+`BODY_DEFAULT_RADIUS_KM = 1.0 km` as the fallback effective radius for any body with a null PCK 
+shape. This gave spacecraft a minimum zoom distance of 1.1 km and a `goTo` arrival distance of 
+~6 km — far too large to see a meter-scale model.
 
-**Decision:** For bodies with null shape, check for a `SpacecraftBlock`. If present, use `block.scale() × 0.001 km` as the effective radius (matching the GLB scale convention: meters × 0.001 = km). `BODY_DEFAULT_RADIUS_KM = 1.0` is retained as the fallback when no `SpacecraftBlock` exists, and as the radius used by `VectorRenderer` for arrow scaling on shape-less bodies. `CAMERA_ZOOM_FALLBACK_MIN_KM = 100.0` is reserved for the case where the body's `EphemerisID` cannot be resolved at all. The goTo formula — `endDist = effectiveRadius / tan(apparentRadiusDeg)` — and the `1.1× radius` minimum zoom rule both use this effective radius, producing visually consistent results for spacecraft at the same default `apparentRadiusDeg` (10°) used for natural bodies.
+**Decision:** For bodies with null shape, check for a `SpacecraftBlock`. If present, use 
+`block.scale() × 0.001 km` as the effective radius (matching the GLB scale convention: meters × 
+0.001 = km). `BODY_DEFAULT_RADIUS_KM = 1.0` is retained as the fallback when no 
+`SpacecraftBlock` exists, and as the radius used by `VectorRenderer` for arrow scaling on 
+shape-less bodies. `CAMERA_ZOOM_FALLBACK_MIN_KM = 100.0` is reserved for the case where the 
+body's `EphemerisID` cannot be resolved at all. The goTo formula — `endDist = effectiveRadius / 
+tan(apparentRadiusDeg)` — and the `1.1× radius` minimum zoom rule both use this effective 
+radius, producing visually consistent results for spacecraft at the same default 
+`apparentRadiusDeg` (10°) used for natural bodies.
 
-**Alternatives considered:** A separate `SpacecraftBlock.viewRadius` config field — rejected as redundant with the existing scale convention. Computing the GLB bounding box at load time — considered but rejected; the scale proxy is sufficient and avoids coupling the scene graph to the camera system.
+**Alternatives considered:** A separate `SpacecraftBlock.viewRadius` config field — rejected as 
+redundant with the existing scale convention. Computing the GLB bounding box at load time — 
+considered but rejected; the scale proxy is sufficient and avoids coupling the scene graph to 
+the camera system.
 
-**Consequences:** Minimum zoom and goTo arrival distance for spacecraft scale with `SpacecraftBlock.scale()`. A spacecraft with `scale = 1.0` has a minimum zoom of ~1.1 m and a goTo arrival of ~5.7 m from the model.
+**Consequences:** Minimum zoom and goTo arrival distance for spacecraft scale with 
+`SpacecraftBlock.scale()`. A spacecraft with `scale = 1.0` has a minimum zoom of ~1.1 m and a 
+goTo arrival of ~5.7 m from the model.
 
 ---
 
@@ -726,13 +788,30 @@ would cause a compilation error since `toScript()` has no default implementation
 **Status:** Accepted
 **Roadmap step:** 21 (post-completion refinement)
 
-**Context:** `BodySceneManager` was constructed once in `simpleInitApp()`. Loading a new configuration via File → Load Configuration updated `KEPPLRConfiguration` but left the JME scene graph with geometry built from the old configuration. Shape models from the new config were never loaded.
+**Context:** `BodySceneManager` was constructed once in `simpleInitApp()`. Loading a new 
+configuration via File → Load Configuration updated `KEPPLRConfiguration` but left the JME 
+scene graph with geometry built from the old configuration. Shape models from the new config 
+were never loaded.
 
-**Decision:** `BodySceneManager.dispose()` detaches all managed body nodes from the frustum layer roots, calls `SaturnRingManager.detach()`, and clears internal maps. `KepplrApp.rebuildBodyScene()` (JME render thread) calls `dispose()`, re-registers the new `resourcesFolder()` as a `FileLocator`, and constructs a fresh `BodySceneManager`. `KepplrStatusWindow` calls a `configReloadCallback` (set by `KepplrApp` in `simpleInitApp()`) after a successful `KEPPLRConfiguration.reload()`. The callback enqueues `rebuildBodyScene()` via `KepplrApp.enqueue()`, ensuring the rebuild runs on the JME thread (CLAUDE.md Rule 4). `TrailManager` and `VectorManager` are not rebuilt — they hold no shape-model geometry and update naturally on the next frame.
+**Decision:** `BodySceneManager.dispose()` detaches all managed body nodes from the frustum 
+layer roots, calls `SaturnRingManager.detach()`, and clears internal maps. 
+`KepplrApp.rebuildBodyScene()` (JME render thread) calls `dispose()`, re-registers the new 
+`resourcesFolder()` as a `FileLocator`, and constructs a fresh `BodySceneManager`. 
+`KepplrStatusWindow` calls a `configReloadCallback` (set by `KepplrApp` in `simpleInitApp()`) 
+after a successful `KEPPLRConfiguration.reload()`. The callback enqueues `rebuildBodyScene()` 
+via `KepplrApp.enqueue()`, ensuring the rebuild runs on the JME thread (CLAUDE.md Rule 4). 
+`TrailManager` and `VectorManager` are not rebuilt — they hold no shape-model geometry and 
+update naturally on the next frame.
 
-**Alternatives considered:** Polling `KEPPLRConfiguration` for changes from `simpleUpdate()` — rejected as polling-based and unnecessarily coupling the render loop to config state. A `SimulationCommands.reloadConfig()` method — rejected because `BodySceneManager` is a render concern, not a simulation concern; the direct `enqueue()` callback is the established pattern already used for window resize.
+**Alternatives considered:** Polling `KEPPLRConfiguration` for changes from `simpleUpdate()` — 
+rejected as polling-based and unnecessarily coupling the render loop to config state. A 
+`SimulationCommands.reloadConfig()` method — rejected because `BodySceneManager` is a render 
+concern, not a simulation concern; the direct `enqueue()` callback is the established pattern 
+already used for window resize.
 
-**Consequences:** The `configReloadCallback` is a `Runnable` on `KepplrStatusWindow`, following the same pattern as `jmeResizeCallback`. Originally `rebuildBodyScene()` rebuilt only `BodySceneManager`; Step 22 expanded this to a full render manager restart — see D-032.
+**Consequences:** The `configReloadCallback` is a `Runnable` on `KepplrStatusWindow`, following 
+the same pattern as `jmeResizeCallback`. Originally `rebuildBodyScene()` rebuilt only 
+`BodySceneManager`; Step 22 expanded this to a full render manager restart — see D-032.
 
 ---
 
@@ -740,13 +819,29 @@ would cause a compilation error since `toScript()` has no default implementation
 **Status:** Accepted
 **Roadmap step:** 22
 
-**Context:** D-031 introduced `rebuildBodyScene()` to rebuild `BodySceneManager` on config reload, but left `TrailManager`, `SunHaloRenderer`, `LabelManager`, `VectorManager`, and `StarFieldManager` alive with state from the old configuration. This was adequate when only shape models needed reloading, but Step 22 added `InstrumentFrustumManager` which reads IK kernels — also needing a full rebuild. The principle generalises: any render manager that reads from `KEPPLREphemeris` or `KEPPLRConfiguration` must be rebuilt when the configuration changes.
+**Context:** D-031 introduced `rebuildBodyScene()` to rebuild `BodySceneManager` on config 
+reload, but left `TrailManager`, `SunHaloRenderer`, `LabelManager`, `VectorManager`, and 
+`StarFieldManager` alive with state from the old configuration. This was adequate when only 
+shape models needed reloading, but Step 22 added `InstrumentFrustumManager` which reads IK 
+kernels — also needing a full rebuild. The principle generalises: any render manager that reads 
+from `KEPPLREphemeris` or `KEPPLRConfiguration` must be rebuilt when the configuration changes.
 
-**Decision:** A config reload rebuilds all render managers. Managers with persistent scene-graph state (`TrailManager`, `SunHaloRenderer`, `LabelManager`) gained `dispose()` methods that remove their geometry from the scene graph and clear internal maps. `VectorManager` and `StarFieldManager` require no separate dispose step because they detach all geometry on every `simpleUpdate()` call; they are simply reconstructed with the same constructor arguments. `activeTrailIds` and `activeVectorDefs` in `KepplrApp` are cleared so the sync methods rebuild them from the current `SimulationState` on the next frame.
+**Decision:** A config reload rebuilds all render managers. Managers with persistent 
+scene-graph state (`TrailManager`, `SunHaloRenderer`, `LabelManager`) gained `dispose()` 
+methods that remove their geometry from the scene graph and clear internal maps. 
+`VectorManager` and `StarFieldManager` require no separate dispose step because they detach all 
+geometry on every `simpleUpdate()` call; they are simply reconstructed with the same 
+constructor arguments. `activeTrailIds` and `activeVectorDefs` in `KepplrApp` are cleared so 
+the sync methods rebuild them from the current `SimulationState` on the next frame.
 
-**Alternatives considered:** Selective rebuilds per manager type — rejected because the set of managers requiring rebuilds will grow and selective logic is fragile. Having each manager observe `KEPPLRConfiguration` reload events directly — rejected as coupling render concerns to the configuration lifecycle without a clear protocol.
+**Alternatives considered:** Selective rebuilds per manager type — rejected because the set of 
+managers requiring rebuilds will grow and selective logic is fragile. Having each manager 
+observe `KEPPLRConfiguration` reload events directly — rejected as coupling render concerns to 
+the configuration lifecycle without a clear protocol.
 
-**Consequences:** Any new render manager added in the future must either (a) have a `dispose()` method and be included in `rebuildBodyScene()`, or (b) be stateless per-frame (detach all geometry each update) and simply be reconstructed. This is the established pattern.
+**Consequences:** Any new render manager added in the future must either (a) have a `dispose()` 
+method and be included in `rebuildBodyScene()`, or (b) be stateless per-frame (detach all 
+geometry each update) and simply be reconstructed. This is the established pattern.
 
 ---
 
@@ -754,13 +849,30 @@ would cause a compilation error since `toScript()` has no default implementation
 **Status:** Accepted
 **Roadmap step:** 22
 
-**Context:** SPICE IK kernels define instrument FOVs as CIRCLE (1 bound vector), ELLIPSE (2 bound vectors), RECTANGLE (4), or POLYGON (3+). The frustum pyramid renderer allocates a `FloatBuffer` sized as `3×(2n−2)` vertices, which evaluates to 0 for n=1 and 6 for n=2 — both insufficient for the side-face loop that writes `n×9` floats. NH_REX, which has a 0.3° CIRCLE FOV, triggered a `BufferOverflowException` at render time.
+**Context:** SPICE IK kernels define instrument FOVs as CIRCLE (1 bound vector), ELLIPSE (2 
+bound vectors), RECTANGLE (4), or POLYGON (3+). The frustum pyramid renderer allocates a 
+`FloatBuffer` sized as `3×(2n−2)` vertices, which evaluates to 0 for n=1 and 6 for n=2 — both 
+insufficient for the side-face loop that writes `n×9` floats. NH_REX, which has a 0.3° CIRCLE 
+FOV, triggered a `BufferOverflowException` at render time.
 
-**Decision:** `InstrumentFrustumManager.approximateBounds(FOVSpice)` converts CIRCLE and ELLIPSE FOVs to synthetic polygon bound lists before mesh allocation. CIRCLE: the single bound vector is rotated around the normalized boresight axis in `INSTRUMENT_FRUSTUM_CIRCLE_APPROX_SIDES = 32` equal steps using Rodrigues' rotation formula. ELLIPSE: 32 points are computed as `cos(t)·a + sin(t)·b` for the two semi-axis bound vectors. RECTANGLE and POLYGON pass through unchanged. The effective bounds are computed once at load time and stored in `FrustumEntry.effectiveBounds`; `updateMesh()` uses `effectiveBounds` rather than calling `fovSpice.getBounds()` each frame.
+**Decision:** `InstrumentFrustumManager.approximateBounds(FOVSpice)` converts CIRCLE and 
+ELLIPSE FOVs to synthetic polygon bound lists before mesh allocation. CIRCLE: the single bound 
+vector is rotated around the normalized boresight axis in 
+`INSTRUMENT_FRUSTUM_CIRCLE_APPROX_SIDES = 32` equal steps using Rodrigues' rotation formula. 
+ELLIPSE: 32 points are computed as `cos(t)·a + sin(t)·b` for the two semi-axis bound vectors. 
+RECTANGLE and POLYGON pass through unchanged. The effective bounds are computed once at load 
+time and stored in `FrustumEntry.effectiveBounds`; `updateMesh()` uses `effectiveBounds` rather 
+than calling `fovSpice.getBounds()` each frame.
 
-**Alternatives considered:** Skipping instruments with fewer than 3 bounds — rejected because a 0.3° circular FOV is meaningful and worth rendering. A separate rendering path for circular cones — rejected as additional complexity for no visual benefit at 32 sides. 16 sides — considered; 32 chosen as a better visual approximation at negligible extra cost.
+**Alternatives considered:** Skipping instruments with fewer than 3 bounds — rejected because a 
+0.3° circular FOV is meaningful and worth rendering. A separate rendering path for circular 
+cones — rejected as additional complexity for no visual benefit at 32 sides. 16 sides — 
+considered; 32 chosen as a better visual approximation at negligible extra cost.
 
-**Consequences:** `INSTRUMENT_FRUSTUM_CIRCLE_APPROX_SIDES = 32` defined in `KepplrConstants`. All four SPICE FOV shape types are renderable. The degenerate fallback (boresight length < 1e-10) returns raw bounds and logs a warning; such instruments are skipped by the `getBounds().isEmpty()` check in `buildEntries()`.
+**Consequences:** `INSTRUMENT_FRUSTUM_CIRCLE_APPROX_SIDES = 32` defined in `KepplrConstants`. 
+All four SPICE FOV shape types are renderable. The degenerate fallback (boresight length < 
+1e-10) returns raw bounds and logs a warning; such instruments are skipped by the 
+`getBounds().isEmpty()` check in `buildEntries()`.
 
 ---
 
@@ -768,13 +880,29 @@ would cause a compilation error since `toScript()` has no default implementation
 **Status:** Accepted
 **Roadmap step:** 23
 
-**Context:** Body surface textures (equirectangular planet maps) are authored in sRGB, but JME's `setGammaCorrection(true)` only applies to its built-in Lighting/PBR pipeline. The custom `EclipseLighting` shader bypasses JME's lighting entirely — it computes N·L from a `SunPosition` uniform, not from scene lights. Enabling JME gamma correction would fix spacecraft PBR materials but leave the custom body shader unchanged, and could introduce inconsistencies between the two paths.
+**Context:** Body surface textures (equirectangular planet maps) are authored in sRGB, but 
+JME's `setGammaCorrection(true)` only applies to its built-in Lighting/PBR pipeline. The custom 
+`EclipseLighting` shader bypasses JME's lighting entirely — it computes N·L from a 
+`SunPosition` uniform, not from scene lights. Enabling JME gamma correction would fix 
+spacecraft PBR materials but leave the custom body shader unchanged, and could introduce 
+inconsistencies between the two paths.
 
-**Decision:** The `EclipseLighting` fragment shader performs manual `pow(c, 2.2)` on texture samples (sRGB→linear) and `pow(c, 1/2.2)` on output (linear→sRGB). The `BODY_AMBIENT_FACTOR` constant was lowered from 0.05 to 0.001 (linear) because the linearToSrgb output conversion lifts dark values — linear 0.001 ≈ sRGB 0.03, preserving the original perceptual night-side darkness. Flat `DiffuseColor` fallback (no texture) skips gamma conversion since engine-set colors are already linear.
+**Decision:** The `EclipseLighting` fragment shader performs manual `pow(c, 2.2)` on texture 
+samples (sRGB→linear) and `pow(c, 1/2.2)` on output (linear→sRGB). The `BODY_AMBIENT_FACTOR` 
+constant was lowered from 0.05 to 0.001 (linear) because the linearToSrgb output conversion 
+lifts dark values — linear 0.001 ≈ sRGB 0.03, preserving the original perceptual night-side 
+darkness. Flat `DiffuseColor` fallback (no texture) skips gamma conversion since engine-set 
+colors are already linear.
 
-**Alternatives considered:** `setGammaCorrection(true)` globally — rejected because it does not reach the custom shader and would require reworking the entire lighting pipeline. Tagging textures as sRGB and relying on hardware sRGB decode — considered but JME's GLSL 150 path does not reliably use `GL_SRGB` internal formats on all drivers.
+**Alternatives considered:** `setGammaCorrection(true)` globally — rejected because it does not 
+reach the custom shader and would require reworking the entire lighting pipeline. Tagging 
+textures as sRGB and relying on hardware sRGB decode — considered but JME's GLSL 150 path does 
+not reliably use `GL_SRGB` internal formats on all drivers.
 
-**Consequences:** Body surface colors now match Cosmographia's muted tones. Any future custom shader that samples sRGB textures must include the same manual conversion. The Saturn ring shader (`SaturnRings.frag`) does not need it — its brightness/transparency textures are 1-D luminance profiles authored in linear space.
+**Consequences:** Body surface colors now match Cosmographia's muted tones. Any future custom 
+shader that samples sRGB textures must include the same manual conversion. The Saturn ring 
+shader (`SaturnRings.frag`) does not need it — its brightness/transparency textures are 1-D 
+luminance profiles authored in linear space.
 
 ---
 
@@ -782,13 +910,27 @@ would cause a compilation error since `toScript()` has no default implementation
 **Status:** Accepted
 **Roadmap step:** 23
 
-**Context:** The original ring phase function (Step 16a) computed `halfPhase = 0.5 × (1 + dot(obsDir, sunDir))` and used it as brightness directly. This made backscatter (sun behind camera, `dot > 0`) bright and forward scatter (sun in front, `dot < 0`) dim — the opposite of physical reality. Saturn's rings are composed of ice particles that transmit and scatter light forward more strongly than they reflect it backward.
+**Context:** The original ring phase function (Step 16a) computed `halfPhase = 0.5 × (1 + 
+dot(obsDir, sunDir))` and used it as brightness directly. This made backscatter (sun behind 
+camera, `dot > 0`) bright and forward scatter (sun in front, `dot < 0`) dim — the opposite of 
+physical reality. Saturn's rings are composed of ice particles that transmit and scatter light 
+forward more strongly than they reflect it backward.
 
-**Decision:** The scattering model now branches on which side of the ring plane the camera and Sun occupy. Same side (backscatter): brightness = `0.5 × (1 + cosPhase)`, bright at opposition and dimming toward 90° phase. Opposite sides (forward scatter): brightness = `unlitSideBrightness × (1 + strength × pow(cosForward, exponent))`, producing a concentrated brightness boost when looking through the rings toward the Sun. Three tunable constants control the lobe shape and unlit-side floor.
+**Decision:** The scattering model now branches on which side of the ring plane the camera and 
+Sun occupy. Same side (backscatter): brightness = `0.5 × (1 + cosPhase)`, bright at opposition 
+and dimming toward 90° phase. Opposite sides (forward scatter): brightness = 
+`unlitSideBrightness × (1 + strength × pow(cosForward, exponent))`, producing a concentrated 
+brightness boost when looking through the rings toward the Sun. Three tunable constants control 
+the lobe shape and unlit-side floor.
 
-**Alternatives considered:** Single Henyey-Greenstein phase function — rejected as overly complex for the visual fidelity needed and harder to tune with named constants. Keeping the original polarity but boosting the dim side — rejected because the physical model is fundamentally inverted.
+**Alternatives considered:** Single Henyey-Greenstein phase function — rejected as overly 
+complex for the visual fidelity needed and harder to tune with named constants. Keeping the 
+original polarity but boosting the dim side — rejected because the physical model is 
+fundamentally inverted.
 
-**Consequences:** `RING_FORWARD_SCATTER_STRENGTH`, `RING_FORWARD_SCATTER_EXPONENT`, and `RING_UNLIT_SIDE_BRIGHTNESS` defined in `KepplrConstants` and passed as shader uniforms. Shadow system unchanged — `shadowFactor` multiplies `ringLightFactor` after scattering is computed.
+**Consequences:** `RING_FORWARD_SCATTER_STRENGTH`, `RING_FORWARD_SCATTER_EXPONENT`, and 
+`RING_UNLIT_SIDE_BRIGHTNESS` defined in `KepplrConstants` and passed as shader uniforms. Shadow 
+system unchanged — `shadowFactor` multiplies `ringLightFactor` after scattering is computed.
 
 ---
 
@@ -796,13 +938,27 @@ would cause a compilation error since `toScript()` has no default implementation
 **Status:** Accepted
 **Roadmap step:** 27 (status window layout improvements)
 
-**Context:** The body readout (Selected/Focused/Targeted) showed only the human-readable name (e.g., "Earth"). Users had no way to see the NAIF ID or how far the camera was from each body without mental calculation.
+**Context:** The body readout (Selected/Focused/Targeted) showed only the human-readable name 
+(e.g., "Earth"). Users had no way to see the NAIF ID or how far the camera was from each body 
+without mental calculation.
 
-**Decision:** `SimulationStateFxBridge.formatBodyNameWithId()` formats bodies as "Name (ID)" (e.g., "Earth (399)"). `computeCameraToBodyDistanceKm()` computes the Euclidean distance from the camera heliocentric J2000 position to the body's heliocentric position via `KEPPLREphemeris.getHeliocentricPositionJ2000()`. `formatDistance()` auto-switches units: metres for < 1 km, km for < 0.01 AU, AU otherwise. Three distance thresholds defined in `KepplrConstants`: `KM_PER_AU`, `DISTANCE_DISPLAY_M_THRESHOLD_KM`, `DISTANCE_DISPLAY_AU_THRESHOLD_AU`. Distance properties are updated in both reactive listeners and `refreshAll()` polling.
+**Decision:** `SimulationStateFxBridge.formatBodyNameWithId()` formats bodies as "Name (ID)" 
+(e.g., "Earth (399)"). `computeCameraToBodyDistanceKm()` computes the Euclidean distance from 
+the camera heliocentric J2000 position to the body's heliocentric position via 
+`KEPPLREphemeris.getHeliocentricPositionJ2000()`. `formatDistance()` auto-switches units: 
+metres for < 1 km, km for < 0.01 AU, AU otherwise. Three distance thresholds defined in 
+`KepplrConstants`: `KM_PER_AU`, `DISTANCE_DISPLAY_M_THRESHOLD_KM`, 
+`DISTANCE_DISPLAY_AU_THRESHOLD_AU`. Distance properties are updated in both reactive listeners 
+and `refreshAll()` polling.
 
-**Alternatives considered:** Showing heliocentric distance instead of camera distance — rejected because camera distance is more actionable for navigation. Separate distance row per body — rejected in favour of inline distance (same row, right-aligned) to keep the readout compact.
+**Alternatives considered:** Showing heliocentric distance instead of camera distance — 
+rejected because camera distance is more actionable for navigation. Separate distance row per 
+body — rejected in favour of inline distance (same row, right-aligned) to keep the readout 
+compact.
 
-**Consequences:** Three new `ReadOnlyStringProperty` fields on `SimulationStateFxBridge`. Body readout rows reordered to Focused → Targeted → Selected (focused is the camera anchor, most important).
+**Consequences:** Three new `ReadOnlyStringProperty` fields on `SimulationStateFxBridge`. Body 
+readout rows reordered to Focused → Targeted → Selected (focused is the camera anchor, most 
+important).
 
 ---
 
@@ -810,13 +966,25 @@ would cause a compilation error since `toScript()` has no default implementation
 **Status:** Accepted
 **Roadmap step:** 27 (status window layout improvements)
 
-**Context:** The status window at 380px was too narrow for name + distance on one row. The body tree search field only resolved on Enter, requiring exact names. No visual separation existed between the body readout and status section. The transition progress bar was rarely noticed.
+**Context:** The status window at 380px was too narrow for name + distance on one row. The body 
+tree search field only resolved on Enter, requiring exact names. No visual separation existed 
+between the body readout and status section. The transition progress bar was rarely noticed.
 
-**Decision:** Window width increased to 440px. The stage remains a normal non-always-on-top window, consistent with D-016. JavaFX `Separator` nodes inserted between body readout, status section, and body list. Transition progress bar removed. Body tree search field replaced with live filtering: on each keystroke, a filtered copy of the master tree is built, keeping items whose display name or NAIF ID contains the filter text (case-insensitive). Parent groups are included (expanded) if any child matches, or if the group name itself matches. Enter still resolves exact NAIF IDs via `BodyLookupService.resolve()`. The Clear button on the Selected row was removed; only Focus and Target buttons remain.
+**Decision:** Window width increased to 440px. The stage remains a normal non-always-on-top 
+window, consistent with D-016. JavaFX `Separator` nodes inserted between body readout, status 
+section, and body list. Transition progress bar removed. Body tree search field replaced with 
+live filtering: on each keystroke, a filtered copy of the master tree is built, keeping items 
+whose display name or NAIF ID contains the filter text (case-insensitive). Parent groups are 
+included (expanded) if any child matches, or if the group name itself matches. Enter still 
+resolves exact NAIF IDs via `BodyLookupService.resolve()`. The Clear button on the Selected row 
+was removed; only Focus and Target buttons remain.
 
-**Alternatives considered:** CSS stylesheet instead of inline styles — deferred to a future polish pass. Collapsible status section — rejected as over-engineering for the current use case.
+**Alternatives considered:** CSS stylesheet instead of inline styles — deferred to a future 
+polish pass. Collapsible status section — rejected as over-engineering for the current use case.
 
-**Consequences:** `masterRoot` field added to `KepplrStatusWindow` to preserve the unfiltered tree. `buildFilteredRoot()` and `matchesFilter()` helper methods added. `ProgressBar` import removed. Section header renamed from "Bodies" to "Select Body" for clarity.
+**Consequences:** `masterRoot` field added to `KepplrStatusWindow` to preserve the unfiltered 
+tree. `buildFilteredRoot()` and `matchesFilter()` helper methods added. `ProgressBar` import 
+removed. Section header renamed from "Bodies" to "Select Body" for clarity.
 
 ---
 
@@ -824,13 +992,23 @@ would cause a compilation error since `toScript()` has no default implementation
 **Status:** Accepted
 **Roadmap step:** 27
 
-**Context:** The "Current Focus" submenu in the Overlays menu maintained its own checked state. When a user toggled a trail or axes via the body tree context menu (or a script), the overlays menu checkmarks became stale. The two menus were visually inconsistent.
+**Context:** The "Current Focus" submenu in the Overlays menu maintained its own checked state. 
+When a user toggled a trail or axes via the body tree context menu (or a script), the overlays 
+menu checkmarks became stale. The two menus were visually inconsistent.
 
-**Decision:** Each `CheckMenuItem` in the "Current Focus" submenu is bound to the corresponding `SimulationState` visibility property (`trailVisibleProperty`, `vectorVisibleProperty`) for the currently focused body. `ChangeListener` instances are added when focus is set and removed (unbound) when focus changes. Initial state is synced immediately on bind. A `Runnable[] unbindPrev` array-of-one pattern stores the cleanup action.
+**Decision:** Each `CheckMenuItem` in the "Current Focus" submenu is bound to the corresponding 
+`SimulationState` visibility property (`trailVisibleProperty`, `vectorVisibleProperty`) for the 
+currently focused body. `ChangeListener` instances are added when focus is set and removed 
+(unbound) when focus changes. Initial state is synced immediately on bind. A `Runnable[] 
+unbindPrev` array-of-one pattern stores the cleanup action.
 
-**Alternatives considered:** Rebuilding the menu items on each show event — rejected because it would lose the menu's position/state mid-interaction. Polling via AnimationTimer — rejected as wasteful when property listeners are available.
+**Alternatives considered:** Rebuilding the menu items on each show event — rejected because it 
+would lose the menu's position/state mid-interaction. Polling via AnimationTimer — rejected as 
+wasteful when property listeners are available.
 
-**Consequences:** Any source of visibility changes (context menu, scripts, keyboard shortcuts) is automatically reflected in the overlays menu. No additional wiring needed when new visibility sources are added.
+**Consequences:** Any source of visibility changes (context menu, scripts, keyboard shortcuts) 
+is automatically reflected in the overlays menu. No additional wiring needed when new 
+visibility sources are added.
 
 ---
 
@@ -838,13 +1016,23 @@ would cause a compilation error since `toScript()` has no default implementation
 **Status:** Accepted
 **Roadmap step:** 27
 
-**Context:** The context menu initially used "Show/Hide" text toggling (e.g., "Show Trail" / "Hide Trail"). The status window menus used `CheckBox` inside `CustomMenuItem`. This was visually inconsistent.
+**Context:** The context menu initially used "Show/Hide" text toggling (e.g., "Show Trail" / 
+"Hide Trail"). The status window menus used `CheckBox` inside `CustomMenuItem`. This was 
+visually inconsistent.
 
-**Decision:** All toggle items across the application use `CheckMenuItem`. The context menu's `populateBodyTreeContextMenu()` reads current visibility state from `SimulationState` at show time and sets `CheckMenuItem.setSelected()` accordingly. The overlays menu, instruments menu, and File > Record Session also use `CheckMenuItem`. The `menuCheckBox` helper and `CheckBox` import were removed.
+**Decision:** All toggle items across the application use `CheckMenuItem`. The context menu's 
+`populateBodyTreeContextMenu()` reads current visibility state from `SimulationState` at show 
+time and sets `CheckMenuItem.setSelected()` accordingly. The overlays menu, instruments menu, 
+and File > Record Session also use `CheckMenuItem`. The `menuCheckBox` helper and `CheckBox` 
+import were removed.
 
-**Alternatives considered:** Using `CheckBox` + `CustomMenuItem` everywhere (allows tooltips) — rejected because `CheckMenuItem` is the standard JavaFX pattern and tooltips on toggle items are low-value.
+**Alternatives considered:** Using `CheckBox` + `CustomMenuItem` everywhere (allows tooltips) — 
+rejected because `CheckMenuItem` is the standard JavaFX pattern and tooltips on toggle items 
+are low-value.
 
-**Consequences:** Consistent checkmark-style toggles everywhere. `CustomMenuItem` is still used for non-toggle items that need tooltips (e.g., `tipItem` helper for action items, radio buttons for camera frame).
+**Consequences:** Consistent checkmark-style toggles everywhere. `CustomMenuItem` is still used 
+for non-toggle items that need tooltips (e.g., `tipItem` helper for action items, radio buttons 
+for camera frame).
 
 ---
 
@@ -852,13 +1040,30 @@ would cause a compilation error since `toScript()` has no default implementation
 **Status:** Accepted
 **Roadmap step:** 27
 
-**Context:** All vector overlays scaled their arrow length relative to the focused body's mean radius. When viewing a spacecraft's body-fixed axes while focused on a planet, the axes were enormous (planet-radius scale). Conversely, if the spacecraft was focused but had no PCK shape data, axes used the 1.0 km fallback — ignoring the GLB bounding radius.
+**Context:** All vector overlays scaled their arrow length relative to the focused body's mean 
+radius. When viewing a spacecraft's body-fixed axes while focused on a planet, the axes were 
+enormous (planet-radius scale). Conversely, if the spacecraft was focused but had no PCK shape 
+data, axes used the 1.0 km fallback — ignoring the GLB bounding radius.
 
-**Decision:** Added `VectorType.usesOriginBodyRadius()` default method (returns `false`). `BodyAxisVectorType` overrides it to return `true`. `VectorRenderer.update()` now accepts an `IntToDoubleFunction sceneRadiusLookup` parameter (supplied as `bodySceneManager::getEffectiveBodyRadiusKm`). When `usesOriginBodyRadius()` is true, the arrow length is computed from the origin body's effective rendered radius (scene-derived, including GLB bounding radius and spacecraft `scale()` factor), with ephemeris shape fallback, then `BODY_DEFAULT_RADIUS_KM` fallback. Other vector types (velocity, towardBody) continue to use the focused body's radius.
+**Decision:** Added `VectorType.usesOriginBodyRadius()` default method (returns `false`). 
+`BodyAxisVectorType` overrides it to return `true`. `VectorRenderer.update()` now accepts an 
+`IntToDoubleFunction sceneRadiusLookup` parameter (supplied as 
+`bodySceneManager::getEffectiveBodyRadiusKm`). When `usesOriginBodyRadius()` is true, the arrow 
+length is computed from the origin body's effective rendered radius (scene-derived, including 
+GLB bounding radius and spacecraft `scale()` factor), with ephemeris shape fallback, then 
+`BODY_DEFAULT_RADIUS_KM` fallback. Other vector types (velocity, towardBody) continue to use 
+the focused body's radius.
 
-**Alternatives considered:** Adding a per-VectorDefinition radius override — rejected as over-engineering; the VectorType already knows whether it's body-intrinsic. Querying ephemeris only — rejected because spacecraft have no PCK shape entry; the scene-derived radius from `BodySceneManager` is the only source that accounts for GLB bounding radius and configured scale.
+**Alternatives considered:** Adding a per-VectorDefinition radius override — rejected as 
+over-engineering; the VectorType already knows whether it's body-intrinsic. Querying ephemeris 
+only — rejected because spacecraft have no PCK shape entry; the scene-derived radius from 
+`BodySceneManager` is the only source that accounts for GLB bounding radius and configured 
+scale.
 
-**Consequences:** `VectorManager.update()` and `VectorRenderer.update()` signatures gain an `IntToDoubleFunction` parameter. `KepplrApp` passes `bodySceneManager::getEffectiveBodyRadiusKm`. Six new tests cover `usesOriginBodyRadius()` for all built-in types plus a custom default.
+**Consequences:** `VectorManager.update()` and `VectorRenderer.update()` signatures gain an 
+`IntToDoubleFunction` parameter. `KepplrApp` passes 
+`bodySceneManager::getEffectiveBodyRadiusKm`. Six new tests cover `usesOriginBodyRadius()` for 
+all built-in types plus a custom default.
 
 ---
 
@@ -866,15 +1071,36 @@ would cause a compilation error since `toScript()` has no default implementation
 **Status:** Accepted
 **Roadmap step:** 24
 
-**Context:** `TrailSampler.computeTrailDurationSec` computed the orbital period of a satellite by feeding its state relative to the system **barycenter** and the system GM into `oscltx`. For the two-body period formula T = 2π√(a³/GM), `a` must be the semi-major axis of the **relative** orbit (body-to-body separation), not the body-to-barycenter distance. For most planet–satellite pairs (mass ratio ≫ 1) the barycenter is inside the primary and the error is negligible (~2% for Earth–Moon). For Pluto–Charon (mass ratio ~8.5:1) the barycentric semi-major axis is ~2,035 km vs. the relative semi-major axis of ~19,571 km, producing a period 30× too short (~5 hours instead of 6.387 days). The trail showed only ~12° of arc — effectively invisible.
+**Context:** `TrailSampler.computeTrailDurationSec` computed the orbital period of a satellite 
+by feeding its state relative to the system **barycenter** and the system GM into `oscltx`. For 
+the two-body period formula T = 2π√(a³/GM), `a` must be the semi-major axis of the **relative** 
+orbit (body-to-body separation), not the body-to-barycenter distance. For most planet–satellite 
+pairs (mass ratio ≫ 1) the barycenter is inside the primary and the error is negligible (~2% 
+for Earth–Moon). For Pluto–Charon (mass ratio ~8.5:1) the barycentric semi-major axis is ~2,035 
+km vs. the relative semi-major axis of ~19,571 km, producing a period 30× too short (~5 hours 
+instead of 6.387 days). The trail showed only ~12° of arc — effectively invisible.
 
-**Decision:** Compute the period from the state of the satellite relative to the **primary body** (NAIF code `barycenterId × 100 + 99`) rather than relative to the barycenter. The system GM is still correct for the relative orbit: T = 2π√(a_rel³ / G(M₁+M₂)) is exact. For Pluto (999), where the primary code equals the satellite code itself, the companion body (`barycenterId × 100 + 1`, i.e. Charon 901) is used instead. Falls back to the barycenter if neither primary nor companion can be resolved.
+**Decision:** Compute the period from the state of the satellite relative to the **primary 
+body** (NAIF code `barycenterId × 100 + 99`) rather than relative to the barycenter. The system 
+GM is still correct for the relative orbit: T = 2π√(a_rel³ / G(M₁+M₂)) is exact. For Pluto 
+(999), where the primary code equals the satellite code itself, the companion body 
+(`barycenterId × 100 + 1`, i.e. Charon 901) is used instead. Falls back to the barycenter if 
+neither primary nor companion can be resolved.
 
-**Future work:** The NAIF naming convention (primary = x99, satellites = x01–x98, barycenter = x) does not hold for asteroids with satellites. A `primary` parameter in `KEPPLRConfiguration.bodyBlock()` will be needed to support those systems. See roadmap future items.
+**Future work:** The NAIF naming convention (primary = x99, satellites = x01–x98, barycenter = 
+x) does not hold for asteroids with satellites. A `primary` parameter in 
+`KEPPLRConfiguration.bodyBlock()` will be needed to support those systems. See roadmap future 
+items.
 
-**Alternatives considered:** Correcting the barycentric period with an effective GM = G·M₂³/(M₁+M₂)² — rejected because it requires individual body masses that may not be in the kernel pool. Using the barycentric state unchanged — rejected because the 30× error for Pluto makes the trail invisible.
+**Alternatives considered:** Correcting the barycentric period with an effective
+GM = G·M₂³/(M₁+M₂)² — rejected because it requires individual body masses that
+may not be in the kernel pool. Using the barycentric state unchanged — rejected
+because the 30× error for Pluto makes the trail invisible.
 
-**Consequences:** `TrailSampler.computeTrailDurationSec` now resolves the primary body for all satellites. Existing behaviour for standard satellites is unchanged (relative orbit ≈ barycentric orbit when mass ratio is extreme). Pluto's trail correctly shows the full ~6.387-day orbit around the Pluto Barycenter.
+**Consequences:** `TrailSampler.computeTrailDurationSec` now resolves the primary body for all 
+satellites. Existing behaviour for standard satellites is unchanged (relative orbit ≈ 
+barycentric orbit when mass ratio is extreme). Pluto's trail correctly shows the full 
+~6.387-day orbit around the Pluto Barycenter.
 
 ---
 
@@ -882,13 +1108,21 @@ would cause a compilation error since `toScript()` has no default implementation
 **Status:** Accepted
 **Roadmap step:** 24
 
-**Context:** The Overlays → Labels and Overlays → Trajectories global toggles iterated over all known bodies. Barycenters (NAIF codes 1–9) received labels and trails, cluttering the view with redundant overlays that overlap the planet they represent. However, the Pluto Barycenter (9) is a meaningful distinct object because Pluto (999) visibly orbits it.
+**Context:** The Overlays → Labels and Overlays → Trajectories global toggles iterated over all 
+known bodies. Barycenters (NAIF codes 1–9) received labels and trails, cluttering the view with 
+redundant overlays that overlap the planet they represent. However, the Pluto Barycenter (9) is 
+a meaningful distinct object because Pluto (999) visibly orbits it.
 
-**Decision:** When enabling labels or trails via the global toggle, skip NAIF codes 1–8 (planet system barycenters). Pluto Barycenter (9) is exempted from the skip. When disabling, turn all off including barycenters. Per-body toggles in context menus are unaffected.
+**Decision:** When enabling labels or trails via the global toggle, skip NAIF codes 1–8 (planet 
+system barycenters). Pluto Barycenter (9) is exempted from the skip. When disabling, turn all 
+off including barycenters. Per-body toggles in context menus are unaffected.
 
-**Alternatives considered:** Filtering all barycenters including Pluto — rejected because the Pluto–Charon barycenter is visually distinct from either body. No filtering — rejected because barycenter labels overlap planet labels at all zoom levels.
+**Alternatives considered:** Filtering all barycenters including Pluto — rejected because the 
+Pluto–Charon barycenter is visually distinct from either body. No filtering — rejected because 
+barycenter labels overlap planet labels at all zoom levels.
 
-**Consequences:** `KepplrStatusWindow.applyLabelVisibility` and the Trajectories toggle handler both skip codes 1–8. Pluto Barycenter labels and trails appear when toggled on.
+**Consequences:** `KepplrStatusWindow.applyLabelVisibility` and the Trajectories toggle handler 
+both skip codes 1–8. Pluto Barycenter labels and trails appear when toggled on.
 
 ---
 
@@ -896,13 +1130,28 @@ would cause a compilation error since `toScript()` has no default implementation
 **Status:** Accepted
 **Roadmap step:** 25
 
-**Context:** The initial implementation used `KepplrApp.enqueue()` to schedule framebuffer capture. In JME's `Application.update()` loop, enqueued tasks run at the start of the frame — before `simpleUpdate()` and before the render pass. This meant the capture read the framebuffer from the *previous* frame's render. During animation sequences, `setET()` advanced the simulation clock and `applyFocusTracking()` moved the camera to follow the focus body, but neither had executed yet when the capture ran. Every captured frame showed the camera at its initial position rather than tracking the focus body.
+**Context:** The initial implementation used `KepplrApp.enqueue()` to schedule framebuffer 
+capture. In JME's `Application.update()` loop, enqueued tasks run at the start of the frame — 
+before `simpleUpdate()` and before the render pass. This meant the capture read the framebuffer 
+from the *previous* frame's render. During animation sequences, `setET()` advanced the 
+simulation clock and `applyFocusTracking()` moved the camera to follow the focus body, but 
+neither had executed yet when the capture ran. Every captured frame showed the camera at its 
+initial position rather than tracking the focus body.
 
-**Decision:** `KepplrApp` overrides `update()` instead of using `enqueue()`. A `volatile PendingCapture` record (outputPath + CountDownLatch) is set by the screenshot callback from the capture/script thread. `update()` calls `super.update()` first (which runs enqueued tasks → `simpleUpdate()` → render pass), then checks for and processes any pending capture. The framebuffer now contains the fully rendered scene at the current ET with focus-body tracking, body-fixed/synodic camera frame rotation, and all render managers updated.
+**Decision:** `KepplrApp` overrides `update()` instead of using `enqueue()`. A `volatile 
+PendingCapture` record (outputPath + CountDownLatch) is set by the screenshot callback from the 
+capture/script thread. `update()` calls `super.update()` first (which runs enqueued tasks → 
+`simpleUpdate()` → render pass), then checks for and processes any pending capture. The 
+framebuffer now contains the fully rendered scene at the current ET with focus-body tracking, 
+body-fixed/synodic camera frame rotation, and all render managers updated.
 
-**Alternatives considered:** Double-enqueue (one fence frame, then one capture frame) — rejected as fragile and adding unnecessary latency. `SceneProcessor.postFrame()` — considered but the `update()` override is simpler and requires no additional JME interface implementation.
+**Alternatives considered:** Double-enqueue (one fence frame, then one capture frame) — 
+rejected as fragile and adding unnecessary latency. `SceneProcessor.postFrame()` — considered 
+but the `update()` override is simpler and requires no additional JME interface implementation.
 
-**Consequences:** Each `saveScreenshot()` call blocks until the JME thread completes one full update cycle (simpleUpdate + render + capture). The volatile field ensures visibility across threads. The capture thread and JME thread are serialised per frame via the CountDownLatch.
+**Consequences:** Each `saveScreenshot()` call blocks until the JME thread completes one full 
+update cycle (simpleUpdate + render + capture). The volatile field ensures visibility across 
+threads. The capture thread and JME thread are serialised per frame via the CountDownLatch.
 
 ---
 
@@ -910,13 +1159,30 @@ would cause a compilation error since `toScript()` has no default implementation
 **Status:** Accepted
 **Roadmap step:** 25
 
-**Context:** Log output was only visible on the console. Users running KEPPLR from a launcher or IDE often could not see log messages. A JavaFX log window was needed, but the `%highlight` pattern in log4j2 produces ANSI escape sequences (e.g., `\033[32m` for green) that would appear as garbage in a plain `TextArea`.
+**Context:** Log output was only visible on the console. Users running KEPPLR from a launcher 
+or IDE often could not see log messages. A JavaFX log window was needed, but the `%highlight` 
+pattern in log4j2 produces ANSI escape sequences (e.g., `\033[32m` for green) that would appear 
+as garbage in a plain `TextArea`.
 
-**Decision:** `LogAppender` (package-private, `kepplr.ui`) is a custom `AbstractAppender` registered programmatically on all loggers via the `LoggerContext` configuration, following the same pattern as `Log4j2Configurator.addFile()`. It uses a `PatternLayout` with the pattern from `KEPPLRConfiguration.getInstance().logFormat()` and `disableAnsi=false` to force ANSI output. Log lines are buffered in a `ConcurrentLinkedQueue`. `LogWindow` (package-private, `kepplr.ui`) displays log output in a `TextFlow` inside a `ScrollPane` on a dark background (`#1e1e1e`). An ANSI parser (`Pattern`-based) converts SGR codes to styled `Text` nodes with appropriate foreground colors. The queue is drained on each FX frame pulse from the existing `AnimationTimer` in `KepplrStatusWindow`, avoiding `Platform.runLater()` per CLAUDE.md Rule 2. A "Save Log..." button writes ANSI-stripped plain text via `FileChooser`. Accessible from `File → Show Log`.
+**Decision:** `LogAppender` (package-private, `kepplr.ui`) is a custom `AbstractAppender` 
+registered programmatically on all loggers via the `LoggerContext` configuration, following the 
+same pattern as `Log4j2Configurator.addFile()`. It uses a `PatternLayout` with the pattern from 
+`KEPPLRConfiguration.getInstance().logFormat()` and `disableAnsi=false` to force ANSI output. 
+Log lines are buffered in a `ConcurrentLinkedQueue`. `LogWindow` (package-private, `kepplr.ui`) 
+displays log output in a `TextFlow` inside a `ScrollPane` on a dark background (`#1e1e1e`). An 
+ANSI parser (`Pattern`-based) converts SGR codes to styled `Text` nodes with appropriate 
+foreground colors. The queue is drained on each FX frame pulse from the existing 
+`AnimationTimer` in `KepplrStatusWindow`, avoiding `Platform.runLater()` per CLAUDE.md Rule 2. 
+A "Save Log..." button writes ANSI-stripped plain text via `FileChooser`. Accessible from `File 
+→ Show Log`.
 
-**Alternatives considered:** `TextArea` with no color — rejected because the user specifically wanted ANSI colors for level distinction. RichTextFX library — rejected to avoid an external dependency. `Platform.runLater()` per log event — rejected per CLAUDE.md Rule 2.
+**Alternatives considered:** `TextArea` with no color — rejected because the user specifically 
+wanted ANSI colors for level distinction. RichTextFX library — rejected to avoid an external 
+dependency. `Platform.runLater()` per log event — rejected per CLAUDE.md Rule 2.
 
-**Consequences:** Max 50,000 `Text` nodes retained; oldest are trimmed. The `LogAppender` reads `KEPPLRConfiguration.getInstance().logFormat()` at install time (point-of-use, Rule 3). The `logFormat()` method is on the user-owned `KEPPLRConfiguration` class.
+**Consequences:** Max 50,000 `Text` nodes retained; oldest are trimmed. The `LogAppender` reads 
+`KEPPLRConfiguration.getInstance().logFormat()` at install time (point-of-use, Rule 3). The 
+`logFormat()` method is on the user-owned `KEPPLRConfiguration` class.
 
 ---
 
@@ -924,13 +1190,25 @@ would cause a compilation error since `toScript()` has no default implementation
 **Status:** Accepted
 **Roadmap step:** 28
 
-**Context:** `setCameraPosition` and `setCameraOrientation` interpreted their vector arguments in J2000 regardless of the active camera frame. A user who set up a synodic frame and then called `setCameraOrientation(1,0,0, 0,0,1, 5)` expected to look along the synodic +X axis (toward the target body), but instead got J2000 +X (vernal equinox).
+**Context:** `setCameraPosition` and `setCameraOrientation` interpreted their vector arguments 
+in J2000 regardless of the active camera frame. A user who set up a synodic frame and then 
+called `setCameraOrientation(1,0,0, 0,0,1, 5)` expected to look along the synodic +X axis 
+(toward the target body), but instead got J2000 +X (vernal equinox).
 
-**Decision:** `TransitionController.frameToJ2000(VectorIJK)` transforms vectors from the active camera frame to J2000 before applying them. For SYNODIC, the three `SynodicFrame.Basis` vectors are the columns of the synodic-to-J2000 rotation matrix: `new RotationMatrixIJK(basis.xAxis(), basis.yAxis(), basis.zAxis())` then `mxv`. For BODY_FIXED, the J2000-to-body-fixed rotation is transposed via `rot.mtxv()`. INERTIAL is the identity (no transform). Both `handleCameraPositionRequest` and `handleCameraOrientationRequest` pass their end vectors through `frameToJ2000`.
+**Decision:** `TransitionController.frameToJ2000(VectorIJK)` transforms vectors from the active 
+camera frame to J2000 before applying them. For SYNODIC, the three `SynodicFrame.Basis` vectors 
+are the columns of the synodic-to-J2000 rotation matrix: `new RotationMatrixIJK(basis.xAxis(), 
+basis.yAxis(), basis.zAxis())` then `mxv`. For BODY_FIXED, the J2000-to-body-fixed rotation is 
+transposed via `rot.mtxv()`. INERTIAL is the identity (no transform). Both 
+`handleCameraPositionRequest` and `handleCameraOrientationRequest` pass their end vectors 
+through `frameToJ2000`.
 
-**Alternatives considered:** Leaving commands always in J2000 and requiring scripts to do the math — rejected because the whole point of camera frames is to simplify spatial reasoning.
+**Alternatives considered:** Leaving commands always in J2000 and requiring scripts to do the 
+math — rejected because the whole point of camera frames is to simplify spatial reasoning.
 
-**Consequences:** Scripts can now reason about camera positioning in the natural frame of the scene. The transform uses the frame/focus/target state at the moment the request is processed (first JME frame), not when it was issued.
+**Consequences:** Scripts can now reason about camera positioning in the natural frame of the 
+scene. The transform uses the frame/focus/target state at the moment the request is processed 
+(first JME frame), not when it was issued.
 
 ---
 
@@ -938,13 +1216,26 @@ would cause a compilation error since `toScript()` has no default implementation
 **Status:** Accepted
 **Roadmap step:** 28
 
-**Context:** Barycenters (NAIF IDs 0–9) are rendered as point sprites that often overlap with or obscure the planet they represent (e.g., Pluto barycenter vs. Pluto). The user wanted a way to show/hide individual bodies, with barycenters hidden by default.
+**Context:** Barycenters (NAIF IDs 0–9) are rendered as point sprites that often overlap with 
+or obscure the planet they represent (e.g., Pluto barycenter vs. Pluto). The user wanted a way 
+to show/hide individual bodies, with barycenters hidden by default.
 
-**Decision:** `SimulationState.bodyVisibleProperty(int)` returns a `ReadOnlyBooleanProperty` backed by a `ConcurrentHashMap<Integer, SimpleBooleanProperty>` in `DefaultSimulationState`, defaulting to `true`. An instance initializer pre-populates NAIF IDs 0–9 with `false`. `BodySceneManager.update()` checks the flag before pass 1 for natural bodies and before the spacecraft loop; hidden bodies are skipped and any stale scene node is detached. `SimulationCommands.setBodyVisible(int, boolean)` is the command; `KepplrScript` exposes both int and String overloads. The body tree context menu in `KepplrStatusWindow` includes a "Visible" `CheckMenuItem`.
+**Decision:** `SimulationState.bodyVisibleProperty(int)` returns a `ReadOnlyBooleanProperty` 
+backed by a `ConcurrentHashMap<Integer, SimpleBooleanProperty>` in `DefaultSimulationState`, 
+defaulting to `true`. An instance initializer pre-populates NAIF IDs 0–9 with `false`. 
+`BodySceneManager.update()` checks the flag before pass 1 for natural bodies and before the 
+spacecraft loop; hidden bodies are skipped and any stale scene node is detached. 
+`SimulationCommands.setBodyVisible(int, boolean)` is the command; `KepplrScript` exposes both 
+int and String overloads. The body tree context menu in `KepplrStatusWindow` includes a 
+"Visible" `CheckMenuItem`.
 
-**Alternatives considered:** Filtering barycenters unconditionally in the render loop — rejected because the user sometimes wants to see them. Using a configuration file list — rejected because this is a runtime toggle, not a persistent setting.
+**Alternatives considered:** Filtering barycenters unconditionally in the render loop — 
+rejected because the user sometimes wants to see them. Using a configuration file list — 
+rejected because this is a runtime toggle, not a persistent setting.
 
-**Consequences:** Barycenters are hidden on startup but can be toggled from the context menu or via `kepplr.setBodyVisible(9, true)`. The visibility map is per-session (not persisted across restarts).
+**Consequences:** Barycenters are hidden on startup but can be toggled from the context menu or 
+via `kepplr.setBodyVisible(9, true)`. The visibility map is per-session (not persisted across 
+restarts).
 
 ---
 
@@ -952,13 +1243,25 @@ would cause a compilation error since `toScript()` has no default implementation
 **Status:** Accepted
 **Roadmap step:** Bug fix (branch 50-clock-update-bug)
 
-**Context:** `SimulationClock.setET()` both updated the atomic `TimeAnchor` and called `state.setCurrentEt(et)`. When `CaptureService` called `commands.setET()` from the script thread while the JME thread was mid-`simpleUpdate()`, `applyFocusTracking()` and `SynodicFrameApplier` could see different ETs within the same frame — one read the old state value, the other read the new one. This caused a camera offset error proportional to `etStep × bodyVelocity` (e.g., ~84 km for New Horizons at 14 km/s with a 6-second step).
+**Context:** `SimulationClock.setET()` both updated the atomic `TimeAnchor` and called 
+`state.setCurrentEt(et)`. When `CaptureService` called `commands.setET()` from the script 
+thread while the JME thread was mid-`simpleUpdate()`, `applyFocusTracking()` and 
+`SynodicFrameApplier` could see different ETs within the same frame — one read the old state 
+value, the other read the new one. This caused a camera offset error proportional to `etStep × 
+bodyVelocity` (e.g., ~84 km for New Horizons at 14 km/s with a 6-second step).
 
-**Decision:** `setET()` only updates the atomic `TimeAnchor`. It no longer calls `state.setCurrentEt()`. The JME thread's `advance()` reads the anchor and sets state consistently at the start of the next frame. Tests that relied on immediate state update now call `clock.advance()` after `setET()`.
+**Decision:** `setET()` only updates the atomic `TimeAnchor`. It no longer calls 
+`state.setCurrentEt()`. The JME thread's `advance()` reads the anchor and sets state 
+consistently at the start of the next frame. Tests that relied on immediate state update now 
+call `clock.advance()` after `setET()`.
 
-**Alternatives considered:** Synchronizing `simpleUpdate()` with `setET()` via a lock — rejected because adding locks between the JME and script threads risks deadlocks and frame drops.
+**Alternatives considered:** Synchronizing `simpleUpdate()` with `setET()` via a lock — 
+rejected because adding locks between the JME and script threads risks deadlocks and frame 
+drops.
 
-**Consequences:** All state mutations from ET changes are serialised on the JME thread. Scripts that call `setET()` see the effect after the next `advance()` cycle, which is the correct behavior for frame-consistent rendering.
+**Consequences:** All state mutations from ET changes are serialised on the JME thread. Scripts 
+that call `setET()` see the effect after the next `advance()` cycle, which is the correct 
+behavior for frame-consistent rendering.
 
 ---
 
@@ -966,13 +1269,24 @@ would cause a compilation error since `toScript()` has no default implementation
 **Status:** Accepted
 **Roadmap step:** Bug fix (branch 50-clock-update-bug)
 
-**Context:** `KepplrApp.update()` read `pendingCapture` after `super.update()`. When `CaptureService` set the ET anchor and then set `pendingCapture` from the script thread, the JME thread might already have started `super.update()` with the old anchor. The first frame of `captureSequence` would render at the stale ET (e.g., 07:00:08.586 instead of 07:00:00.000).
+**Context:** `KepplrApp.update()` read `pendingCapture` after `super.update()`. When 
+`CaptureService` set the ET anchor and then set `pendingCapture` from the script thread, the 
+JME thread might already have started `super.update()` with the old anchor. The first frame of 
+`captureSequence` would render at the stale ET (e.g., 07:00:08.586 instead of 07:00:00.000).
 
-**Decision:** `update()` now reads and clears `pendingCapture` *before* `super.update()`. This ensures `advance()` (inside `super.update() → simpleUpdate()`) picks up the latest anchor. The framebuffer capture still runs *after* `super.update()` so the rendered scene is complete. This supersedes the "post-render" framing in D-043 — the capture is still post-render, but the pending-capture read is now pre-advance.
+**Decision:** `update()` now reads and clears `pendingCapture` *before* `super.update()`. This 
+ensures `advance()` (inside `super.update() → simpleUpdate()`) picks up the latest anchor. The 
+framebuffer capture still runs *after* `super.update()` so the rendered scene is complete. This 
+supersedes the "post-render" framing in D-043 — the capture is still post-render, but the 
+pending-capture read is now pre-advance.
 
-**Alternatives considered:** Having `CaptureService` use `enqueue()` to set ET on the JME thread before capture — rejected because it would add a full frame of latency per capture and complicate the latch handshake.
+**Alternatives considered:** Having `CaptureService` use `enqueue()` to set ET on the JME 
+thread before capture — rejected because it would add a full frame of latency per capture and 
+complicate the latch handshake.
 
-**Consequences:** The first frame of `captureSequence` now renders at the exact requested start ET. The two-phase read (clear before, capture after) is slightly more nuanced than the original single block, but the comment in `update()` explains the rationale.
+**Consequences:** The first frame of `captureSequence` now renders at the exact requested start 
+ET. The two-phase read (clear before, capture after) is slightly more nuanced than the original 
+single block, but the comment in `update()` explains the rationale.
 
 ---
 
@@ -980,13 +1294,23 @@ would cause a compilation error since `toScript()` has no default implementation
 **Status:** Accepted
 **Roadmap step:** 26 (State Snapshot Strings)
 
-**Context:** The roadmap left the internal representation TBD — "JSON for readability during development, packed binary if string length becomes a concern." The snapshot encodes 10 fields (ET, timeRate, paused, camPos[3], camOrient[4], cameraFrame, focus/target/selected IDs, FOV).
+**Context:** The roadmap left the internal representation TBD — "JSON for readability during 
+development, packed binary if string length becomes a concern." The snapshot encodes 10 fields 
+(ET, timeRate, paused, camPos[3], camOrient[4], cameraFrame, focus/target/selected IDs, FOV).
 
-**Decision:** Packed binary from the start. A `DataOutputStream` writes a version byte (1) followed by the fields in fixed order (74 bytes total), then Base64url-encodes without padding. This produces ~100-character strings — short enough to paste into chat, email, or script comments. JSON would produce ~300+ characters for the same data and add a JSON library dependency or manual string building.
+**Decision:** Packed binary from the start. A `DataOutputStream` writes a version byte (1) 
+followed by the fields in fixed order (74 bytes total), then Base64url-encodes without padding. 
+This produces ~100-character strings — short enough to paste into chat, email, or script 
+comments. JSON would produce ~300+ characters for the same data and add a JSON library 
+dependency or manual string building.
 
-**Alternatives considered:** JSON was considered for debuggability, but the version byte + known layout means any future tooling can decode the binary trivially. A hex dump of the Base64-decoded bytes is equally readable for debugging.
+**Alternatives considered:** JSON was considered for debuggability, but the version byte + 
+known layout means any future tooling can decode the binary trivially. A hex dump of the 
+Base64-decoded bytes is equally readable for debugging.
 
-**Consequences:** Compact strings. Version byte allows future format extensions (add fields after the current layout in version 2, decode version 1 strings with defaults for missing fields). `StateSnapshotCodec` is the single encode/decode authority.
+**Consequences:** Compact strings. Version byte allows future format extensions (add fields 
+after the current layout in version 2, decode version 1 strings with defaults for missing 
+fields). `StateSnapshotCodec` is the single encode/decode authority.
 
 ---
 
@@ -994,11 +1318,17 @@ would cause a compilation error since `toScript()` has no default implementation
 **Status:** Accepted
 **Roadmap step:** 26 (State Snapshot Strings)
 
-**Context:** The state snapshot needs camera orientation in J2000, but `SimulationState` only exposed `cameraPositionJ2000Property()`. The JME camera rotation quaternion is the J2000 orientation (scene frame = J2000, translated to floating origin).
+**Context:** The state snapshot needs camera orientation in J2000, but `SimulationState` only 
+exposed `cameraPositionJ2000Property()`. The JME camera rotation quaternion is the J2000 
+orientation (scene frame = J2000, translated to floating origin).
 
-**Decision:** Added `cameraOrientationJ2000Property()` returning `ReadOnlyObjectProperty<float[]>` (xyzw quaternion) to `SimulationState`. `KepplrApp` sets it each frame alongside position. `float[]` rather than `double[]` because JME quaternions are single-precision — no false precision.
+**Decision:** Added `cameraOrientationJ2000Property()` returning 
+`ReadOnlyObjectProperty<float[]>` (xyzw quaternion) to `SimulationState`. `KepplrApp` sets it 
+each frame alongside position. `float[]` rather than `double[]` because JME quaternions are 
+single-precision — no false precision.
 
-**Consequences:** Snapshot capture reads orientation from state like any other field. The property is also available for future HUD displays (e.g., camera Euler angles).
+**Consequences:** Snapshot capture reads orientation from state like any other field. The 
+property is also available for future HUD displays (e.g., camera Euler angles).
 
 ---
 
@@ -1006,13 +1336,22 @@ would cause a compilation error since `toScript()` has no default implementation
 **Status:** Accepted
 **Roadmap step:** 26 (State Snapshot Strings)
 
-**Context:** `setStateString()` must restore camera position, orientation, and FOV. These live in the JME `cam` object and `cameraHelioJ2000` array, which are only safe to mutate on the JME render thread. The command may be called from any thread (script thread, FX thread).
+**Context:** `setStateString()` must restore camera position, orientation, and FOV. These live 
+in the JME `cam` object and `cameraHelioJ2000` array, which are only safe to mutate on the JME 
+render thread. The command may be called from any thread (script thread, FX thread).
 
-**Decision:** `DefaultSimulationState` holds an `AtomicReference<PendingCameraRestore>` (same pattern as `HudMessage`). `setStateString()` posts a restore record; `KepplrApp.simpleUpdate()` consumes it at the top of the frame — after `clock.advance()` but before `cameraInputHandler.update()` — so the restored pose takes effect before any user input processing or frame co-rotation.
+**Decision:** `DefaultSimulationState` holds an `AtomicReference<PendingCameraRestore>` (same 
+pattern as `HudMessage`). `setStateString()` posts a restore record; `KepplrApp.simpleUpdate()` 
+consumes it at the top of the frame — after `clock.advance()` but before 
+`cameraInputHandler.update()` — so the restored pose takes effect before any user input 
+processing or frame co-rotation.
 
-**Alternatives considered:** Using `TransitionController.requestCameraPosition()` with duration 0 — rejected because that interprets position relative to a focus body in the active camera frame, whereas the snapshot stores absolute J2000 coordinates.
+**Alternatives considered:** Using `TransitionController.requestCameraPosition()` with duration 
+0 — rejected because that interprets position relative to a focus body in the active camera 
+frame, whereas the snapshot stores absolute J2000 coordinates.
 
-**Consequences:** Thread-safe, instant restore. Any in-progress transition is cancelled before the restore is posted.
+**Consequences:** Thread-safe, instant restore. Any in-progress transition is cancelled before 
+the restore is posted.
 
 ---
 
@@ -1020,13 +1359,24 @@ would cause a compilation error since `toScript()` has no default implementation
 **Status:** Accepted
 **Roadmap step:** 26 (State Snapshot Strings — CLI extension)
 
-**Context:** Users need to launch KEPPLR pre-configured to a specific state or with a script running, e.g. for automated rendering or sharing views via command line.
+**Context:** Users need to launch KEPPLR pre-configured to a specific state or with a script 
+running, e.g. for automated rendering or sharing views via command line.
 
-**Decision:** Two optional CLI flags added to `KEPPLR.main()`: `-state <string>` and `-script <path>`. Both are passed to `KepplrApp.run()` and applied at the very end of `simpleInitApp()`, after all managers, cameras, and input handlers are fully initialised. State is applied before script so the script sees the restored state. `ScriptRunner` and `CommandRecorder` promoted from local variables to fields to support this. The state string is routed through `CommandRecorder.setStateString()` so it is loggable if recording is later started.
+**Decision:** Two optional CLI flags added to `KEPPLR.main()`: `-state <string>` and `-script 
+<path>`. Both are passed to `KepplrApp.run()` and applied at the very end of `simpleInitApp()`, 
+after all managers, cameras, and input handlers are fully initialised. State is applied before 
+script so the script sees the restored state. `ScriptRunner` and `CommandRecorder` promoted 
+from local variables to fields to support this. The state string is routed through 
+`CommandRecorder.setStateString()` so it is loggable if recording is later started.
 
-**Alternatives considered:** Applying via `enqueue()` on the first `simpleUpdate()` frame — rejected because that adds a visible frame at the default state before the restore takes effect. Applying in `simpleInitApp()` means the very first rendered frame already reflects the restored state.
+**Alternatives considered:** Applying via `enqueue()` on the first `simpleUpdate()` frame — 
+rejected because that adds a visible frame at the default state before the restore takes 
+effect. Applying in `simpleInitApp()` means the very first rendered frame already reflects the 
+restored state.
 
-**Consequences:** `-state` errors are logged and skipped (non-fatal). `-script` launches on a daemon thread as usual. No new classes; ~15 lines of new code across `KEPPLR.java` and `KepplrApp.java`.
+**Consequences:** `-state` errors are logged and skipped (non-fatal). `-script` launches on a 
+daemon thread as usual. No new classes; ~15 lines of new code across `KEPPLR.java` and 
+`KepplrApp.java`.
 
 ---
 
@@ -1034,13 +1384,25 @@ would cause a compilation error since `toScript()` has no default implementation
 **Status:** Accepted
 **Roadmap step:** 28 (Scripting Console, Configuration Access, Display Messages)
 
-**Context:** Scripts had no way to read live simulation state (current ET, time rate, paused status, focused body ID, camera position/orientation). The `SimulationState` field existed on `KepplrScript` but was private with no accessor. Comparison with Cosmographia's scripting API highlighted the gap — Cosmographia exposes `getTime()`, `getDistanceFromCenter()`, `getCameraPosition()`, `getCameraOrientation()`, etc.
+**Context:** Scripts had no way to read live simulation state (current ET, time rate, paused 
+status, focused body ID, camera position/orientation). The `SimulationState` field existed on 
+`KepplrScript` but was private with no accessor. Comparison with Cosmographia's scripting API 
+highlighted the gap — Cosmographia exposes `getTime()`, `getDistanceFromCenter()`, 
+`getCameraPosition()`, `getCameraOrientation()`, etc.
 
-**Decision:** Add `KepplrScript.getState()` returning the live `SimulationState` instance. Scripts can read any observable property directly (e.g., `kepplr.getState().currentEtProperty().get()`). This exposes the interface, not the `DefaultSimulationState` implementation — scripts get read-only property access only.
+**Decision:** Add `KepplrScript.getState()` returning the live `SimulationState` instance. 
+Scripts can read any observable property directly (e.g., 
+`kepplr.getState().currentEtProperty().get()`). This exposes the interface, not the 
+`DefaultSimulationState` implementation — scripts get read-only property access only.
 
-**Alternatives considered:** Individual convenience getters (`getET()`, `getTimeRate()`, `isPaused()`, etc.) on `KepplrScript` — rejected as redundant wrapper proliferation when the `SimulationState` interface already provides a clean, documented property API. Individual getters can be added later for common cases if ergonomics demand it.
+**Alternatives considered:** Individual convenience getters (`getET()`, `getTimeRate()`, 
+`isPaused()`, etc.) on `KepplrScript` — rejected as redundant wrapper proliferation when the 
+`SimulationState` interface already provides a clean, documented property API. Individual 
+getters can be added later for common cases if ergonomics demand it.
 
-**Consequences:** Scripts gain full read access to simulation state. No new mutation path — `SimulationState` properties are read-only from the consumer side. The `SimulationState` interface is already public API.
+**Consequences:** Scripts gain full read access to simulation state. No new mutation path — 
+`SimulationState` properties are read-only from the consumer side. The `SimulationState` 
+interface is already public API.
 
 ---
 
@@ -1048,11 +1410,19 @@ would cause a compilation error since `toScript()` has no default implementation
 **Status:** Accepted
 **Roadmap step:** 28 (Frame-aware camera commands)
 
-**Context:** The `setCameraPosition()` and `setCameraOrientation()` methods on `KepplrScript` accept offset/look/up vectors that are interpreted in the active camera frame (INERTIAL, BODY_FIXED, SYNODIC), but the Javadoc did not state this. Comparison with Cosmographia's `moveToPovSpiceFrame()` — which explicitly names the frame — highlighted that KEPPLR's implicit-frame convention needs to be documented clearly.
+**Context:** The `setCameraPosition()` and `setCameraOrientation()` methods on `KepplrScript` 
+accept offset/look/up vectors that are interpreted in the active camera frame (INERTIAL, 
+BODY_FIXED, SYNODIC), but the Javadoc did not state this. Comparison with Cosmographia's 
+`moveToPovSpiceFrame()` — which explicitly names the frame — highlighted that KEPPLR's 
+implicit-frame convention needs to be documented clearly.
 
-**Decision:** Updated Javadoc on all `KepplrScript.setCameraPosition()` overloads (3) and `setCameraOrientation()` to state that vectors are expressed in the current camera frame, with a pointer to `setCameraFrame()`. Parameter descriptions changed from "x offset in km" to "x offset in km in the current camera frame", etc.
+**Decision:** Updated Javadoc on all `KepplrScript.setCameraPosition()` overloads (3) and 
+`setCameraOrientation()` to state that vectors are expressed in the current camera frame, with 
+a pointer to `setCameraFrame()`. Parameter descriptions changed from "x offset in km" to "x 
+offset in km in the current camera frame", etc.
 
-**Consequences:** Documentation-only change. No behavioral change. Scripts that need a specific frame should call `setCameraFrame()` before `setCameraPosition()` / `setCameraOrientation()`.
+**Consequences:** Documentation-only change. No behavioral change. Scripts that need a specific 
+frame should call `setCameraFrame()` before `setCameraPosition()` / `setCameraOrientation()`.
 
 ---
 
@@ -1060,18 +1430,29 @@ would cause a compilation error since `toScript()` has no default implementation
 **Status:** Accepted
 **Roadmap step:** N/A (conversion tooling fix)
 
-**Context:** The Python conversion script (`convert_to_normalized_glb.py`) injected an `Rx(-90°)` quaternion as `modelToBodyFixedQuat` for OBJ/CMOD sources, based on the assumption that Blender's `export_yup=True` bakes an `Rx(-90°)` rotation into GLB vertex data and KEPPLR would need to undo it. Empirical testing showed this was wrong: JME's glTF loader handles the Y-up basis conversion via the scene graph, so loaded vertices are already in their original frame. The injected rotation was doubling the conversion, producing incorrect orientation.
+**Context:** The Python conversion script (`convert_to_normalized_glb.py`) injected an 
+`Rx(-90°)` quaternion as `modelToBodyFixedQuat` for OBJ/CMOD sources, based on the assumption 
+that Blender's `export_yup=True` bakes an `Rx(-90°)` rotation into GLB vertex data and KEPPLR 
+would need to undo it. Empirical testing showed this was wrong: JME's glTF loader handles the 
+Y-up basis conversion via the scene graph, so loaded vertices are already in their original 
+frame. The injected rotation was doubling the conversion, producing incorrect orientation.
 
 **Decision:**
-1. `modelToBodyFixedQuat` defaults to identity `(0,0,0,1)` for all source formats. No format-based basis correction is applied.
-2. Two new mutually exclusive CLI options allow per-model correction when a model's vertex frame does not match the expected SPICE body-fixed frame:
+1. `modelToBodyFixedQuat` defaults to identity `(0,0,0,1)` for all source formats. No 
+format-based basis correction is applied.
+2. Two new mutually exclusive CLI options allow per-model correction when a model's vertex 
+frame does not match the expected SPICE body-fixed frame:
    - `--apply-rotation x,y,z,a` (axis-angle, degrees)
-   - `--apply-quaternion w,x,y,z` (quaternion in Cosmographia `meshRotation` order; reordered to `x,y,z,w` for glTF/JME)
-3. No changes to the Java side — `GLTFUtils`, `BodyNodeFactory`, and `GlbModelViewer` are correct as-is.
+   - `--apply-quaternion w,x,y,z` (quaternion in Cosmographia `meshRotation` order; reordered 
+to `x,y,z,w` for glTF/JME)
+3. No changes to the Java side — `GLTFUtils`, `BodyNodeFactory`, and `GlbModelViewer` are 
+correct as-is.
 
 **Consequences:**
-- All previously converted GLB files from OBJ/CMOD sources that had the erroneous `Rx(-90°)` quaternion must be reconverted.
-- CMOD models that need alignment (e.g., authored with +Y up) can use `--apply-quaternion` with the `meshRotation` value from Cosmographia's SSC/JSON config files directly.
+- All previously converted GLB files from OBJ/CMOD sources that had the erroneous `Rx(-90°)` 
+quaternion must be reconverted.
+- CMOD models that need alignment (e.g., authored with +Y up) can use `--apply-quaternion` with 
+the `meshRotation` value from Cosmographia's SSC/JSON config files directly.
 - OBJ models with vertices already in body-fixed coordinates need no flags.
 
 ---
@@ -1080,9 +1461,14 @@ would cause a compilation error since `toScript()` has no default implementation
 **Status:** Accepted
 **Roadmap step:** N/A (scripting API documentation)
 
-**Context:** Users writing scripts had no way to know which `KepplrScript` methods execute immediately, which are queued to the JME thread, and which block the script thread. This led to subtle bugs — for example, calling `focusBody()` immediately after `loadConfiguration()` without realizing the camera transitions were queued while the JME thread hadn't yet computed body positions. The prototype's `EngineApi` labelled every method clearly.
+**Context:** Users writing scripts had no way to know which `KepplrScript` methods execute 
+immediately, which are queued to the JME thread, and which block the script thread. This led to 
+subtle bugs — for example, calling `centerBody()` immediately after `loadConfiguration()` 
+without realizing the camera transitions were queued while the JME thread hadn't yet computed 
+body positions. The prototype's `EngineApi` labelled every method clearly.
 
-**Decision:** Every public method on `KepplrScript` now has an `<b>Execution semantics:</b>` label in its Javadoc, using one of four categories:
+**Decision:** Every public method on `KepplrScript` now has an `<b>Execution semantics:</b>` 
+label in its Javadoc, using one of four categories:
 - **Immediate** — takes effect on the calling thread; no JME involvement.
 - **Queued** — enqueued to the JME thread's transition inbox; returns immediately.
 - **Blocking** — blocks the script thread until the operation completes.
@@ -1090,7 +1476,9 @@ would cause a compilation error since `toScript()` has no default implementation
 
 The class-level Javadoc summarizes all four categories.
 
-**Consequences:** Script authors can determine whether they need `waitTransition()` or `waitWall()` between calls. Hybrid methods (`focusBody`, `targetBody`, `setStateString`) are flagged so users understand that state is visible immediately but the camera arrives asynchronously.
+**Consequences:** Script authors can determine whether they need `waitTransition()` or 
+`waitWall()` between calls. Hybrid methods (`setStateString`) are flagged so users
+understand that state is visible immediately but the camera arrives asynchronously.
 
 ---
 
@@ -1098,13 +1486,25 @@ The class-level Javadoc summarizes all four categories.
 **Status:** Accepted
 **Roadmap step:** N/A (scripting reliability fix)
 
-**Context:** `loadConfiguration()` blocked the script thread via a `CountDownLatch` until `rebuildBodyScene()` finished on the JME thread. However, the latch was counted down inside the enqueued callable that runs during `super.update()` — *before* `simpleUpdate()`. This meant the script thread could resume and queue camera transitions (via `focusBody`) before the JME thread had computed body positions for the new scene, causing transitions to target stale or missing positions.
+**Context:** `loadConfiguration()` blocked the script thread via a `CountDownLatch` until 
+`rebuildBodyScene()` finished on the JME thread. However, the latch was counted down inside the 
+enqueued callable that runs during `super.update()` — *before* `simpleUpdate()`. This meant the 
+script thread could resume and queue camera transitions (for example via an explicit
+`goTo`) before the JME thread had computed body positions for the new scene, causing
+transitions to target stale or missing positions.
 
-**Decision:** The latch is no longer counted down inside the enqueued callable. Instead, it is stored in a `volatile postRebuildLatch` field and counted down at the end of `simpleUpdate()`. This guarantees that the first full update cycle with the new configuration (body positions computed, scene graph updated) has completed before the script thread unblocks.
+**Decision:** The latch is no longer counted down inside the enqueued callable. Instead, it is 
+stored in a `volatile postRebuildLatch` field and counted down at the end of `simpleUpdate()`. 
+This guarantees that the first full update cycle with the new configuration (body positions 
+computed, scene graph updated) has completed before the script thread unblocks.
 
-**Alternatives considered:** Adding `waitWall(5)` in scripts as a workaround — functional but fragile and violates the "Blocking means truly blocking" contract.
+**Alternatives considered:** Adding `waitWall(5)` in scripts as a workaround — functional but 
+fragile and violates the "Blocking means truly blocking" contract.
 
-**Consequences:** Scripts can safely call `focusBody()` immediately after `loadConfiguration()` without any artificial delay. The `loadConfiguration` Javadoc labelled as "Blocking" now accurately reflects its behavior.
+**Consequences:** Scripts can safely call `centerBody()` or explicit camera-transition
+commands immediately after `loadConfiguration()` without any artificial delay. The
+`loadConfiguration` Javadoc labelled as "Blocking" now 
+accurately reflects its behavior.
 
 ---
 
@@ -1112,15 +1512,26 @@ The class-level Javadoc summarizes all four categories.
 **Status:** Accepted
 **Roadmap step:** N/A (scene rebuild correctness fix)
 
-**Context:** Running a script that called `loadConfiguration()` multiple times left orphaned geometry in the scene graph. Two bugs:
-1. `VectorManager` and `StarFieldManager` were reconstructed without disposing the old instances. The old geometry remained attached to the frustum layer nodes — the new manager's `detachAll()` only knew about its own geometry, not the predecessor's.
-2. Overlay visibility state in `DefaultSimulationState` (vectors, trails, labels, frustums, body visibility) was not cleared on rebuild, so flags set by a previous script run survived and caused the new managers to immediately re-enable stale overlays.
+**Context:** Running a script that called `loadConfiguration()` multiple times left orphaned 
+geometry in the scene graph. Two bugs:
+1. `VectorManager` and `StarFieldManager` were reconstructed without disposing the old 
+instances. The old geometry remained attached to the frustum layer nodes — the new manager's 
+`detachAll()` only knew about its own geometry, not the predecessor's.
+2. Overlay visibility state in `DefaultSimulationState` (vectors, trails, labels, frustums, 
+body visibility) was not cleared on rebuild, so flags set by a previous script run survived and 
+caused the new managers to immediately re-enable stale overlays.
 
 **Decision:**
-1. Added `dispose()` methods to `VectorManager` and `StarFieldManager` that detach all geometry and clear internal state. Both are called in `rebuildBodyScene()` before constructing replacements.
-2. Added `clearOverlayState()` to `DefaultSimulationState` that clears all overlay visibility maps and re-applies the default barycenter hiding. Called in `rebuildBodyScene()`.
+1. Added `dispose()` methods to `VectorManager` and `StarFieldManager` that detach all geometry 
+and clear internal state. Both are called in `rebuildBodyScene()` before constructing 
+replacements.
+2. Added `clearOverlayState()` to `DefaultSimulationState` that clears all overlay visibility 
+maps and re-applies the default barycenter hiding. Called in `rebuildBodyScene()`.
 
-**Consequences:** Scripts that call `loadConfiguration()` (including re-running the same script) get a clean slate — no orphaned geometry, no stale overlay flags. The script must re-enable any desired overlays after each `loadConfiguration()` call, which matches user expectation and the script's own flow.
+**Consequences:** Scripts that call `loadConfiguration()` (including re-running the same 
+script) get a clean slate — no orphaned geometry, no stale overlay flags. The script must 
+re-enable any desired overlays after each `loadConfiguration()` call, which matches user 
+expectation and the script's own flow.
 
 ---
 
@@ -1128,11 +1539,17 @@ The class-level Javadoc summarizes all four categories.
 **Status:** Accepted
 **Roadmap step:** N/A (UX refinement)
 
-**Context:** The G (goTo focused body), F (toggle synodic/inertial frame), and T (target selected body) keybindings in `CameraInputHandler` were not useful in practice. Additionally, the Up arrow tilted the camera down and Down arrow tilted up, which was counterintuitive.
+**Context:** The G (goTo focused body), F (toggle synodic/inertial frame), and T (target 
+selected body) keybindings in `CameraInputHandler` were not useful in practice. Additionally, 
+the Up arrow tilted the camera down and Down arrow tilted up, which was counterintuitive.
 
-**Decision:** Removed G, F, and T keybindings from `CameraInputHandler.onKeyEvent()`. Reversed the tilt direction so Up arrow tilts the camera up (positive degrees) and Down arrow tilts down (negative degrees). Frame switching is done via the Camera Frame submenu in the View menu. REDESIGN.md §4.6 updated to remove the F-key reference.
+**Decision:** Removed G, F, and T keybindings from `CameraInputHandler.onKeyEvent()`. Reversed 
+the tilt direction so Up arrow tilts the camera up (positive degrees) and Down arrow tilts down 
+(negative degrees). Frame switching is done via the Camera Frame submenu in the View menu. 
+REDESIGN.md §4.6 updated to remove the F-key reference.
 
-**Consequences:** Keyboard shortcuts are now: arrow keys (tilt/orbit), Page Up/Down (zoom), Space (pause), `[`/`]` (time rate). Frame switching is menu-only.
+**Consequences:** Keyboard shortcuts are now: arrow keys (tilt/orbit), Page Up/Down (zoom), 
+Space (pause), `[`/`]` (time rate). Frame switching is menu-only.
 
 ---
 
@@ -1140,11 +1557,15 @@ The class-level Javadoc summarizes all four categories.
 **Status:** Accepted
 **Roadmap step:** N/A (UX refinement)
 
-**Context:** The Edit menu contained only Copy State and Paste State — not enough to justify a dedicated menu. Moving them into the File menu reduces menu bar clutter.
+**Context:** The Edit menu contained only Copy State and Paste State — not enough to justify a 
+dedicated menu. Moving them into the File menu reduces menu bar clutter.
 
-**Decision:** Moved Copy State and Paste State into the File menu (between Capture Sequence and Show Log, with separators). Removed the Edit menu entirely. `buildEditMenu()` deleted from `KepplrStatusWindow`.
+**Decision:** Moved Copy State and Paste State into the File menu (between Capture Sequence and 
+Show Log, with separators). Removed the Edit menu entirely. `buildEditMenu()` deleted from 
+`KepplrStatusWindow`.
 
-**Consequences:** Menu bar is: File, View, Time, Overlays, Instruments, Window. One fewer top-level menu.
+**Consequences:** Menu bar is: File, View, Time, Overlays, Instruments, Window. One fewer 
+top-level menu.
 
 ---
 
@@ -1152,11 +1573,18 @@ The class-level Javadoc summarizes all four categories.
 **Status:** Accepted
 **Roadmap step:** N/A (correctness fix)
 
-**Context:** `VectorTypes.velocity()` computed the heliocentric velocity for all bodies. For satellites (e.g. the Moon), this showed the velocity relative to the Sun, which did not match the orbital trail direction and was not useful for understanding the body's orbit around its parent.
+**Context:** `VectorTypes.velocity()` computed the heliocentric velocity for all bodies. For 
+satellites (e.g. the Moon), this showed the velocity relative to the Sun, which did not match 
+the orbital trail direction and was not useful for understanding the body's orbit around its 
+parent.
 
-**Decision:** `VelocityVectorType` now subtracts the parent barycenter's velocity for satellites (NAIF IDs 100–999 not ending in 99, plus Pluto 999). For planets and other bodies, the heliocentric velocity is used. This matches the trail direction convention in `TrailSampler`.
+**Decision:** `VelocityVectorType` now subtracts the parent barycenter's velocity for 
+satellites (NAIF IDs 100–999 not ending in 99, plus Pluto 999). For planets and other bodies, 
+the heliocentric velocity is used. This matches the trail direction convention in 
+`TrailSampler`.
 
-**Consequences:** The velocity overlay arrow now points along the orbital trail for all bodies. REDESIGN.md §10.3 updated to document this.
+**Consequences:** The velocity overlay arrow now points along the orbital trail for all bodies. 
+REDESIGN.md §10.3 updated to document this.
 
 ---
 
@@ -1164,11 +1592,17 @@ The class-level Javadoc summarizes all four categories.
 **Status:** Accepted
 **Roadmap step:** N/A (robustness fix)
 
-**Context:** `BodySceneManager.update()` called `eph.getJ2000ToBodyFixedRotation()` for any body with `DRAW_FULL` decision. Bodies like Hyperion (NAIF 607) have no PCK orientation data, causing `getJ2000ToBodyFixedRotation()` to return null and a subsequent NullPointerException.
+**Context:** `BodySceneManager.update()` called `eph.getJ2000ToBodyFixedRotation()` for any 
+body with `DRAW_FULL` decision. Bodies like Hyperion (NAIF 607) have no PCK orientation data, 
+causing `getJ2000ToBodyFixedRotation()` to return null and a subsequent NullPointerException.
 
-**Decision:** When `getJ2000ToBodyFixedRotation()` returns null for a `DRAW_FULL` body, the decision is downgraded to `DRAW_SPRITE`. The body is still visible as a point sprite rather than crashing.
+**Decision:** When `getJ2000ToBodyFixedRotation()` returns null for a `DRAW_FULL` body, the 
+decision is downgraded to `DRAW_SPRITE`. The body is still visible as a point sprite rather 
+than crashing.
 
-**Consequences:** All bodies in the SPK are renderable regardless of PCK coverage. Bodies without orientation data appear as sprites even at close range, which is acceptable since there is no texture to orient anyway.
+**Consequences:** All bodies in the SPK are renderable regardless of PCK coverage. Bodies 
+without orientation data appear as sprites even at close range, which is acceptable since there 
+is no texture to orient anyway.
 
 ---
 
@@ -1207,7 +1641,8 @@ ET jumps. The `resetFocusTrackingAnchor()` call is paired with `consumePendingCa
 
 ---
 
-## D-064: Synodic frame override state is seeded from focus + selected on setCameraFrame(SYNODIC)
+## D-064: Synodic frame override state is seeded from focus + selected on 
+setCameraFrame(SYNODIC)
 **Status:** Accepted
 **Roadmap step:** 19c / 28 follow-up (state consistency fix)
 
@@ -1249,32 +1684,47 @@ incorrect implication that the synodic "other body" is tied to
 **Roadmap step:** §7.5 follow-up (trail coordinate system)
 
 **Context:** All orbital trails were drawn relative to a reference body derived from the NAIF ID
-heuristic: natural satellites used their system barycenter; everything else used heliocentric (Sun)
+heuristic: natural satellites used their system barycenter; everything else used heliocentric 
+(Sun)
 coordinates. For spacecraft with negative NAIF IDs the heuristic always gave heliocentric, which
-made their trails drift across the scene as the reference planet moved — useless for viewing a lunar
+made their trails drift across the scene as the reference planet moved — useless for viewing a 
+lunar
 approach trajectory. The velocity direction arrow (D-047/D-061) was designed to match the trail
-reference convention, so changing the trail reference without also changing the velocity arrow would
+reference convention, so changing the trail reference without also changing the velocity arrow 
+would
 make the arrow point in a direction inconsistent with the trail.
 
-**Decision:** Add `setTrailReferenceBody(int naifId, int referenceBodyId)` to `SimulationCommands`
+**Decision:** Add `setTrailReferenceBody(int naifId, int referenceBodyId)` to 
+`SimulationCommands`
 and expose it in `KepplrScript`. The command stores the reference body in `SimulationState` as a
-per-body `ReadOnlyIntegerProperty` (default `-1` = use NAIF heuristic). `TrailManager` reads this
-property at resample time; a change in reference body forces an immediate resample. `VelocityVectorType`
-reads the same property at point-of-use via a package-private `SimulationState` reference held in
-`VectorTypes`, set once during `KepplrApp.simpleInitApp()`. This couples both the trail and velocity
-arrow to the configured reference body without changing the `VectorType` interface or the `VectorKey`
+per-body `ReadOnlyIntegerProperty` (default `-1` = use NAIF heuristic). `TrailManager` reads 
+this
+property at resample time; a change in reference body forces an immediate resample. 
+`VelocityVectorType`
+reads the same property at point-of-use via a package-private `SimulationState` reference held 
+in
+`VectorTypes`, set once during `KepplrApp.simpleInitApp()`. This couples both the trail and 
+velocity
+arrow to the configured reference body without changing the `VectorType` interface or the 
+`VectorKey`
 scheme. `clearOverlayState()` clears the reference body map on config reload.
 
-**Alternatives considered:** Parameterizing `VelocityVectorType` with a reference body and updating
-`VectorKey` — rejected because changing the reference body would require removing and re-adding the
-vector definition, requiring `DefaultSimulationCommands` to reach into render-layer state. A separate
-`setVelocityReferenceBody` command — rejected per discussion (option 2: trail and velocity should
+**Alternatives considered:** Parameterizing `VelocityVectorType` with a reference body and 
+updating
+`VectorKey` — rejected because changing the reference body would require removing and re-adding 
+the
+vector definition, requiring `DefaultSimulationCommands` to reach into render-layer state. A 
+separate
+`setVelocityReferenceBody` command — rejected per discussion (option 2: trail and velocity 
+should
 always agree).
 
 **Consequences:** Scripting: `kepplr.setTrailReferenceBody("Artemis II", "Moon")` makes both the
 trail and velocity arrow for Artemis II Moon-relative. The NAIF heuristic remains the default;
-existing scripts are unaffected. The `TrailState.barycenterId` field now stores the effective reference
-body (not just the satellite-barycenter special case), enabling the reference-body-change staleness
+existing scripts are unaffected. The `TrailState.barycenterId` field now stores the effective 
+reference
+body (not just the satellite-barycenter special case), enabling the reference-body-change 
+staleness
 trigger.
 
 ---
@@ -1338,7 +1788,38 @@ reference body.
 
 ---
 
-*Last updated: D-067 (BODY_FIXED trail reference always focus body), D-066 (synodic trail uses active frame and override IDs), D-065 (configurable trail reference body), D-064 (synodic frame override state seeded from focus + selected), D-063 (focus-tracking anchor reset on state restore), D-062 (sprite fallback for missing body-fixed frames)*
+## D-068: macOS JavaFX startup is deferred to `simpleInitApp()` and must occur exactly once
+**Status:** Accepted
+
+**Context:** KEPPLR uses GLFW/JME for the render window and JavaFX for the control
+window. On macOS, calling `Platform.startup()` before GLFW has initialized lets JavaFX
+claim `NSApplication`, which then conflicts with GLFW and can prevent the JME window
+from appearing. A later regression also showed that calling `Platform.startup()` twice
+from `simpleInitApp()` throws `IllegalStateException: Toolkit already initialized` on
+startup.
+
+**Decision:** On macOS, JavaFX startup is deferred until `KepplrApp.simpleInitApp()`,
+after GLFW has already claimed `NSApplication`. That macOS path must call
+`Platform.startup(...)` exactly once, with `FxDispatch::start` as the startup callback.
+The control window is then shown by enqueuing `statusWindow.show()` through
+`FxDispatch.dispatch(...)`, not by making a second `Platform.startup(...)` call.
+
+**Alternatives considered:** Starting JavaFX in `run()` on all platforms — rejected
+because it lets JavaFX win the `NSApplication` race on macOS. Calling
+`Platform.startup()` once to initialize the toolkit and again to show the window —
+rejected because JavaFX only permits a single toolkit startup.
+
+**Consequences:** macOS startup logic differs intentionally from Linux. Any future work
+around the control window, `FxDispatch`, or JavaFX lifecycle must preserve the
+"GLFW first, then one JavaFX startup" rule. If the FX window needs more initialization
+work on macOS, it must be chained from the existing FX startup/dispatch path rather than
+adding another `Platform.startup(...)` call.
+
+---
+
+*Last updated: D-068 (macOS JavaFX startup deferred to simpleInitApp and called exactly once), 
+D-067 (BODY_FIXED trail reference always focus body), D-066 (synodic trail uses active frame 
+and override IDs), D-065 (configurable trail reference body), D-064 (synodic frame override 
+state seeded from focus + selected), D-063 (focus-tracking anchor reset on state restore)*
 *Backfill note: Entries D-001 through D-009 were reconstructed retrospectively.
 D-010 onwards recorded in real time.*
-

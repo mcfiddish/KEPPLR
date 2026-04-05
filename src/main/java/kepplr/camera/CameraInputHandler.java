@@ -450,7 +450,7 @@ public final class CameraInputHandler implements ActionListener, AnalogListener,
 
     /**
      * Handle a left-click at the given screen coordinates. Casts a pick ray against the frustum layer nodes to find a
-     * body. Single click → selectBody; double-click → focusBody.
+     * body. Single click → selectBody; double-click → centerBody + goTo.
      */
     private void handleClick(float screenX, float screenY) {
         if (commands == null) return;
@@ -461,8 +461,12 @@ public final class CameraInputHandler implements ActionListener, AnalogListener,
         long now = System.nanoTime();
         if (lastClickNaifId == hitNaifId
                 && (now - lastClickTimeNanos) < KepplrConstants.MOUSE_DOUBLE_CLICK_THRESHOLD_NS) {
-            // Double-click on same body → focus
-            commands.focusBody(hitNaifId);
+            // Double-click on same body → center and move camera
+            commands.centerBody(hitNaifId);
+            commands.goTo(
+                    hitNaifId,
+                    KepplrConstants.DEFAULT_GOTO_APPARENT_RADIUS_DEG,
+                    KepplrConstants.DEFAULT_GOTO_DURATION_SECONDS);
             lastClickTimeNanos = 0;
             lastClickNaifId = -1;
         } else {

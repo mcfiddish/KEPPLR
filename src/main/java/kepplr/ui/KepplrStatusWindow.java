@@ -2,7 +2,6 @@ package kepplr.ui;
 
 import java.io.File;
 import java.io.IOException;
-import java.io.StringWriter;
 import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -54,8 +53,6 @@ import javafx.scene.layout.VBox;
 import javafx.stage.DirectoryChooser;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
-import javax.script.ScriptEngine;
-import javax.script.ScriptEngineManager;
 import kepplr.camera.CameraFrame;
 import kepplr.commands.SimulationCommands;
 import kepplr.config.KEPPLRConfiguration;
@@ -64,10 +61,8 @@ import kepplr.ephemeris.BodyLookupService;
 import kepplr.ephemeris.Instrument;
 import kepplr.ephemeris.KEPPLREphemeris;
 import kepplr.ephemeris.spice.SpiceBundle;
-import kepplr.render.RenderQuality;
 import kepplr.render.vector.VectorTypes;
 import kepplr.scripting.CommandRecorder;
-import kepplr.scripting.KepplrScript;
 import kepplr.scripting.ScriptRunner;
 import kepplr.state.SimulationState;
 import kepplr.util.KepplrConstants;
@@ -116,7 +111,6 @@ public final class KepplrStatusWindow {
     private CustomMenuItem captureSeqItem;
     private CustomMenuItem saveScreenshotItem;
     private volatile Thread captureSequenceThread;
-    private volatile Thread consoleThread;
     /** Set by {@link #signalConfigRefresh()} from any thread; drained by the AnimationTimer on the FX thread. */
     private volatile boolean pendingConfigRefresh = false;
 
@@ -317,8 +311,8 @@ public final class KepplrStatusWindow {
 
         int row = 0;
 
-        // Row 0: Focused
-        grid.add(boldLabel("Focused:"), 0, row);
+        // Row 0: Center
+        grid.add(boldLabel("Center:"), 0, row);
         Label focValue = monoLabel();
         focValue.textProperty().bind(bridge.focusedBodyNameProperty());
         grid.add(focValue, 1, row);
@@ -337,7 +331,7 @@ public final class KepplrStatusWindow {
         grid.add(tgtDist, 2, row);
         row++;
 
-        // Row 2: Selected — with Focus, Target buttons
+        // Row 2: Selected — with Center, Go To, Point At buttons
         grid.add(boldLabel("Selected:"), 0, row);
         Label selValue = monoLabel();
         selValue.textProperty().bind(bridge.selectedBodyNameProperty());
@@ -346,17 +340,29 @@ public final class KepplrStatusWindow {
         selDist.textProperty().bind(bridge.selectedBodyDistanceProperty());
         grid.add(selDist, 2, row);
 
-        Button focusBtn = smallButton("Focus");
-        focusBtn.setOnAction(e -> {
+        Button centerBtn = smallButton("Center");
+        centerBtn.setOnAction(e -> {
             int id = bridge.selectedBodyIdProperty().get();
-            if (id != -1) commands.focusBody(id);
+            if (id != -1) commands.centerBody(id);
         });
-        Button targetBtn = smallButton("Target");
-        targetBtn.setOnAction(e -> {
+        Button goToBtn = smallButton("Go To");
+        goToBtn.setOnAction(e -> {
             int id = bridge.selectedBodyIdProperty().get();
-            if (id != -1) commands.targetBody(id);
+            if (id != -1) {
+                commands.goTo(
+                        id,
+                        KepplrConstants.DEFAULT_GOTO_APPARENT_RADIUS_DEG,
+                        KepplrConstants.DEFAULT_GOTO_DURATION_SECONDS);
+            }
         });
-        HBox selButtons = new HBox(4, focusBtn, targetBtn);
+        Button pointAtBtn = smallButton("Point At");
+        pointAtBtn.setOnAction(e -> {
+            int id = bridge.selectedBodyIdProperty().get();
+            if (id != -1) {
+                commands.pointAt(id, KepplrConstants.DEFAULT_SLEW_DURATION_SECONDS);
+            }
+        });
+        HBox selButtons = new HBox(4, centerBtn, goToBtn, pointAtBtn);
         selButtons.visibleProperty().bind(bridge.selectedBodyActiveProperty());
         selButtons.managedProperty().bind(bridge.selectedBodyActiveProperty());
         grid.add(selButtons, 3, row);
@@ -463,13 +469,17 @@ public final class KepplrStatusWindow {
             if (inViewToggle.isSelected()) applyFilters.run();
         });
 
-        // Single click → select; double-click → focus
+        // Single click → select; double-click → center + goTo
         bodyTree.setOnMouseClicked(evt -> {
             TreeItem<BodyTreeEntry> item = bodyTree.getSelectionModel().getSelectedItem();
             if (item == null || item.getValue() == null || item.getValue().naifId == -1) return;
             int naifId = item.getValue().naifId;
             if (evt.getClickCount() == 2) {
-                commands.focusBody(naifId);
+                commands.centerBody(naifId);
+                commands.goTo(
+                        naifId,
+                        KepplrConstants.DEFAULT_GOTO_APPARENT_RADIUS_DEG,
+                        KepplrConstants.DEFAULT_GOTO_DURATION_SECONDS);
             } else if (evt.getClickCount() == 1) {
                 commands.selectBody(naifId);
             }
@@ -500,11 +510,19 @@ public final class KepplrStatusWindow {
     private void populateBodyTreeContextMenu(ContextMenu menu, int naifId) {
         menu.getItems().clear();
 
-        MenuItem focusItem = new MenuItem("Focus");
-        focusItem.setOnAction(e -> commands.focusBody(naifId));
+        MenuItem centerItem = new MenuItem("Center");
+        centerItem.setOnAction(e -> commands.centerBody(naifId));
 
-        MenuItem targetItem = new MenuItem("Target");
-        targetItem.setOnAction(e -> commands.targetBody(naifId));
+        MenuItem goToItem = new MenuItem("Go To");
+        goToItem.setOnAction(e -> {
+            commands.goTo(
+                    naifId,
+                    KepplrConstants.DEFAULT_GOTO_APPARENT_RADIUS_DEG,
+                    KepplrConstants.DEFAULT_GOTO_DURATION_SECONDS);
+        });
+
+        MenuItem pointAtItem = new MenuItem("Point At");
+        pointAtItem.setOnAction(e -> commands.pointAt(naifId, KepplrConstants.DEFAULT_SLEW_DURATION_SECONDS));
 
         CheckMenuItem trailItem = new CheckMenuItem("Trail");
         trailItem.setSelected(bridge.getState().trailVisibleProperty(naifId).get());
@@ -531,8 +549,9 @@ public final class KepplrStatusWindow {
 
         menu.getItems()
                 .addAll(
-                        focusItem,
-                        targetItem,
+                        centerItem,
+                        goToItem,
+                        pointAtItem,
                         new SeparatorMenuItem(),
                         trailItem,
                         labelItem,
@@ -812,11 +831,15 @@ public final class KepplrStatusWindow {
         runButton.setOnAction(e -> evaluateConsoleInput());
         runButton.setStyle("-fx-font-size: 10px;");
 
+        Button stopButton = new Button("Stop");
+        stopButton.setOnAction(e -> stopConsoleScript());
+        stopButton.setStyle("-fx-font-size: 10px;");
+
         Button clearButton = new Button("Clear");
         clearButton.setOnAction(e -> consoleInput.clear());
         clearButton.setStyle("-fx-font-size: 10px;");
 
-        HBox buttonBar = new HBox(6, runButton, clearButton);
+        HBox buttonBar = new HBox(6, runButton, stopButton, clearButton);
         buttonBar.setPadding(new Insets(0, 10, 0, 10));
 
         VBox inputPane = new VBox(4, header, consoleInput, buttonBar);
@@ -836,14 +859,13 @@ public final class KepplrStatusWindow {
         String code = consoleInput.getText().trim();
         if (code.isEmpty()) return;
 
-        if (scriptRunner != null && scriptRunner.isRunning()) {
-            scriptOutputQueue.add("⚠ Cannot evaluate: a script is running");
+        if (scriptRunner == null) {
+            scriptOutputQueue.add("ERROR: Script runner not available");
             return;
         }
 
-        Thread ct = consoleThread;
-        if (ct != null && ct.isAlive()) {
-            scriptOutputQueue.add("⚠ Previous console command still running");
+        if (scriptRunner.isRunning()) {
+            scriptOutputQueue.add("⚠ Cannot evaluate: a script is running");
             return;
         }
 
@@ -855,58 +877,15 @@ public final class KepplrStatusWindow {
             scriptOutputQueue.add("› " + lines[0] + " ... (" + lines.length + " lines)");
         }
 
-        // Wrap in kepplr.with { ... } so the "kepplr." prefix is optional
-        String wrappedCode = "kepplr.with {\n" + code + "\n}";
+        scriptRunner.runInlineScript("Console input", code, true);
+    }
 
-        Thread thread = new Thread(
-                () -> {
-                    try {
-                        ScriptEngineManager manager = new ScriptEngineManager();
-                        ScriptEngine engine = manager.getEngineByName("groovy");
-                        if (engine == null) {
-                            scriptOutputQueue.add("ERROR: Groovy engine not available");
-                            return;
-                        }
-
-                        StringWriter outputWriter = new StringWriter();
-                        engine.getContext().setWriter(outputWriter);
-                        engine.getContext().setErrorWriter(outputWriter);
-
-                        KepplrScript api = new KepplrScript(commands, bridge.getState());
-                        javax.script.Bindings bindings = engine.createBindings();
-                        bindings.put("kepplr", api);
-                        bindings.put("VectorTypes", VectorTypes.class);
-                        bindings.put("CameraFrame", CameraFrame.class);
-                        bindings.put("RenderQuality", RenderQuality.class);
-
-                        Object result = engine.eval(wrappedCode, bindings);
-
-                        // Flush any print output from the script
-                        String printed = outputWriter.toString();
-                        if (!printed.isEmpty()) {
-                            for (String line : printed.split("\n")) {
-                                scriptOutputQueue.add(line);
-                            }
-                        }
-
-                        if (result != null) {
-                            scriptOutputQueue.add("= " + result);
-                        }
-                        scriptOutputQueue.add("✓ Done");
-                    } catch (Exception ex) {
-                        Throwable cause = ex;
-                        while (cause.getCause() != null && cause.getCause() != cause) {
-                            cause = cause.getCause();
-                        }
-                        String msg = cause.getMessage();
-                        scriptOutputQueue.add(
-                                "✗ " + (msg != null ? msg : cause.getClass().getSimpleName()));
-                    }
-                },
-                "kepplr-console");
-        thread.setDaemon(true);
-        consoleThread = thread;
-        thread.start();
+    private void stopConsoleScript() {
+        if (scriptRunner == null || !scriptRunner.isRunning()) {
+            scriptOutputQueue.add("⚠ No script is running");
+            return;
+        }
+        scriptRunner.stop();
     }
 
     private void drainScriptOutput() {

@@ -143,6 +143,8 @@ At any time, the application maintains at most:
 
   * **camera position remains fixed**
   * **camera orientation slews** to point to target center over the default slew duration.
+  * An explicit `pointAt(naifId, duration)` call also sets the targeted and selected bodies
+    to `naifId`.
 * In the GUI this corresponds to **Point At**.
 
 ### 4.5 Focused (Orbit Camera)
@@ -155,10 +157,11 @@ At any time, the application maintains at most:
 
   * it also becomes the **selected** body
   * and becomes the **targeted** body
-  * the camera slews to point at the body via `pointAt`, then translates along its
-    line of sight to a default apparent radius via `goTo`. [D-010, D-013]
-    Both transitions are non-blocking; `waitTransition()` is available in the
-    scripting layer to sequence subsequent commands. [D-015]
+  * an explicit `goTo(naifId, radius, duration)` call also sets focused, targeted, and
+    selected to `naifId`, then slews to point at the body and translates along its line
+    of sight to the requested apparent radius. [D-010, D-013]
+    Both transitions are non-blocking; `waitTransition()` is available in the scripting
+    layer to sequence subsequent commands. [D-015]
 
 * After focusing, the user may choose another body as the **target** (distinct from focus).
 
@@ -517,8 +520,9 @@ All menu items call `SimulationCommands` only — no rendering logic in `ui/`.
   * **Immediate + Queued** — hybrid: state mutations are immediate, camera
     transitions are queued. Use `waitTransition()` to ensure the camera
     arrives before issuing dependent commands.
-* Hybrid methods (`focusBody`, `targetBody`, `setStateString`) must document
-  which effects are immediate and which are queued.
+* Hybrid methods are limited to operations that genuinely combine state
+  mutation and queued camera work (for example `setStateString`), not simple
+  interaction-state setters like `centerBody` or `targetBody`.
 
 ### 11.6 Configuration Reload [D-057, D-058]
 

@@ -19,12 +19,12 @@ Basic Concepts
 **Blocking vs. non-blocking methods.**
 Most methods that move the camera (``goTo``, ``pointAt``, ``orbit``, ``setCameraPosition``, etc.) start
 an animated transition and return immediately.  Use ``waitTransition()`` to pause the script until the
-transition completes.  Methods that change state instantly (``selectBody``, ``setPaused``, ``setTimeRate``)
-take effect immediately.
+transition completes.  Methods that change state instantly (``selectBody``, ``targetBody``,
+``centerBody``, ``setPaused``, ``setTimeRate``) take effect immediately.
 
 **Identifying bodies.**
 Methods that take a body accept either a NAIF ID (integer) or a body name (string).  For example,
-``kepplr.focusBody(399)`` and ``kepplr.focusBody("Earth")`` are equivalent.
+``kepplr.centerBody(399)`` and ``kepplr.centerBody("Earth")`` are equivalent.
 
 **Coordinate frames.**
 Camera position and orientation methods (``setCameraPosition``, ``setCameraOrientation``) interpret their
@@ -57,11 +57,11 @@ Body Selection
      - Set the selected body.  Does not move the camera.
      - ``kepplr.selectBody("Earth")``
    * - ``targetBody(int/String body)``
-     - Point the camera at the given body.  Also selects it.
-     - ``kepplr.targetBody("Mars"); kepplr.waitTransition()``
-   * - ``focusBody(int/String body)``
-     - Move the camera to orbit the given body.  Also targets and selects it.
-     - ``kepplr.focusBody("Jupiter"); kepplr.waitTransition()``
+     - Set the targeted body.  Also selects it.  Does not move the camera.
+     - ``kepplr.targetBody("Mars")``
+   * - ``centerBody(int/String body)``
+     - Set the centered body.  Also targets and selects it.  Does not move the camera.
+     - ``kepplr.centerBody("Jupiter")``
 
 
 Time Control
@@ -101,10 +101,13 @@ These methods start animated transitions.  Use ``waitTransition()`` to block unt
      - Description
      - Example
    * - ``goTo(int/String body, double apparentRadiusDeg, double durationSec)``
-     - Move the camera so that the body fills the given apparent radius in degrees.
+     - Move the camera so that the body fills the given apparent radius in degrees.  Also sets
+       the selected, focused, and targeted bodies to the approached body, and prepends a default
+       ``pointAt`` slew.
      - ``kepplr.goTo("Earth", 15.0, 5.0); kepplr.waitTransition()``
    * - ``pointAt(int/String body, double durationSec)``
-     - Slew the camera to point at the given body.
+     - Slew the camera to point at the given body.  Also sets the selected and targeted bodies
+       to that body.
      - ``kepplr.pointAt("Moon", 3.0); kepplr.waitTransition()``
    * - ``zoom(double factor, double durationSec)``
      - Zoom by the given factor (>1 zooms in, <1 zooms out).

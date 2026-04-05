@@ -50,10 +50,10 @@ class KepplrScriptTest {
         }
 
         @Test
-        @DisplayName("focusBody(String) resolves Moon to 301")
-        void focusBodyByName() {
-            script.focusBody("Moon");
-            assertEquals("focusBody", spy.lastMethod);
+        @DisplayName("centerBody(String) resolves Moon to 301")
+        void centerBodyByName() {
+            script.centerBody("Moon");
+            assertEquals("centerBody", spy.lastMethod);
             assertEquals(301, spy.lastIntArg);
         }
 
@@ -304,8 +304,8 @@ class KepplrScriptTest {
         }
 
         @Override
-        public void focusBody(int naifId) {
-            lastMethod = "focusBody";
+        public void centerBody(int naifId) {
+            lastMethod = "centerBody";
             lastIntArg = naifId;
         }
 
