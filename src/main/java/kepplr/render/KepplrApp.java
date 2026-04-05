@@ -239,9 +239,11 @@ public class KepplrApp extends SimpleApplication {
 
         SimulationStateFxBridge bridge = new SimulationStateFxBridge(simulationState);
         // On macOS, JavaFX is started here (after GLFW has claimed NSApplication) rather than in
-        // main().  See main() comment for the full rationale.
-        if (System.getProperty("os.name", "").toLowerCase().contains("mac")) {
-            Platform.startup(() -> {});
+        // main(). See run() for the full rationale. Start the FxDispatch timer as part of the
+        // single allowed Platform.startup() call, then enqueue the window show below.
+        boolean isMac = System.getProperty("os.name", "").toLowerCase().contains("mac");
+        if (isMac) {
+            Platform.startup(FxDispatch::start);
         }
         // Capture a reference to this app for the FX-side shutdown callback
         KepplrApp appRef = this;
@@ -259,14 +261,7 @@ public class KepplrApp extends SimpleApplication {
         commands.setPostReloadCallback(statusWindow::signalConfigRefresh);
         statusWindow.setScriptRunner(scriptRunner);
         statusWindow.setCommandRecorder(recorder);
-        if (System.getProperty("os.name", "").toLowerCase().contains("mac")) {
-            Platform.startup(() -> {
-                FxDispatch.start();
-                statusWindow.show();
-            });
-        } else {
-            FxDispatch.dispatch(statusWindow::show);
-        }
+        FxDispatch.dispatch(statusWindow::show);
 
         int focusBodyId = DEFAULT_FOCUS_BODY;
         commands.focusBody(focusBodyId);
