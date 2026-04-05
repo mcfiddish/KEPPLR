@@ -2,7 +2,6 @@ package kepplr.ui;
 
 import java.io.File;
 import java.io.IOException;
-import java.io.StringWriter;
 import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -54,8 +53,6 @@ import javafx.scene.layout.VBox;
 import javafx.stage.DirectoryChooser;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
-import javax.script.ScriptEngine;
-import javax.script.ScriptEngineManager;
 import kepplr.camera.CameraFrame;
 import kepplr.commands.SimulationCommands;
 import kepplr.config.KEPPLRConfiguration;
@@ -64,10 +61,8 @@ import kepplr.ephemeris.BodyLookupService;
 import kepplr.ephemeris.Instrument;
 import kepplr.ephemeris.KEPPLREphemeris;
 import kepplr.ephemeris.spice.SpiceBundle;
-import kepplr.render.RenderQuality;
 import kepplr.render.vector.VectorTypes;
 import kepplr.scripting.CommandRecorder;
-import kepplr.scripting.KepplrScript;
 import kepplr.scripting.ScriptRunner;
 import kepplr.state.SimulationState;
 import kepplr.util.KepplrConstants;
@@ -116,7 +111,6 @@ public final class KepplrStatusWindow {
     private CustomMenuItem captureSeqItem;
     private CustomMenuItem saveScreenshotItem;
     private volatile Thread captureSequenceThread;
-    private volatile Thread consoleThread;
     /** Set by {@link #signalConfigRefresh()} from any thread; drained by the AnimationTimer on the FX thread. */
     private volatile boolean pendingConfigRefresh = false;
 
@@ -837,11 +831,15 @@ public final class KepplrStatusWindow {
         runButton.setOnAction(e -> evaluateConsoleInput());
         runButton.setStyle("-fx-font-size: 10px;");
 
+        Button stopButton = new Button("Stop");
+        stopButton.setOnAction(e -> stopConsoleScript());
+        stopButton.setStyle("-fx-font-size: 10px;");
+
         Button clearButton = new Button("Clear");
         clearButton.setOnAction(e -> consoleInput.clear());
         clearButton.setStyle("-fx-font-size: 10px;");
 
-        HBox buttonBar = new HBox(6, runButton, clearButton);
+        HBox buttonBar = new HBox(6, runButton, stopButton, clearButton);
         buttonBar.setPadding(new Insets(0, 10, 0, 10));
 
         VBox inputPane = new VBox(4, header, consoleInput, buttonBar);
@@ -861,14 +859,13 @@ public final class KepplrStatusWindow {
         String code = consoleInput.getText().trim();
         if (code.isEmpty()) return;
 
-        if (scriptRunner != null && scriptRunner.isRunning()) {
-            scriptOutputQueue.add("⚠ Cannot evaluate: a script is running");
+        if (scriptRunner == null) {
+            scriptOutputQueue.add("ERROR: Script runner not available");
             return;
         }
 
-        Thread ct = consoleThread;
-        if (ct != null && ct.isAlive()) {
-            scriptOutputQueue.add("⚠ Previous console command still running");
+        if (scriptRunner.isRunning()) {
+            scriptOutputQueue.add("⚠ Cannot evaluate: a script is running");
             return;
         }
 
@@ -880,58 +877,15 @@ public final class KepplrStatusWindow {
             scriptOutputQueue.add("› " + lines[0] + " ... (" + lines.length + " lines)");
         }
 
-        // Wrap in kepplr.with { ... } so the "kepplr." prefix is optional
-        String wrappedCode = "kepplr.with {\n" + code + "\n}";
+        scriptRunner.runInlineScript("Console input", code, true);
+    }
 
-        Thread thread = new Thread(
-                () -> {
-                    try {
-                        ScriptEngineManager manager = new ScriptEngineManager();
-                        ScriptEngine engine = manager.getEngineByName("groovy");
-                        if (engine == null) {
-                            scriptOutputQueue.add("ERROR: Groovy engine not available");
-                            return;
-                        }
-
-                        StringWriter outputWriter = new StringWriter();
-                        engine.getContext().setWriter(outputWriter);
-                        engine.getContext().setErrorWriter(outputWriter);
-
-                        KepplrScript api = new KepplrScript(commands, bridge.getState());
-                        javax.script.Bindings bindings = engine.createBindings();
-                        bindings.put("kepplr", api);
-                        bindings.put("VectorTypes", VectorTypes.class);
-                        bindings.put("CameraFrame", CameraFrame.class);
-                        bindings.put("RenderQuality", RenderQuality.class);
-
-                        Object result = engine.eval(wrappedCode, bindings);
-
-                        // Flush any print output from the script
-                        String printed = outputWriter.toString();
-                        if (!printed.isEmpty()) {
-                            for (String line : printed.split("\n")) {
-                                scriptOutputQueue.add(line);
-                            }
-                        }
-
-                        if (result != null) {
-                            scriptOutputQueue.add("= " + result);
-                        }
-                        scriptOutputQueue.add("✓ Done");
-                    } catch (Exception ex) {
-                        Throwable cause = ex;
-                        while (cause.getCause() != null && cause.getCause() != cause) {
-                            cause = cause.getCause();
-                        }
-                        String msg = cause.getMessage();
-                        scriptOutputQueue.add(
-                                "✗ " + (msg != null ? msg : cause.getClass().getSimpleName()));
-                    }
-                },
-                "kepplr-console");
-        thread.setDaemon(true);
-        consoleThread = thread;
-        thread.start();
+    private void stopConsoleScript() {
+        if (scriptRunner == null || !scriptRunner.isRunning()) {
+            scriptOutputQueue.add("⚠ No script is running");
+            return;
+        }
+        scriptRunner.stop();
     }
 
     private void drainScriptOutput() {

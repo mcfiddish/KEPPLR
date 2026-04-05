@@ -81,11 +81,35 @@ public final class ScriptRunner {
         synchronized (lock) {
             stopInternal();
 
-            Thread thread = new Thread(() -> executeScript(scriptFile), THREAD_NAME);
+            Thread thread = new Thread(() -> executeScriptFile(scriptFile), THREAD_NAME);
             thread.setDaemon(true);
             scriptThread = thread;
             thread.start();
             logger.info("Script started: {}", scriptFile);
+        }
+    }
+
+    /**
+     * Run an inline Groovy snippet.
+     *
+     * <p>If a script is already running, it is interrupted and any active transition is cancelled before the new
+     * script starts.
+     *
+     * @param displayName label used in output/status messages
+     * @param scriptSource Groovy source to evaluate
+     * @param wrapWithKepplrWith when true, evaluate inside {@code kepplr.with \{ ... \}} so the {@code kepplr.}
+     *     prefix is optional
+     */
+    public void runInlineScript(String displayName, String scriptSource, boolean wrapWithKepplrWith) {
+        synchronized (lock) {
+            stopInternal();
+
+            Thread thread = new Thread(
+                    () -> executeInlineScript(displayName, scriptSource, wrapWithKepplrWith), THREAD_NAME);
+            thread.setDaemon(true);
+            scriptThread = thread;
+            thread.start();
+            logger.info("Inline script started: {}", displayName);
         }
     }
 
@@ -129,31 +153,12 @@ public final class ScriptRunner {
         scriptThread = null;
     }
 
-    private void executeScript(Path scriptFile) {
+    private void executeScriptFile(Path scriptFile) {
         KepplrScript api = new KepplrScript(commands, state);
         emit("▶ Running: " + scriptFile.getFileName());
         try {
-            ScriptEngineManager manager = new ScriptEngineManager();
-            ScriptEngine engine = manager.getEngineByName("groovy");
-            if (engine == null) {
-                logger.error("Groovy script engine not available — check groovy-jsr223 dependency");
-                emit("ERROR: Groovy engine not available");
-                return;
-            }
-
-            // Redirect script stdout/stderr to the output listener
-            Writer outputWriter = new LineForwardingWriter(outputListener);
-            engine.getContext().setWriter(outputWriter);
-            engine.getContext().setErrorWriter(outputWriter);
-
-            Bindings bindings = engine.createBindings();
-            bindings.put("kepplr", api);
-            bindings.put("VectorTypes", VectorTypes.class);
-            bindings.put("CameraFrame", CameraFrame.class);
-            bindings.put("RenderQuality", RenderQuality.class);
-
             try (BufferedReader reader = Files.newBufferedReader(scriptFile)) {
-                engine.eval(reader, bindings);
+                evalScript(api, engine -> engine.eval(reader, createBindings(engine, api)));
             }
             logger.info("Script completed: {}", scriptFile);
             emit("✓ Completed: " + scriptFile.getFileName());
@@ -169,6 +174,55 @@ public final class ScriptRunner {
             logger.error("Script failed: {}", scriptFile, e);
             emit("✗ Error: " + extractMessage(e));
         }
+    }
+
+    private void executeInlineScript(String displayName, String scriptSource, boolean wrapWithKepplrWith) {
+        KepplrScript api = new KepplrScript(commands, state);
+        emit("▶ Running: " + displayName);
+        try {
+            String source = wrapWithKepplrWith ? "kepplr.with {\n" + scriptSource + "\n}" : scriptSource;
+            Object result = evalScript(api, engine -> engine.eval(source, createBindings(engine, api)));
+            if (result != null) {
+                emit("= " + result);
+            }
+            logger.info("Inline script completed: {}", displayName);
+            emit("✓ Completed: " + displayName);
+        } catch (ScriptException e) {
+            if (isInterruptCause(e)) {
+                logger.info("Inline script interrupted: {}", displayName);
+                emit("— Interrupted: " + displayName);
+            } else {
+                logger.error("Inline script failed: {}", displayName, e);
+                emit("✗ Error: " + extractMessage(e));
+            }
+        } catch (Exception e) {
+            logger.error("Inline script failed: {}", displayName, e);
+            emit("✗ Error: " + extractMessage(e));
+        }
+    }
+
+    private Object evalScript(KepplrScript api, ScriptEvaluator evaluator) throws Exception {
+        ScriptEngineManager manager = new ScriptEngineManager();
+        ScriptEngine engine = manager.getEngineByName("groovy");
+        if (engine == null) {
+            logger.error("Groovy script engine not available — check groovy-jsr223 dependency");
+            emit("ERROR: Groovy engine not available");
+            return null;
+        }
+
+        Writer outputWriter = new LineForwardingWriter(outputListener);
+        engine.getContext().setWriter(outputWriter);
+        engine.getContext().setErrorWriter(outputWriter);
+        return evaluator.eval(engine);
+    }
+
+    private static Bindings createBindings(ScriptEngine engine, KepplrScript api) {
+        Bindings bindings = engine.createBindings();
+        bindings.put("kepplr", api);
+        bindings.put("VectorTypes", VectorTypes.class);
+        bindings.put("CameraFrame", CameraFrame.class);
+        bindings.put("RenderQuality", RenderQuality.class);
+        return bindings;
     }
 
     private void emit(String line) {
@@ -194,5 +248,10 @@ public final class ScriptRunner {
             t = t.getCause();
         }
         return false;
+    }
+
+    @FunctionalInterface
+    private interface ScriptEvaluator {
+        Object eval(ScriptEngine engine) throws Exception;
     }
 }

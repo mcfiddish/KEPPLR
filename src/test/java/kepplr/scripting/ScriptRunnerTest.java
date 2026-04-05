@@ -4,6 +4,8 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
 import kepplr.camera.CameraFrame;
 import kepplr.commands.SimulationCommands;
 import kepplr.config.KEPPLRConfiguration;
@@ -130,6 +132,36 @@ class ScriptRunnerTest {
 
         runner.stop();
         assertTrue(commands.cancelTransitionCalled, "stop() should call cancelTransition()");
+    }
+
+    @Test
+    @DisplayName("Inline script runs with implicit kepplr context")
+    void inlineScriptRuns() throws Exception {
+        List<String> output = new ArrayList<>();
+        runner.setOutputListener(output::add);
+
+        runner.runInlineScript("Console input", "selectBody(499)", true);
+        Thread.sleep(500);
+
+        assertEquals(499, commands.lastSelectBodyId, "Inline script should have called selectBody(499)");
+        assertTrue(output.stream().anyMatch(line -> line.equals("✓ Completed: Console input")));
+    }
+
+    @Test
+    @DisplayName("stop() interrupts inline script")
+    void stopInterruptsInlineScript() throws Exception {
+        List<String> output = new ArrayList<>();
+        runner.setOutputListener(output::add);
+
+        runner.runInlineScript("Console input", "waitWall(60.0)", true);
+        Thread.sleep(100);
+        assertTrue(runner.isRunning(), "Inline script should be running during waitWall");
+
+        runner.stop();
+        Thread.sleep(600);
+
+        assertFalse(runner.isRunning(), "Inline script should stop after stop()");
+        assertTrue(output.stream().anyMatch(line -> line.equals("— Interrupted: Console input")));
     }
 
     // ── Recording commands ──────────────────────────────────────────────────────
