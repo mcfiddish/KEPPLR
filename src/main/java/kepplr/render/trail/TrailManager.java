@@ -132,9 +132,21 @@ public class TrailManager {
      * @param cameraHelioJ2000 camera heliocentric J2000 position in km (length ≥ 3)
      */
     public void update(double currentEt, double[] cameraHelioJ2000) {
-        CameraFrame currentFrame = this.state.cameraFrameProperty().get();
-        int focusId = this.state.focusedBodyIdProperty().get();
-        int selectedId = this.state.selectedBodyIdProperty().get();
+        // Use the active (post-fallback) frame, not the requested frame, so trail rendering
+        // always matches what the camera is actually doing.  If BODY_FIXED or SYNODIC fell
+        // back to INERTIAL, activeCameraFrameProperty reflects that.
+        CameraFrame currentFrame = this.state.activeCameraFrameProperty().get();
+
+        // Mirror the synodic focus/selected resolution in KepplrApp (Step 19c): explicit
+        // override IDs take precedence over the interaction-state focused/selected bodies.
+        int synodicFocusOverride = this.state.synodicFrameFocusIdProperty().get();
+        int synodicSelectedOverride = this.state.synodicFrameSelectedIdProperty().get();
+        int focusId = (synodicFocusOverride != -1)
+                ? synodicFocusOverride
+                : this.state.focusedBodyIdProperty().get();
+        int selectedId = (synodicSelectedOverride != -1)
+                ? synodicSelectedOverride
+                : this.state.selectedBodyIdProperty().get();
         boolean synodic = currentFrame == CameraFrame.SYNODIC && focusId != -1 && selectedId != -1;
 
         for (int naifId : enabledIds) {
