@@ -245,21 +245,21 @@ public interface SimulationCommands {
             double lookX, double lookY, double lookZ, double upX, double upY, double upZ, double durationSeconds);
 
     /**
-     * Switch to the synodic camera frame defined by explicit focus and target bodies, without changing focused,
+     * Switch to the synodic camera frame defined by explicit focus and selected bodies, without changing focused,
      * targeted, or selected body state.
      *
      * <p>Use this when a script needs a specific synodic view without disturbing interaction state. To switch to the
-     * synodic frame using the current SimulationState focus and target, use {@code setCameraFrame(CameraFrame.SYNODIC)}
-     * instead.
+     * synodic frame using the current SimulationState focus and selected body, use
+     * {@code setCameraFrame(CameraFrame.SYNODIC)} instead.
      *
      * <p>Example — Earth-Moon synodic view:
      *
      * <pre>
-     *   setSynodicFrame(399, 301); // focus=Earth, target=Moon
+     *   setSynodicFrame(399, 301); // focus=Earth, selected=Moon
      * </pre>
      *
      * @param focusNaifId NAIF ID of the focus body defining the frame origin
-     * @param targetNaifId NAIF ID of the target body defining the +X axis
+     * @param targetNaifId NAIF ID of the selected body defining the +X axis
      */
     void setSynodicFrame(int focusNaifId, int targetNaifId);
 

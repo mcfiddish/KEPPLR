@@ -51,9 +51,6 @@ import org.apache.logging.log4j.Logger;
  *   <li>Shift + Up/Down arrow — orbit around screen-right axis
  *   <li>Shift + Left/Right arrow — orbit around screen-up axis
  *   <li>PgUp/PgDn — zoom in/out
- *   <li>G — goTo focused body (camera transition)
- *   <li>F — toggle camera frame between SYNODIC and INERTIAL (§4.6)
- *   <li>T — target selected body
  *   <li>Space — pause/resume simulation
  *   <li>{@code [} / {@code ]} — decrease / increase time rate
  *   <li>Left click on body — select body

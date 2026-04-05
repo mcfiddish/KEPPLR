@@ -97,7 +97,7 @@ public interface SimulationState {
     ReadOnlyIntegerProperty synodicFrameFocusIdProperty();
 
     /**
-     * Explicit target NAIF ID for the synodic frame, or -1 to use {@link #targetedBodyIdProperty()} (Step 19c).
+     * Explicit selected-body NAIF ID for the synodic frame, or -1 to use {@link #selectedBodyIdProperty()} (Step 19c).
      *
      * <p>Set by {@link kepplr.commands.SimulationCommands#setSynodicFrame(int, int)} to decouple the synodic frame from
      * interaction state. Cleared to -1 by {@link kepplr.commands.SimulationCommands#setCameraFrame}.

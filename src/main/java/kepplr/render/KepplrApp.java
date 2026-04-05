@@ -43,6 +43,7 @@ import kepplr.stars.catalogs.yaleBSC.YaleBrightStarCatalog;
 import kepplr.state.BodyInView;
 import kepplr.state.DefaultSimulationState;
 import kepplr.state.DefaultSimulationState.VectorKey;
+import kepplr.ui.FxDispatch;
 import kepplr.ui.KepplrStatusWindow;
 import kepplr.ui.SimulationStateFxBridge;
 import kepplr.util.KepplrConstants;
@@ -244,23 +245,28 @@ public class KepplrApp extends SimpleApplication {
         }
         // Capture a reference to this app for the FX-side shutdown callback
         KepplrApp appRef = this;
-        Platform.runLater(() -> {
-            statusWindow = new KepplrStatusWindow(bridge, recorder);
-            statusWindow.setJmeShutdown(appRef::stop);
-            statusWindow.setJmeResizeCallback((w, h) -> appRef.enqueue(() -> {
-                long glfwWindowHandle = getGlfwWindowHandle();
-                if (glfwWindowHandle != 0) {
-                    GLFW.glfwSetWindowSize(glfwWindowHandle, w, h);
-                }
-            }));
-            // Wire the post-reload notification: after loadConfiguration() finishes the JME scene
-            // rebuild (from either a script or the File menu), signal the status window to refresh
-            // the body tree and instruments menu on the next animation frame.
-            commands.setPostReloadCallback(statusWindow::signalConfigRefresh);
-            statusWindow.setScriptRunner(scriptRunner);
-            statusWindow.setCommandRecorder(recorder);
-            statusWindow.show();
-        });
+        statusWindow = new KepplrStatusWindow(bridge, recorder);
+        statusWindow.setJmeShutdown(appRef::stop);
+        statusWindow.setJmeResizeCallback((w, h) -> appRef.enqueue(() -> {
+            long glfwWindowHandle = getGlfwWindowHandle();
+            if (glfwWindowHandle != 0) {
+                GLFW.glfwSetWindowSize(glfwWindowHandle, w, h);
+            }
+        }));
+        // Wire the post-reload notification: after loadConfiguration() finishes the JME scene
+        // rebuild (from either a script or the File menu), signal the status window to refresh
+        // the body tree and instruments menu on the next animation frame.
+        commands.setPostReloadCallback(statusWindow::signalConfigRefresh);
+        statusWindow.setScriptRunner(scriptRunner);
+        statusWindow.setCommandRecorder(recorder);
+        if (System.getProperty("os.name", "").toLowerCase().contains("mac")) {
+            Platform.startup(() -> {
+                FxDispatch.start();
+                statusWindow.show();
+            });
+        } else {
+            FxDispatch.dispatch(statusWindow::show);
+        }
 
         int focusBodyId = DEFAULT_FOCUS_BODY;
         commands.focusBody(focusBodyId);
@@ -383,21 +389,18 @@ public class KepplrApp extends SimpleApplication {
 
     @Override
     public void simpleUpdate(float tpf) {
-        // One-shot: position the JavaFX window to the left of the JME window on first frame
+        // One-shot: position the JavaFX window to the right of the JME window on first frame
         if (!fxWindowPositioned) {
             fxWindowPositioned = true;
             var ctx = getContext();
             if (ctx instanceof com.jme3.system.lwjgl.LwjglWindow lwjglWindow) {
                 int jmeX = lwjglWindow.getWindowXPosition();
                 int jmeY = lwjglWindow.getWindowYPosition();
-                double fxWidth = WINDOW_WIDTH_FX;
-                double fxX = Math.max(0, jmeX - fxWidth);
+                double fxX = jmeX + cam.getWidth();
                 double fxY = jmeY;
-                Platform.runLater(() -> {
-                    if (statusWindow != null) {
-                        statusWindow.setPosition(fxX, fxY);
-                    }
-                });
+                if (statusWindow != null) {
+                    statusWindow.requestPosition(fxX, fxY);
+                }
             }
         }
 
@@ -968,7 +971,7 @@ public class KepplrApp extends SimpleApplication {
             // GTK initialisation (triggered by Platform.startup) must happen on the main thread
             // on Linux.  Calling it later from the JME render thread causes GTK assertion failures
             // and crashes.
-            Platform.startup(() -> {});
+            Platform.startup(FxDispatch::start);
         }
         // On macOS, Platform.startup() is deferred to simpleInitApp() so that GLFW initialises
         // NSApplication first.  Calling Platform.startup() before glfwInit() on macOS lets JavaFX

@@ -68,7 +68,7 @@ See D-026.
 
 **The JavaFX control panel is a separate OS window (two-window layout).** The transparent overlay (Option B) was prototyped and rejected — position-sync lag on macOS is unacceptable and the platform complexity is not justified for v0.1. The JavaFX stage is a normal, non-transparent, non-always-on-top window. No `WindowManager` class. No GLFW position/minimize/focus callbacks. Do not revisit this decision.
 
-**Tracking is not a separate camera behavior.** The F key is the shortcut for switching the camera frame between Synodic and Inertial. `trackedBodyId`, `trackingAnchor`, `trackBody()`, and `stopTracking()` do not exist in the codebase. Pressing F with a selected body set switches to the Synodic frame; pressing F in Synodic switches back to Inertial. Stop Tracking no longer exists as a menu item — selecting Inertial in the Camera Frame submenu is the equivalent action.
+**Tracking is not a separate camera behavior.** Selecting `SYNODIC` in the Camera Frame submenu switches into the synodic view using the focused body plus the currently selected body. Selecting `INERTIAL` exits it. `trackedBodyId`, `trackingAnchor`, `trackBody()`, and `stopTracking()` do not exist in the codebase. Stop Tracking no longer exists as a menu item — selecting Inertial in the Camera Frame submenu is the equivalent action.
 
 **Mouse picking is screen-space only.** Body selection via click projects all visible bodies to screen space and finds candidates within `PICK_MIN_SCREEN_RADIUS_PX` of the click point. No 3D ray cast. When multiple candidates exist, the body with the largest actual screen-space radius wins. Click on empty space does nothing.
 
@@ -200,12 +200,9 @@ the control panel must update immediately. Double-click →
 
 **Keyboard shortcuts** — wired through the JME input handler, not JavaFX. All
 call `SimulationCommands`:
-- G — `goTo` focused body
-- F — toggles camera frame between SYNODIC and INERTIAL. If camera frame is
-  currently INERTIAL and a selected body is set, switches to SYNODIC. If
-  camera frame is currently SYNODIC, switches to INERTIAL. No-op if frame is
-  INERTIAL and no selected body is set.
-- T — target selected body
+- Arrow keys — tilt / roll
+- Shift + Arrow keys — orbit
+- Page Up / Page Down — zoom
 - Space — pause/resume
 - `[` / `]` — decrease / increase time rate
 
@@ -714,9 +711,10 @@ pass with no architectural impact.
   button removed; only Focus and Target buttons remain on the Selected row.
   (See D-036.)
 
-- **Window:** Width increased from 380px to 440px. Always-on-top enabled
-  (`stage.setAlwaysOnTop(true)`). JavaFX `Separator` lines added between body
-  readout, status section, and body list sections.
+- **Window:** Width increased from 380px to 440px. JavaFX `Separator` lines
+  added between body readout, status section, and body list sections. The
+  stage remains a normal non-always-on-top window per the two-window layout
+  decision.
 
 - **Live body filtering:** The search field filters the body tree as the user
   types (case-insensitive match on display name or NAIF ID). Parent groups are

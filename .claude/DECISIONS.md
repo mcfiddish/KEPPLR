@@ -806,13 +806,13 @@ would cause a compilation error since `toScript()` has no default implementation
 
 ---
 
-## D-037: Status window layout: wider, always-on-top, section separators, live body filter
+## D-037: Status window layout: wider, section separators, live body filter
 **Status:** Accepted
 **Roadmap step:** 27 (status window layout improvements)
 
 **Context:** The status window at 380px was too narrow for name + distance on one row. The body tree search field only resolved on Enter, requiring exact names. No visual separation existed between the body readout and status section. The transition progress bar was rarely noticed.
 
-**Decision:** Window width increased to 440px. `stage.setAlwaysOnTop(true)` — user can minimise if needed. JavaFX `Separator` nodes inserted between body readout, status section, and body list. Transition progress bar removed. Body tree search field replaced with live filtering: on each keystroke, a filtered copy of the master tree is built, keeping items whose display name or NAIF ID contains the filter text (case-insensitive). Parent groups are included (expanded) if any child matches, or if the group name itself matches. Enter still resolves exact NAIF IDs via `BodyLookupService.resolve()`. The Clear button on the Selected row was removed; only Focus and Target buttons remain.
+**Decision:** Window width increased to 440px. The stage remains a normal non-always-on-top window, consistent with D-016. JavaFX `Separator` nodes inserted between body readout, status section, and body list. Transition progress bar removed. Body tree search field replaced with live filtering: on each keystroke, a filtered copy of the master tree is built, keeping items whose display name or NAIF ID contains the filter text (case-insensitive). Parent groups are included (expanded) if any child matches, or if the group name itself matches. Enter still resolves exact NAIF IDs via `BodyLookupService.resolve()`. The Clear button on the Selected row was removed; only Focus and Target buttons remain.
 
 **Alternatives considered:** CSS stylesheet instead of inline styles — deferred to a future polish pass. Collapsible status section — rejected as over-engineering for the current use case.
 
@@ -1341,5 +1341,4 @@ reference body.
 *Last updated: D-067 (BODY_FIXED trail reference always focus body), D-066 (synodic trail uses active frame and override IDs), D-065 (configurable trail reference body), D-064 (synodic frame override state seeded from focus + selected), D-063 (focus-tracking anchor reset on state restore), D-062 (sprite fallback for missing body-fixed frames)*
 *Backfill note: Entries D-001 through D-009 were reconstructed retrospectively.
 D-010 onwards recorded in real time.*
-
 
