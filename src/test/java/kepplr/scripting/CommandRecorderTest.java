@@ -74,7 +74,7 @@ class CommandRecorderTest {
             recorder.startRecording();
             recorder.selectBody(399);
             Thread.sleep(150);
-            recorder.focusBody(301);
+            recorder.centerBody(301);
             recorder.stopRecording();
 
             String script = recorder.getScript();
@@ -99,12 +99,12 @@ class CommandRecorderTest {
             recorder.stopRecording();
 
             recorder.startRecording();
-            recorder.focusBody(301);
+            recorder.centerBody(301);
             recorder.stopRecording();
 
             String script = recorder.getScript();
             assertFalse(script.contains("selectBody"), "Previous recording should be cleared: " + script);
-            assertTrue(script.contains("focusBody"), "New recording should be present: " + script);
+            assertTrue(script.contains("centerBody"), "New recording should be present: " + script);
         }
 
         @Test
@@ -443,8 +443,8 @@ class CommandRecorderTest {
         }
 
         @Override
-        public void focusBody(int naifId) {
-            lastMethod = "focusBody";
+        public void centerBody(int naifId) {
+            lastMethod = "centerBody";
             lastIntArg = naifId;
         }
 

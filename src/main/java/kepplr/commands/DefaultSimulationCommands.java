@@ -33,8 +33,8 @@ import picante.math.vectorspace.VectorIJK;
  *
  * <ul>
  *   <li>{@code selectBody(id)}: sets selected only; no camera change (§4.3)
- *   <li>{@code focusBody(id)}: sets selected, focused, and targeted (§4.5)
- *   <li>{@code targetBody(id)}: sets selected and targeted (§4.4)
+ *   <li>{@code centerBody(id)}: sets selected, focused, and targeted; no camera change (§4.5)
+ *   <li>{@code targetBody(id)}: sets selected and targeted; no camera change (§4.4)
  *   <li>{@code setTimeRate(r)}: delegates to {@link SimulationClock} — absolute, no-jump (§2.3)
  *   <li>{@code setPaused(b)}: delegates to {@link SimulationClock} — clamp/resume logic (§1.2)
  *   <li>{@code setET(et)}: delegates to {@link SimulationClock} (§1.2)
@@ -95,45 +95,46 @@ public final class DefaultSimulationCommands implements SimulationCommands {
         state.setSelectedBodyId(naifId);
     }
 
-    /**
-     * Focus the camera on a body (§4.5). Implicitly selects and targets the same body.
-     *
-     * <p>Initiates a {@code pointAt} slew followed by a {@code goTo} translation (Step 18). The {@code goTo} is queued
-     * and begins automatically when the {@code pointAt} completes.
-     */
+    /** Center the interaction state on a body (§4.5). Implicitly selects and targets the same body. */
     @Override
-    public void focusBody(int naifId) {
+    public void centerBody(int naifId) {
         state.setSelectedBodyId(naifId);
         state.setFocusedBodyId(naifId);
         state.setTargetedBodyId(naifId);
-        transitionController.requestPointAt(naifId, KepplrConstants.DEFAULT_SLEW_DURATION_SECONDS);
-        transitionController.requestGoTo(
-                naifId,
-                KepplrConstants.DEFAULT_GOTO_APPARENT_RADIUS_DEG,
-                KepplrConstants.DEFAULT_GOTO_DURATION_SECONDS);
     }
 
-    /**
-     * Target a body — "point at" (§4.4). Implicitly selects the body.
-     *
-     * <p>Initiates a {@code pointAt} slew (Step 18).
-     */
+    /** Target a body (§4.4). Implicitly selects the body, without moving the camera. */
     @Override
     public void targetBody(int naifId) {
         state.setSelectedBodyId(naifId);
         state.setTargetedBodyId(naifId);
-        transitionController.requestPointAt(naifId, KepplrConstants.DEFAULT_SLEW_DURATION_SECONDS);
     }
 
-    /** Initiate a {@code pointAt} slew (Step 18). Delegates to {@link TransitionController}. */
+    /**
+     * Initiate a {@code pointAt} slew (Step 18).
+     *
+     * <p>Also updates interaction state so the target and selected bodies match the explicit camera target.
+     */
     @Override
     public void pointAt(int naifId, double durationSeconds) {
+        state.setSelectedBodyId(naifId);
+        state.setTargetedBodyId(naifId);
         transitionController.requestPointAt(naifId, durationSeconds);
     }
 
-    /** Initiate a {@code goTo} translation (Step 18). Delegates to {@link TransitionController}. */
+    /**
+     * Initiate a {@code goTo} camera move (Step 18).
+     *
+     * <p>Also updates interaction state so the selected, focused, and targeted bodies all match the explicit approach
+     * target. Always queues a matching {@code pointAt} first so the approach path is consistent across scripts, UI
+     * actions, and input gestures.
+     */
     @Override
     public void goTo(int naifId, double apparentRadiusDeg, double durationSeconds) {
+        state.setSelectedBodyId(naifId);
+        state.setFocusedBodyId(naifId);
+        state.setTargetedBodyId(naifId);
+        transitionController.requestPointAt(naifId, KepplrConstants.DEFAULT_SLEW_DURATION_SECONDS);
         transitionController.requestGoTo(naifId, apparentRadiusDeg, durationSeconds);
     }
 
@@ -550,7 +551,7 @@ public final class DefaultSimulationCommands implements SimulationCommands {
      * configuration completes (Step 27).
      *
      * <p>This ensures that body positions are computed for the new scene before the script thread resumes, so
-     * subsequent commands like {@code focusBody()} can immediately queue transitions against valid body positions.
+     * subsequent commands like {@code centerBody()} can immediately queue transitions against valid body positions.
      *
      * <p>If {@link KEPPLRConfiguration#reload} throws for any reason (file not found, parse error, etc.) the error is
      * logged and this method returns immediately — no rebuild is enqueued and the previous configuration remains

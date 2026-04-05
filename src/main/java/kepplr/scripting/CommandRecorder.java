@@ -39,7 +39,7 @@ import org.apache.logging.log4j.Logger;
  *
  * <pre>{@code
  * // KEPPLR recorded script
- * kepplr.focusBody(399)
+ * kepplr.centerBody(399)
  * kepplr.waitWall(2.500)
  * kepplr.setTimeRate(100.0)
  * kepplr.waitWall(5.000)
@@ -275,9 +275,9 @@ public final class CommandRecorder implements SimulationCommands {
     }
 
     @Override
-    public void focusBody(int naifId) {
-        recordCommand("kepplr.focusBody(" + naifId + ")");
-        delegate.focusBody(naifId);
+    public void centerBody(int naifId) {
+        recordCommand("kepplr.centerBody(" + naifId + ")");
+        delegate.centerBody(naifId);
     }
 
     @Override

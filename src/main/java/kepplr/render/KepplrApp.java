@@ -264,7 +264,7 @@ public class KepplrApp extends SimpleApplication {
         FxDispatch.dispatch(statusWindow::show);
 
         int focusBodyId = DEFAULT_FOCUS_BODY;
-        commands.focusBody(focusBodyId);
+        commands.centerBody(focusBodyId);
 
         // ── Camera initial position: offset above Earth in J2000 +Z ──────────────────────────
         KEPPLREphemeris eph = KEPPLRConfiguration.getInstance().getEphemeris();

@@ -388,7 +388,7 @@ public final class TransitionController {
         boolean earlyComplete = false;
         switch (active.getType()) {
             case POINT_AT, TILT, YAW, ROLL, CAMERA_LOOK_DIRECTION -> applyOrientationTransition(active, t, cam);
-            case GO_TO -> earlyComplete = !applyGoTo(active, t, cameraHelioJ2000);
+            case GO_TO -> earlyComplete = !applyGoTo(active, t, cam, cameraHelioJ2000);
             case ZOOM -> earlyComplete = !applyZoomTransition(active, t, cameraHelioJ2000);
             case FOV -> applyFovTransition(active, t, cam);
             case ORBIT -> earlyComplete = !applyOrbitTransition(active, t, cam, cameraHelioJ2000);
@@ -705,7 +705,7 @@ public final class TransitionController {
      * @return {@code true} if the body position is available and the camera was repositioned; {@code false} if the body
      *     has no ephemeris (signals early completion)
      */
-    private boolean applyGoTo(CameraTransition transition, double t, double[] cameraHelioJ2000) {
+    private boolean applyGoTo(CameraTransition transition, double t, Camera cam, double[] cameraHelioJ2000) {
         double targetDist = lerp(transition.getStartDistanceKm(), transition.getEndDistanceKm(), t);
 
         double[] bodyPos = getBodyPos(transition.getTargetNaifId());
@@ -724,6 +724,15 @@ public final class TransitionController {
             cameraHelioJ2000[0] = bodyPos[0] + dx * scale;
             cameraHelioJ2000[1] = bodyPos[1] + dy * scale;
             cameraHelioJ2000[2] = bodyPos[2] + dz * scale;
+
+            // Keep the body centred throughout the approach even when simulation time is
+            // accelerated and the target moves significantly during the transition.
+            Vector3f dir = new Vector3f(
+                            (float) (bodyPos[0] - cameraHelioJ2000[0]),
+                            (float) (bodyPos[1] - cameraHelioJ2000[1]),
+                            (float) (bodyPos[2] - cameraHelioJ2000[2]))
+                    .normalizeLocal();
+            cam.setAxes(buildLookAtQuaternion(dir, cam.getUp()));
         }
         return true;
     }

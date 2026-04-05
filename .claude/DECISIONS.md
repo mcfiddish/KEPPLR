@@ -127,7 +127,7 @@ confirmation, even though UI work was not the primary focus of that step.
 
 **Consequences:** Establishes the pattern that visual confirmation prerequisites should
 be unblocked within the current step rather than deferred. This was also applied in
-Step 12 (temporary `focusBody(499)` call to enable orbital trail verification).
+Step 12 (temporary `centerBody(499)` call to enable orbital trail verification).
 
 ---
 
@@ -271,8 +271,9 @@ cancellation.
 **Status:** Accepted  
 **Roadmap step:** 18
 
-**Context:** `goTo` needs a default apparent radius to use when `focusBody` drives the
-transition. The formula `endDistance = bodyRadius / tan(apparentRadiusDeg × π/180)`
+**Context:** `goTo` needs a default apparent radius to use when the default
+center-and-goTo interaction drives the transition. The formula
+`endDistance = bodyRadius / tan(apparentRadiusDeg × π/180)`
 means the choice directly controls how close the camera ends up relative to the target
 body.
 
@@ -285,34 +286,42 @@ constant in `KepplrConstants` and can be adjusted without touching logic code.
 typical FOV), 5.0° (reasonable but less dramatic). 10.0° selected as the most
 immediately satisfying default for interactive use.
 
-**Consequences:** Scripts that call `focusBody` will land at 10° apparent radius by
-default. Scripts requiring a specific distance should call `goTo` directly with an
-explicit value.
+**Consequences:** UI actions that trigger the default center-and-goTo flow will land at
+10° apparent radius by default. Scripts requiring a specific distance should call
+`goTo` directly with an explicit value.
 
 ---
 
-## D-014: focusBody and targetBody compose pointAt/goTo internally; signatures unchanged
+## D-014: explicit `pointAt` and `goTo` also synchronize interaction state
 **Status:** Accepted  
 **Roadmap step:** 18
 
 **Context:** Step 18 introduced `pointAt` and `goTo` as explicit primitives on
-`SimulationCommands`. The existing `focusBody` and `targetBody` methods had direct
-camera manipulation semantics that needed to be expressed through these new primitives.
+`SimulationCommands`. A later interaction-model cleanup separated public
+`centerBody`/`targetBody` setters from camera motion, but in practice `goTo(body)`
+while still focused on another body produced inconsistent end-state behavior because
+focus tracking, camera-frame logic, and aberration policy still used the old focused
+body.
 
-**Decision:** `targetBody` calls `pointAt` internally after updating targeted body
-state. `focusBody` calls `pointAt` then queues `goTo` as a pending transition that
-begins when `pointAt` completes. Neither method's signature changes. Existing call
-sites require no updates.
+**Decision:** Public `centerBody` and `targetBody` remain available as state setters,
+but explicit camera commands now also synchronize interaction state:
+`pointAt(naifId, ...)` sets selected and targeted to `naifId`, and
+`goTo(naifId, ...)` sets selected, focused, and targeted to `naifId` before queueing
+the move. `goTo` also prepends a default `pointAt` so approach paths are centered on
+the target. The internal state/property naming remains `focusedBodyId` for continuity
+with the camera/frame system.
 
-**Alternatives considered:** Removing `focusBody`/`targetBody` and requiring callers to
-compose `pointAt`/`goTo` manually — rejected because it would break existing call sites
-and the Groovy scripting API, and because the composed semantics are the correct default
-behavior that all callers want.
+**Alternatives considered:** Keeping camera commands state-neutral — rejected because
+it lets translation/pointing semantics drift away from focus tracking and camera-frame
+semantics. Making `pointAt`/`goTo` operate on current target/focus slots rather than
+explicit NAIF IDs — rejected because explicit-body camera commands are more flexible
+and less surprising.
 
-**Consequences:** `TransitionController` supports a pending transition queue of depth 1
-to handle the `pointAt`-then-`goTo` sequence initiated by `focusBody`. A second
-`pointAt` or `goTo` issued while one is active cancels the active transition and
-replaces the pending one.
+**Consequences:** Scripts can rely on `goTo("Mars", ...)` to leave Mars as the coherent
+camera center/pivot at the end of the move, and `pointAt("Mars", ...)` to leave Mars as
+the active target. UI workflows may still compose `centerBody` explicitly, but they no
+longer need to do so for correctness. `TransitionController` still supports a pending
+transition queue of depth 1 for explicit `pointAt`-then-`goTo` sequences.
 
 ---
 
@@ -1454,7 +1463,7 @@ the `meshRotation` value from Cosmographia's SSC/JSON config files directly.
 
 **Context:** Users writing scripts had no way to know which `KepplrScript` methods execute 
 immediately, which are queued to the JME thread, and which block the script thread. This led to 
-subtle bugs — for example, calling `focusBody()` immediately after `loadConfiguration()` 
+subtle bugs — for example, calling `centerBody()` immediately after `loadConfiguration()` 
 without realizing the camera transitions were queued while the JME thread hadn't yet computed 
 body positions. The prototype's `EngineApi` labelled every method clearly.
 
@@ -1468,9 +1477,8 @@ label in its Javadoc, using one of four categories:
 The class-level Javadoc summarizes all four categories.
 
 **Consequences:** Script authors can determine whether they need `waitTransition()` or 
-`waitWall()` between calls. Hybrid methods (`focusBody`, `targetBody`, `setStateString`) are 
-flagged so users understand that state is visible immediately but the camera arrives 
-asynchronously.
+`waitWall()` between calls. Hybrid methods (`setStateString`) are flagged so users
+understand that state is visible immediately but the camera arrives asynchronously.
 
 ---
 
@@ -1481,9 +1489,9 @@ asynchronously.
 **Context:** `loadConfiguration()` blocked the script thread via a `CountDownLatch` until 
 `rebuildBodyScene()` finished on the JME thread. However, the latch was counted down inside the 
 enqueued callable that runs during `super.update()` — *before* `simpleUpdate()`. This meant the 
-script thread could resume and queue camera transitions (via `focusBody`) before the JME thread 
-had computed body positions for the new scene, causing transitions to target stale or missing 
-positions.
+script thread could resume and queue camera transitions (for example via an explicit
+`goTo`) before the JME thread had computed body positions for the new scene, causing
+transitions to target stale or missing positions.
 
 **Decision:** The latch is no longer counted down inside the enqueued callable. Instead, it is 
 stored in a `volatile postRebuildLatch` field and counted down at the end of `simpleUpdate()`. 
@@ -1493,8 +1501,9 @@ computed, scene graph updated) has completed before the script thread unblocks.
 **Alternatives considered:** Adding `waitWall(5)` in scripts as a workaround — functional but 
 fragile and violates the "Blocking means truly blocking" contract.
 
-**Consequences:** Scripts can safely call `focusBody()` immediately after `loadConfiguration()` 
-without any artificial delay. The `loadConfiguration` Javadoc labelled as "Blocking" now 
+**Consequences:** Scripts can safely call `centerBody()` or explicit camera-transition
+commands immediately after `loadConfiguration()` without any artificial delay. The
+`loadConfiguration` Javadoc labelled as "Blocking" now 
 accurately reflects its behavior.
 
 ---

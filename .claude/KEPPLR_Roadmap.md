@@ -135,7 +135,7 @@ Analytic physical eclipse geometry per §9.3 hybrid Option C. Sun treated as ext
 Sun halo implemented as a world-space billboard with custom GLSL 150 shader (`SunHalo.vert/frag`). Halo size scales with Sun's apparent angular diameter recomputed each frame. Brightness and falloff parameterized as named constants tuned visually. Halo always renders regardless of Sun body cull state; suppressed only when Sun is outside view frustum. Bodies and Saturn's rings occlude the halo correctly per §8.4. Halo node assigned to FAR frustum layer with a marked comment noting layer reassignment if Sun ever enters MID or NEAR range. `KepplrConstants.SUN_NAIF_ID = 10` promoted from `BodyNodeFactory`. `RenderQuality` sun halo quality stub replaced with real per-tier values.
 
 ### 18. Camera Transitions
-`pointAt(int naifId, double durationSeconds)` and `goTo(int naifId, double apparentRadiusDeg, double durationSeconds)` added to `SimulationCommands`. Transitions execute on the JME render thread, progressing each frame in `simpleUpdate()`. Transitions are non-blocking — commands return immediately and progress is tracked in `SimulationState`. `pointAt` slews the camera orientation from current look direction to the target body direction over `durationSeconds` using spherical linear interpolation (slerp). `goTo` waits for any in-progress `pointAt` to complete, then translates the camera along its current line of sight until the target body subtends the requested apparent radius. Both transitions use linear interpolation initially; acceleration/deceleration is a deferred refinement. `goTo` does not apply light-time correction to the translation path. `SimulationState` exposes `transitionActiveProperty()` (boolean) and `transitionProgressProperty()` (double in [0,1]) so the UI and scripting layer can observe completion. If a new `pointAt` or `goTo` is issued while a transition is in progress, the in-progress transition is cancelled and the new one begins immediately. `waitTransition()` implemented as a blocking primitive that returns when `transitionActiveProperty()` becomes false — defined here alongside the property it depends on and exposed through the Groovy scripting wrapper in step 20. Existing `focusBody()` and `targetBody()` implementations updated to drive `pointAt`/`goTo` internally so interaction mode semantics are consistent with the new transition system. All duration and interpolation constants in `KepplrConstants`.
+`pointAt(int naifId, double durationSeconds)` and `goTo(int naifId, double apparentRadiusDeg, double durationSeconds)` added to `SimulationCommands`. Transitions execute on the JME render thread, progressing each frame in `simpleUpdate()`. Transitions are non-blocking — commands return immediately and progress is tracked in `SimulationState`. `pointAt` slews the camera orientation from current look direction to the target body direction over `durationSeconds` using spherical linear interpolation (slerp), and also updates selected/targeted state to match the explicit target body. `goTo` waits for any in-progress `pointAt` to complete, then translates the camera along its current line of sight until the target body subtends the requested apparent radius. `goTo` also updates selected/focused/targeted state to match the approached body and prepends a default `pointAt` so the approach path is centered on the target. Both transitions use linear interpolation initially; acceleration/deceleration is a deferred refinement. `goTo` does not apply light-time correction to the translation path. `SimulationState` exposes `transitionActiveProperty()` (boolean) and `transitionProgressProperty()` (double in [0,1]) so the UI and scripting layer can observe completion. If a new `pointAt` or `goTo` is issued while a transition is in progress, the in-progress transition is cancelled and the new one begins immediately. `waitTransition()` implemented as a blocking primitive that returns when `transitionActiveProperty()` becomes false — defined here alongside the property it depends on and exposed through the Groovy scripting wrapper in step 20. `centerBody()`, `targetBody()`, and `selectBody()` remain available as direct state setters when scripts or UI actions want to update interaction state without moving the camera. All duration and interpolation constants in `KepplrConstants`.
 
 ### 19. UI — Body Selection and Camera Controls
 
@@ -184,7 +184,7 @@ refreshes on `KEPPLRConfiguration.reload()`.
 
 Single click → `SimulationCommands.selectBody(naifId)`. The Selected row in
 the control panel must update immediately. Double-click →
-`SimulationCommands.focusBody(naifId)`.
+`SimulationCommands.centerBody(naifId)` followed by `SimulationCommands.goTo(naifId, ...)`.
 
 **Menus:**
 - File — Load Configuration (`KEPPLRConfiguration.reload(Path)`); parse errors
@@ -219,8 +219,9 @@ call sites are replaced with `setCameraFrame()` calls.
 **Mouse picking in the JME window:**
 
 Single click on a body → `SimulationCommands.selectBody(naifId)`. Double-click
-on a body → `SimulationCommands.focusBody(naifId)`. No mouse-based targeting —
-Target is only available via the T key or the control panel button.
+on a body → `SimulationCommands.centerBody(naifId)` then
+`SimulationCommands.goTo(naifId, ...)`. No mouse-based targeting — Point At is
+available via explicit UI actions rather than click-picking.
 
 Picking is entirely screen-space — no 3D ray cast:
 
@@ -773,7 +774,7 @@ Four improvements to the scripting layer and its GUI integration.
 
 **(1) Interactive script console.** A text input field in the JavaFX control
 window where the user can type and execute single-line Groovy expressions
-(e.g., `kepplr.focusBody("Earth")`). Expressions are evaluated via JSR 223
+(e.g., `kepplr.centerBody("Earth")`). Expressions are evaluated via JSR 223
 with the same `kepplr` binding as `ScriptRunner`. Execution runs on a
 dedicated daemon thread (not the FX thread). Output and errors are displayed
 in the existing script output panel. The console must not interfere with a

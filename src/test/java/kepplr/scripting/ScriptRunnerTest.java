@@ -144,7 +144,7 @@ class ScriptRunnerTest {
         }
 
         @Override
-        public void focusBody(int naifId) {}
+        public void centerBody(int naifId) {}
 
         @Override
         public void targetBody(int naifId) {}

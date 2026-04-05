@@ -47,11 +47,12 @@ import picante.mechanics.EphemerisID;
  * <h3>Example script</h3>
  *
  * <pre>{@code
- * kepplr.focusBody("Earth")
+ * kepplr.goTo("Earth", 20, 5)
  * kepplr.waitTransition()
  * kepplr.setTimeRate(3600.0)
  * kepplr.waitSim(86400.0)
- * kepplr.focusBody("Mars")
+ * kepplr.goTo("Mars", 20, 5)
+ * kepplr.waitTransition()
  * }</pre>
  */
 public final class KepplrScript {
@@ -166,42 +167,36 @@ public final class KepplrScript {
     }
 
     /**
-     * Focus the camera on a body by NAIF ID.
+     * Center the interaction state on a body by NAIF ID.
      *
-     * <p><b>Execution semantics:</b> <em>Immediate + Queued</em> — state mutations (selected/focused/targeted body IDs)
-     * take effect immediately; camera transitions (point-at and go-to) are queued to the JME thread. Use
-     * {@link #waitTransition()} to block until the camera arrives.
+     * <p><b>Execution semantics:</b> <em>Immediate</em>.
      *
-     * <p>Example: {@code kepplr.focusBody(399)}
+     * <p>Example: {@code kepplr.centerBody(399)}
      *
-     * @param naifId NAIF ID of the body to focus
+     * @param naifId NAIF ID of the body to center
      */
-    public void focusBody(int naifId) {
-        commands.focusBody(naifId);
+    public void centerBody(int naifId) {
+        commands.centerBody(naifId);
     }
 
     /**
-     * Focus the camera on a body by name.
+     * Center the interaction state on a body by name.
      *
-     * <p><b>Execution semantics:</b> <em>Immediate + Queued</em> — state mutations (selected/focused/targeted body IDs)
-     * take effect immediately; camera transitions (point-at and go-to) are queued to the JME thread. Use
-     * {@link #waitTransition()} to block until the camera arrives.
+     * <p><b>Execution semantics:</b> <em>Immediate</em>.
      *
-     * <p>Example: {@code kepplr.focusBody("Earth")}
+     * <p>Example: {@code kepplr.centerBody("Earth")}
      *
      * @param bodyName body name; case-insensitive
      * @throws IllegalArgumentException if the name cannot be resolved
      */
-    public void focusBody(String bodyName) {
-        commands.focusBody(resolve(bodyName));
+    public void centerBody(String bodyName) {
+        commands.centerBody(resolve(bodyName));
     }
 
     /**
      * Target a body by NAIF ID.
      *
-     * <p><b>Execution semantics:</b> <em>Immediate + Queued</em> — state mutations (selected/targeted body IDs) take
-     * effect immediately; camera point-at transition is queued to the JME thread. Use {@link #waitTransition()} to
-     * block until the camera arrives.
+     * <p><b>Execution semantics:</b> <em>Immediate</em>.
      *
      * <p>Example: {@code kepplr.targetBody(301)}
      *
@@ -214,9 +209,7 @@ public final class KepplrScript {
     /**
      * Target a body by name.
      *
-     * <p><b>Execution semantics:</b> <em>Immediate + Queued</em> — state mutations (selected/targeted body IDs) take
-     * effect immediately; camera point-at transition is queued to the JME thread. Use {@link #waitTransition()} to
-     * block until the camera arrives.
+     * <p><b>Execution semantics:</b> <em>Immediate</em>.
      *
      * <p>Example: {@code kepplr.targetBody("Moon")}
      *
@@ -286,7 +279,8 @@ public final class KepplrScript {
     /**
      * Point the camera at a body by NAIF ID.
      *
-     * <p><b>Execution semantics:</b> <em>Queued</em> — enqueued to the JME thread; returns immediately.
+     * <p><b>Execution semantics:</b> <em>Queued</em> — enqueued to the JME thread; returns immediately. Updates
+     * selected/targeted state to the same body.
      *
      * <p>Example: {@code kepplr.pointAt(399, 2.0)}
      *
@@ -300,7 +294,8 @@ public final class KepplrScript {
     /**
      * Point the camera at a body by name.
      *
-     * <p><b>Execution semantics:</b> <em>Queued</em> — enqueued to the JME thread; returns immediately.
+     * <p><b>Execution semantics:</b> <em>Queued</em> — enqueued to the JME thread; returns immediately. Updates
+     * selected/targeted state to the same body.
      *
      * <p>Example: {@code kepplr.pointAt("Earth", 2.0)}
      *
@@ -315,7 +310,8 @@ public final class KepplrScript {
     /**
      * Fly the camera to a body by NAIF ID.
      *
-     * <p><b>Execution semantics:</b> <em>Queued</em> — enqueued to the JME thread; returns immediately.
+     * <p><b>Execution semantics:</b> <em>Queued</em> — enqueued to the JME thread; returns immediately. Updates
+     * selected/focused/targeted state to the same body and prepends a default point-at slew.
      *
      * <p>Example: {@code kepplr.goTo(399, 5.0, 3.0)}
      *
@@ -330,7 +326,8 @@ public final class KepplrScript {
     /**
      * Fly the camera to a body by name.
      *
-     * <p><b>Execution semantics:</b> <em>Queued</em> — enqueued to the JME thread; returns immediately.
+     * <p><b>Execution semantics:</b> <em>Queued</em> — enqueued to the JME thread; returns immediately. Updates
+     * selected/focused/targeted state to the same body and prepends a default point-at slew.
      *
      * <p>Example: {@code kepplr.goTo("Earth", 5.0, 3.0)}
      *
@@ -1215,7 +1212,7 @@ public final class KepplrScript {
      * <p>Example:
      *
      * <pre>{@code
-     * kepplr.focusBody("Earth")
+     * kepplr.pointAt("Earth", 5)
      * kepplr.waitTransition()
      * // Camera is now pointing at Earth
      * }</pre>

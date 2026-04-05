@@ -58,9 +58,9 @@ class DefaultSimulationCommandsTest {
         }
 
         @Test
-        @DisplayName("selectBody after focusBody does not change focused or targeted")
-        void selectAfterFocusLeavesOtherFieldsUnchanged() {
-            commands.focusBody(EARTH);
+        @DisplayName("selectBody after centerBody does not change focused or targeted")
+        void selectAfterCenterLeavesOtherFieldsUnchanged() {
+            commands.centerBody(EARTH);
             commands.selectBody(MOON);
 
             assertEquals(MOON, state.selectedBodyIdProperty().get(), "selected should be MOON");
@@ -70,26 +70,26 @@ class DefaultSimulationCommandsTest {
     }
 
     // ─────────────────────────────────────────────────────────────────
-    // focusBody (§4.5, §4.6)
+    // centerBody (§4.5, §4.6)
     // ─────────────────────────────────────────────────────────────────
 
     @Nested
-    @DisplayName("focusBody (§4.5, §4.6)")
-    class FocusBodyTests {
+    @DisplayName("centerBody (§4.5, §4.6)")
+    class CenterBodyTests {
 
         @Test
-        @DisplayName("focusBody sets selected, focused, and targeted to same body")
-        void focusBodySetsThreeFields() {
-            commands.focusBody(EARTH);
+        @DisplayName("centerBody sets selected, focused, and targeted to same body")
+        void centerBodySetsThreeFields() {
+            commands.centerBody(EARTH);
             assertEquals(EARTH, state.selectedBodyIdProperty().get(), "selected should be EARTH");
             assertEquals(EARTH, state.focusedBodyIdProperty().get(), "focused should be EARTH");
             assertEquals(EARTH, state.targetedBodyIdProperty().get(), "targeted should be EARTH");
         }
 
         @Test
-        @DisplayName("focusBody then targetBody: selected=target, focused=focus, targeted=target")
-        void focusThenTarget() {
-            commands.focusBody(EARTH);
+        @DisplayName("centerBody then targetBody: selected=target, focused=center, targeted=target")
+        void centerThenTarget() {
+            commands.centerBody(EARTH);
             commands.targetBody(MOON);
 
             assertEquals(MOON, state.selectedBodyIdProperty().get(), "selected should be MOON");
@@ -109,11 +109,44 @@ class DefaultSimulationCommandsTest {
         @Test
         @DisplayName("targetBody sets selected and targeted; focused unchanged")
         void targetBodySetsSelectedAndTargeted() {
-            commands.focusBody(EARTH);
+            commands.centerBody(EARTH);
             commands.targetBody(MOON);
 
             assertEquals(MOON, state.selectedBodyIdProperty().get(), "selected should be MOON");
             assertEquals(EARTH, state.focusedBodyIdProperty().get(), "focused should still be EARTH");
+            assertEquals(MOON, state.targetedBodyIdProperty().get(), "targeted should be MOON");
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────────
+    // pointAt / goTo explicit camera commands
+    // ─────────────────────────────────────────────────────────────────
+
+    @Nested
+    @DisplayName("pointAt / goTo explicit camera commands")
+    class CameraTransitionCommandStateTests {
+
+        @Test
+        @DisplayName("pointAt sets selected and targeted; focused unchanged")
+        void pointAtUpdatesTargetState() {
+            commands.centerBody(EARTH);
+
+            commands.pointAt(MOON, 2.0);
+
+            assertEquals(MOON, state.selectedBodyIdProperty().get(), "selected should be MOON");
+            assertEquals(EARTH, state.focusedBodyIdProperty().get(), "focused should remain EARTH");
+            assertEquals(MOON, state.targetedBodyIdProperty().get(), "targeted should be MOON");
+        }
+
+        @Test
+        @DisplayName("goTo sets selected, focused, and targeted to the approached body")
+        void goToUpdatesCenterState() {
+            commands.centerBody(EARTH);
+
+            commands.goTo(MOON, 5.0, 3.0);
+
+            assertEquals(MOON, state.selectedBodyIdProperty().get(), "selected should be MOON");
+            assertEquals(MOON, state.focusedBodyIdProperty().get(), "focused should be MOON");
             assertEquals(MOON, state.targetedBodyIdProperty().get(), "targeted should be MOON");
         }
     }
@@ -280,7 +313,7 @@ class DefaultSimulationCommandsTest {
         @Test
         @DisplayName("setSynodicFrame sets override IDs and frame without changing interaction state")
         void setSynodicFrameSetsOverrides() {
-            commands.focusBody(EARTH);
+            commands.centerBody(EARTH);
             commands.targetBody(MOON);
             commands.selectBody(SUN);
 
@@ -454,9 +487,9 @@ class DefaultSimulationCommandsTest {
         @Test
         @DisplayName("setStateString restores body IDs")
         void setStateStringRestoresBodyIds() {
-            // Set some state — focusBody sets selected+focused+targeted to MOON,
+            // Set some state — centerBody sets selected+focused+targeted to MOON,
             // then targetBody sets selected+targeted to SUN
-            commands.focusBody(MOON);
+            commands.centerBody(MOON);
             commands.targetBody(SUN);
             // Now: selected=SUN, focused=MOON, targeted=SUN
             String snapshot = commands.getStateString();

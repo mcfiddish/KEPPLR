@@ -317,8 +317,8 @@ public final class KepplrStatusWindow {
 
         int row = 0;
 
-        // Row 0: Focused
-        grid.add(boldLabel("Focused:"), 0, row);
+        // Row 0: Center
+        grid.add(boldLabel("Center:"), 0, row);
         Label focValue = monoLabel();
         focValue.textProperty().bind(bridge.focusedBodyNameProperty());
         grid.add(focValue, 1, row);
@@ -337,7 +337,7 @@ public final class KepplrStatusWindow {
         grid.add(tgtDist, 2, row);
         row++;
 
-        // Row 2: Selected — with Focus, Target buttons
+        // Row 2: Selected — with Center, Go To, Point At buttons
         grid.add(boldLabel("Selected:"), 0, row);
         Label selValue = monoLabel();
         selValue.textProperty().bind(bridge.selectedBodyNameProperty());
@@ -346,17 +346,29 @@ public final class KepplrStatusWindow {
         selDist.textProperty().bind(bridge.selectedBodyDistanceProperty());
         grid.add(selDist, 2, row);
 
-        Button focusBtn = smallButton("Focus");
-        focusBtn.setOnAction(e -> {
+        Button centerBtn = smallButton("Center");
+        centerBtn.setOnAction(e -> {
             int id = bridge.selectedBodyIdProperty().get();
-            if (id != -1) commands.focusBody(id);
+            if (id != -1) commands.centerBody(id);
         });
-        Button targetBtn = smallButton("Target");
-        targetBtn.setOnAction(e -> {
+        Button goToBtn = smallButton("Go To");
+        goToBtn.setOnAction(e -> {
             int id = bridge.selectedBodyIdProperty().get();
-            if (id != -1) commands.targetBody(id);
+            if (id != -1) {
+                commands.goTo(
+                        id,
+                        KepplrConstants.DEFAULT_GOTO_APPARENT_RADIUS_DEG,
+                        KepplrConstants.DEFAULT_GOTO_DURATION_SECONDS);
+            }
         });
-        HBox selButtons = new HBox(4, focusBtn, targetBtn);
+        Button pointAtBtn = smallButton("Point At");
+        pointAtBtn.setOnAction(e -> {
+            int id = bridge.selectedBodyIdProperty().get();
+            if (id != -1) {
+                commands.pointAt(id, KepplrConstants.DEFAULT_SLEW_DURATION_SECONDS);
+            }
+        });
+        HBox selButtons = new HBox(4, centerBtn, goToBtn, pointAtBtn);
         selButtons.visibleProperty().bind(bridge.selectedBodyActiveProperty());
         selButtons.managedProperty().bind(bridge.selectedBodyActiveProperty());
         grid.add(selButtons, 3, row);
@@ -463,13 +475,17 @@ public final class KepplrStatusWindow {
             if (inViewToggle.isSelected()) applyFilters.run();
         });
 
-        // Single click → select; double-click → focus
+        // Single click → select; double-click → center + goTo
         bodyTree.setOnMouseClicked(evt -> {
             TreeItem<BodyTreeEntry> item = bodyTree.getSelectionModel().getSelectedItem();
             if (item == null || item.getValue() == null || item.getValue().naifId == -1) return;
             int naifId = item.getValue().naifId;
             if (evt.getClickCount() == 2) {
-                commands.focusBody(naifId);
+                commands.centerBody(naifId);
+                commands.goTo(
+                        naifId,
+                        KepplrConstants.DEFAULT_GOTO_APPARENT_RADIUS_DEG,
+                        KepplrConstants.DEFAULT_GOTO_DURATION_SECONDS);
             } else if (evt.getClickCount() == 1) {
                 commands.selectBody(naifId);
             }
@@ -500,11 +516,19 @@ public final class KepplrStatusWindow {
     private void populateBodyTreeContextMenu(ContextMenu menu, int naifId) {
         menu.getItems().clear();
 
-        MenuItem focusItem = new MenuItem("Focus");
-        focusItem.setOnAction(e -> commands.focusBody(naifId));
+        MenuItem centerItem = new MenuItem("Center");
+        centerItem.setOnAction(e -> commands.centerBody(naifId));
 
-        MenuItem targetItem = new MenuItem("Target");
-        targetItem.setOnAction(e -> commands.targetBody(naifId));
+        MenuItem goToItem = new MenuItem("Go To");
+        goToItem.setOnAction(e -> {
+            commands.goTo(
+                    naifId,
+                    KepplrConstants.DEFAULT_GOTO_APPARENT_RADIUS_DEG,
+                    KepplrConstants.DEFAULT_GOTO_DURATION_SECONDS);
+        });
+
+        MenuItem pointAtItem = new MenuItem("Point At");
+        pointAtItem.setOnAction(e -> commands.pointAt(naifId, KepplrConstants.DEFAULT_SLEW_DURATION_SECONDS));
 
         CheckMenuItem trailItem = new CheckMenuItem("Trail");
         trailItem.setSelected(bridge.getState().trailVisibleProperty(naifId).get());
@@ -531,8 +555,9 @@ public final class KepplrStatusWindow {
 
         menu.getItems()
                 .addAll(
-                        focusItem,
-                        targetItem,
+                        centerItem,
+                        goToItem,
+                        pointAtItem,
                         new SeparatorMenuItem(),
                         trailItem,
                         labelItem,
