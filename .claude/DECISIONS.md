@@ -1279,7 +1279,66 @@ trigger.
 
 ---
 
-*Last updated: D-065 (configurable trail reference body), D-064 (synodic frame override state seeded from focus + selected), D-063 (focus-tracking anchor reset on state restore), D-062 (sprite fallback for missing body-fixed frames), D-061 (parent-relative velocity), D-060 (Edit menu removal)*
+## D-066: Synodic trail rendering uses active frame and synodic override IDs
+**Status:** Accepted
+**Roadmap step:** Branch 58 (trail camera-frame rendering)
+
+**Context:** The camera in SYNODIC mode uses `synodicFrameFocusIdProperty()` /
+`synodicFrameSelectedIdProperty()` override IDs (set by `setSynodicFrame()`) rather
+than the raw `focusedBodyIdProperty()` / `selectedBodyIdProperty()`. Trail rendering
+needed to mirror this resolution to stay consistent with what the camera is actually
+showing. Additionally, `cameraFrameProperty()` reflects the *requested* frame, which
+may differ from the *actual* frame when SYNODIC or BODY_FIXED falls back to INERTIAL
+(e.g., no selected body or missing PCK data).
+
+**Decision:** Trail rendering reads `activeCameraFrameProperty()` (the post-fallback
+actual frame) and resolves synodic body IDs using the same override-first logic as
+KepplrApp: `synodicFrameFocusId != -1 ? synodicFrameFocusId : focusedBodyId`, and
+similarly for selected. This ensures the trail frame is always consistent with the
+camera frame.
+
+**Alternatives considered:** Always reading `focusedBodyId` / `selectedBodyId` —
+rejected because it would draw trails in a different synodic frame than the camera when
+`setSynodicFrame()` overrides are active.
+
+**Consequences:** Synodic trail rendering is automatically correct for both the
+interactive case (F key toggles synodic with focus+selected) and the scripted case
+(`setSynodicFrame()` with explicit body IDs).
+
+---
+
+## D-067: In BODY_FIXED mode, trail reference body is always the focus body
+**Status:** Accepted
+**Roadmap step:** Branch 58 (trail camera-frame rendering)
+
+**Context:** Body-fixed trail rendering requires a reference body to define the
+coordinate system origin for `dP = body − ref`. In BODY_FIXED mode the camera is
+already rotating with the focus body's fixed frame, so the natural and only sensible
+reference is the focus body itself. The per-body `setTrailReferenceBody()` override
+(D-065) is not meaningful in this context — a Phobos trail drawn in Mars body-fixed
+coordinates should always be anchored to Mars, not to a user-configured reference body.
+
+**Decision:** In BODY_FIXED mode `TrailManager` always uses `focusId` as the
+barycenter/reference body, ignoring any per-body `setTrailReferenceBody`
+configuration. This is determined before the staleness check (computing
+`barycenterId = bodyFixed ? focusId : effectiveRef`) to avoid a mismatch where
+`TrailState.barycenterId` stores `focusId` but the check compares against
+`effectiveRef`.
+
+**Alternatives considered:** Honoring `setTrailReferenceBody` in BODY_FIXED mode —
+rejected because no meaningful use case exists and it would require projecting `dP`
+into a frame whose origin differs from the rotation pivot, producing a trail that
+orbits the wrong point in body-fixed space.
+
+**Consequences:** In BODY_FIXED mode, satellite and spacecraft trails are always
+centered on the focus body. Scripts using `setTrailReferenceBody` for spacecraft
+approach trajectories will see the BODY_FIXED path take precedence when the camera
+is in that frame; switching back to INERTIAL or SYNODIC restores the configured
+reference body.
+
+---
+
+*Last updated: D-067 (BODY_FIXED trail reference always focus body), D-066 (synodic trail uses active frame and override IDs), D-065 (configurable trail reference body), D-064 (synodic frame override state seeded from focus + selected), D-063 (focus-tracking anchor reset on state restore), D-062 (sprite fallback for missing body-fixed frames)*
 *Backfill note: Entries D-001 through D-009 were reconstructed retrospectively.
 D-010 onwards recorded in real time.*
 

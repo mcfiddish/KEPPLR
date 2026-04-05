@@ -853,6 +853,86 @@ No behavioral change — purely a naming improvement.
 
 ---
 
+### Trail Reference Body and Camera-Frame Trail Rendering (branches 57–58) ✅
+
+Two related improvements to orbital trail rendering.
+
+#### Branch 57 — Configurable trail reference body (D-065)
+
+All orbital trails were previously drawn in coordinates relative to a reference
+body determined by a NAIF ID heuristic: natural satellites used their system
+barycenter; everything else used heliocentric (Sun). For spacecraft with
+negative NAIF IDs the heuristic always produced heliocentric coordinates,
+causing spacecraft approach trails to drift across the scene as the target
+planet moved.
+
+`setTrailReferenceBody(int naifId, int referenceBodyId)` added to
+`SimulationCommands` and `KepplrScript`. The reference body is stored as a
+per-body property in `DefaultSimulationState`. `TrailManager` reads the
+property at resample time; a changed reference body triggers an immediate
+resample. `VelocityVectorType` reads the same property so the velocity arrow
+always points in the same direction as the trail is drawn (D-065).
+
+**Key implementation detail:** `TrailSampler.sample()` contains its own
+internal NAIF heuristic and cannot be overridden by the caller. A new
+package-private entry point `TrailSampler.sampleWithExplicitRef()` was added
+that bypasses the heuristic entirely. `TrailManager` computes the barycenter
+anchor *before* calling the sampler so that both the samples and the live
+anchor are consistent.
+
+**Files changed:**
+- `TrailSampler.java` — added `sampleWithExplicitRef()` and extracted `doSample()`
+- `SimulationCommands.java` — added `setTrailReferenceBody(int, int)` (D-065)
+- `DefaultSimulationState.java` — per-body trail reference body map; removed
+  unused `getTrailReferenceBodyMap()`
+- `DefaultSimulationCommands.java` — wires command to state
+- `TrailManager.java` — reads reference body; calls `sampleWithExplicitRef()`
+- `KepplrScript.java` / `CommandRecorder.java` — String overloads, recording
+- `SimulationCommandsTest.java` / `TrailManagerTest.java` — coverage
+
+#### Branch 58 — Orbit trails in current camera frame (D-066, D-067)
+
+Orbit trails are now drawn in the **current active camera frame** rather than
+always in heliocentric J2000:
+
+- **INERTIAL** — unchanged; heliocentric J2000 (or barycenter-anchored for
+  natural satellites and bodies with a configured reference body).
+- **SYNODIC** — at resample time each sample's relative position `dP = body −
+  ref` is projected onto the `SynodicFrame.Basis` computed at the sample ET,
+  storing synodic coordinates `(sx, sy, sz)`. At render time they are
+  re-expressed in J2000 via the *current* basis `B_now`, so the trail appears
+  frozen in the synodic rotating frame. The focus/selected body IDs mirror the
+  `synodicFrameFocusId` / `synodicFrameSelectedId` override pattern from
+  KepplrApp (Step 19c). (See D-066.)
+- **BODY_FIXED** — at resample time `bf = R_i · dP` where `R_i` is the J2000 →
+  body-fixed rotation at the sample ET. At render time `J2000 = focusNow +
+  R_now^T · bf`. The reference body in BODY_FIXED mode is **always the focus
+  body**, regardless of any per-body `setTrailReferenceBody` configuration
+  (see D-067). `TrailRenderer` is completely frame-unaware; all transforms
+  happen in `TrailManager` before calling the renderer.
+
+The trail reads `activeCameraFrameProperty()` (the post-fallback actual frame),
+not `cameraFrameProperty()` (the requested frame), so trails are automatically
+consistent with what the camera is actually doing when BODY_FIXED or SYNODIC
+falls back to INERTIAL.
+
+`TrailState` record extended to 10 fields: added `synodicFocusId`,
+`synodicSelectedId`, `synodicSamples`, `bodyFixedFocusId`, `bodyFixedSamples`.
+Staleness checks cover all new fields so a frame switch triggers an immediate
+resample.
+
+**Files changed:**
+- `TrailManager.java` — SYNODIC and BODY_FIXED render paths; new private static
+  helpers `computeSynodicSamples`, `projectSynodic`, `buildSynodicRenderList`,
+  `synodicToJ2000`, `computeBodyFixedSamples`, `projectBodyFixed`,
+  `buildBodyFixedRenderList`, `bodyFixedToJ2000`, `renderJ2000`
+- `TrailManagerTest.java` — `SynodicProjectionTest` nested class with SPICE-backed
+  round-trip and axis-alignment tests
+
+**664 tests, 0 failures.**
+
+---
+
 ### Bug Fix: Cross-thread capture timing (branch 50-clock-update-bug)
 
 Two race conditions in the capture path caused incorrect camera positioning
