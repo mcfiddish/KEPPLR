@@ -52,16 +52,16 @@ class VectorRenderer {
     private static final Logger logger = LogManager.getLogger(VectorRenderer.class);
 
     /** Fraction of the arrow shaft length used for the arrowhead cone height. */
-    private static final float ARROWHEAD_LENGTH_FRACTION = 0.12f;
+    private static final float ARROWHEAD_LENGTH_FRACTION = 0.09f;
 
     /** Ratio of arrowhead base radius to arrowhead height. */
-    private static final float ARROWHEAD_RADIUS_RATIO = 0.35f;
+    private static final float ARROWHEAD_RADIUS_RATIO = 0.20f;
 
     /** Number of radial segments for the arrowhead cone mesh. */
-    private static final int ARROWHEAD_SEGMENTS = 8;
+    private static final int ARROWHEAD_SEGMENTS = 16;
 
     /** Line width in pixels for vector shafts. */
-    private static final float LINE_WIDTH = 2f;
+    private static final float LINE_WIDTH = 4f;
 
     private final AssetManager assetManager;
     private final Map<FrustumLayer, Node> layerNodes;
