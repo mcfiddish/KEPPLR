@@ -1817,9 +1817,48 @@ adding another `Platform.startup(...)` call.
 
 ---
 
-*Last updated: D-068 (macOS JavaFX startup deferred to simpleInitApp and called exactly once), 
-D-067 (BODY_FIXED trail reference always focus body), D-066 (synodic trail uses active frame 
-and override IDs), D-065 (configurable trail reference body), D-064 (synodic frame override 
-state seeded from focus + selected), D-063 (focus-tracking anchor reset on state restore)*
+## D-069: Close large bodies stay in NEAR, with dynamic NEAR far-plane expansion and per-body hysteresis
+**Status:** Accepted
+
+**Context:** The original multi-frustum body assignment for §8.3 preferred a layer that
+fully contained the body's bounding volume, falling back to greatest overlap for very
+large bodies. For close approaches to bodies like Europa, that sent the body to `MID`
+once its bounding sphere straddled the NEAR/MID boundary, which clipped the visible near
+hemisphere at `MID`'s 900 km near plane. Switching to a pure nearest-edge rule fixed
+that clipping, but exposed two follow-on issues: the visible limb could still extend
+beyond NEAR's default 1100 km far plane, and bodies near the NEAR/MID boundary could
+flicker as their assignment toggled across adjacent frames.
+
+**Decision:** Body assignment is now driven by the body's nearest visible edge
+(`dist - radius` clamped to zero), not by full containment or greatest overlap.
+`KepplrApp` expands the NEAR camera's far plane per frame when a nearby full-render body
+needs additional depth range for its visible limb. `BodySceneManager` also keeps the
+previous frustum layer for each body and spacecraft and applies a 100 km hysteresis band
+at the NEAR/MID and MID/FAR handoffs so a body does not chatter between layers on
+adjacent frames.
+
+**Alternatives considered:** Keeping full-containment / greatest-overlap assignment —
+rejected because it visibly clips close approaches to large bodies. Raising the NEAR
+camera's far plane unconditionally — rejected because it weakens the precision benefit of
+the multi-frustum design for the whole scene. Dynamic NEAR near-plane adjustment —
+rejected after testing because it clipped close spacecraft sprites. Stateless handoff
+buffers in `FrustumLayer.assign()` alone — rejected because they reduced but did not
+eliminate temporal flicker.
+
+**Consequences:** Close-surface body viewing now prioritizes visual correctness over
+strict per-frame minimal-frustum assignment. Frustum selection for bodies is no longer a
+pure stateless function at the render-manager level; `BodySceneManager` owns the
+hysteresis state and must clear it on disappearance or disposal. If future work revisits
+the remaining minor limb shimmer, the next likely area is cross-viewport depth behavior,
+not layer-assignment policy.
+
+---
+
+*Last updated: D-069 (close large bodies stay in NEAR with dynamic far-plane expansion and 
+per-body hysteresis), D-068 (macOS JavaFX startup deferred to simpleInitApp and called exactly 
+once), D-067 (BODY_FIXED trail reference always focus body), D-066 (synodic trail uses active 
+frame and override IDs), D-065 (configurable trail reference body), D-064 (synodic frame 
+override state seeded from focus + selected), D-063 (focus-tracking anchor reset on state 
+restore)*
 *Backfill note: Entries D-001 through D-009 were reconstructed retrospectively.
 D-010 onwards recorded in real time.*

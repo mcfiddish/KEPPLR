@@ -4,7 +4,6 @@ import com.google.common.collect.ImmutableList;
 import java.io.File;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
-
 import kepplr.config.KEPPLRConfiguration;
 import kepplr.config.SpacecraftBlock;
 import kepplr.ephemeris.spice.SpiceBundle;
@@ -357,7 +356,8 @@ public class KEPPLREphemeris {
                 warningBodies.add(body);
                 KEPPLRConfiguration config = KEPPLRConfiguration.getInstance();
                 TimeConversion tc = config.getTimeConversion();
-                logger.warn("Can't connect {} to SUN at {}", body.getName(), tc.tdbToUTCString(et, config.timeFormat()));
+                logger.warn(
+                        "Can't connect {} to SUN at {}", body.getName(), tc.tdbToUTCString(et, config.timeFormat()));
             }
             return null;
         }

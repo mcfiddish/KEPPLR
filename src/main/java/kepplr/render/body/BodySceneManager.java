@@ -49,6 +49,7 @@ import picante.surfaces.Ellipsoid;
 public class BodySceneManager {
 
     private static final Logger logger = LogManager.getLogger();
+    private static final double LAYER_HYSTERESIS_KM = 100.0;
 
     private final Node nearNode;
     private final Node midNode;
@@ -63,6 +64,8 @@ public class BodySceneManager {
      * position/rotation/attachment are updated per frame.
      */
     private final Map<EphemerisID, BodySceneNode> bodyNodes = new HashMap<>();
+
+    private final Map<EphemerisID, FrustumLayer> lastAssignedLayers = new HashMap<>();
 
     /**
      * Per-frame cache of effective rendered radius (km) keyed by NAIF ID. For natural bodies this is the mean ellipsoid
@@ -120,6 +123,7 @@ public class BodySceneManager {
             bsn.detach();
         }
         bodyNodes.clear();
+        lastAssignedLayers.clear();
         sceneBodyRadiiKm.clear();
         spacecraftIdSet = null;
         saturnRingManager.detach();
@@ -218,7 +222,7 @@ public class BodySceneManager {
                 bsn.updateRotation(frame.rotation());
             }
 
-            FrustumLayer layer = FrustumLayer.assign(frame.dist(), frame.bodyRadiusKm());
+            FrustumLayer layer = assignLayerWithHysteresis(frame.bodyId(), frame.dist(), frame.bodyRadiusKm());
             bsn.apply(effective, layer, nearNode, midNode, farNode, frame.dist(), viewportHeight, fovYDeg);
             sceneBodyRadiiKm.put(frame.naifId(), frame.bodyRadiusKm());
 
@@ -267,7 +271,7 @@ public class BodySceneManager {
                 bsn.updateRotation(rotation);
             }
 
-            FrustumLayer layer = FrustumLayer.assign(dist, 0.0);
+            FrustumLayer layer = assignLayerWithHysteresis(sc.id(), dist, 0.0);
             bsn.apply(CullDecision.DRAW_SPRITE, layer, nearNode, midNode, farNode, dist, viewportHeight, fovYDeg);
 
             Number radiusNum = bsn.ephemerisNode.getUserData("bodyRadiusKm");
@@ -278,6 +282,7 @@ public class BodySceneManager {
         bodyNodes.entrySet().removeIf(entry -> {
             if (!visibleThisFrame.contains(entry.getKey())) {
                 entry.getValue().detach();
+                lastAssignedLayers.remove(entry.getKey());
                 return true;
             }
             return false;
@@ -285,6 +290,31 @@ public class BodySceneManager {
 
         inView.sort(Comparator.comparingDouble(BodyInView::distanceKm));
         return inView;
+    }
+
+    private FrustumLayer assignLayerWithHysteresis(EphemerisID bodyId, double distKm, double bodyRadiusKm) {
+        FrustumLayer preferred = FrustumLayer.assign(distKm, bodyRadiusKm);
+        FrustumLayer previous = lastAssignedLayers.get(bodyId);
+        if (previous == null) {
+            lastAssignedLayers.put(bodyId, preferred);
+            return preferred;
+        }
+
+        double lo = Math.max(0.0, distKm - bodyRadiusKm);
+        FrustumLayer resolved =
+                switch (previous) {
+                    case NEAR -> lo < FrustumLayer.NEAR.farKm + LAYER_HYSTERESIS_KM ? FrustumLayer.NEAR : preferred;
+                    case MID -> {
+                        if (lo < FrustumLayer.NEAR.farKm - LAYER_HYSTERESIS_KM) {
+                            yield FrustumLayer.NEAR;
+                        }
+                        yield lo < FrustumLayer.MID.farKm + LAYER_HYSTERESIS_KM ? FrustumLayer.MID : preferred;
+                    }
+                    case FAR -> lo < FrustumLayer.MID.farKm - LAYER_HYSTERESIS_KM ? preferred : FrustumLayer.FAR;
+                };
+
+        lastAssignedLayers.put(bodyId, resolved);
+        return resolved;
     }
 
     /**

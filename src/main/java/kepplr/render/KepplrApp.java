@@ -30,7 +30,9 @@ import kepplr.config.KEPPLRConfiguration;
 import kepplr.core.SimulationClock;
 import kepplr.ephemeris.BodyLookupService;
 import kepplr.ephemeris.KEPPLREphemeris;
+import kepplr.render.body.BodyCuller;
 import kepplr.render.body.BodySceneManager;
+import kepplr.render.body.CullDecision;
 import kepplr.render.frustum.FrustumLayer;
 import kepplr.render.label.LabelManager;
 import kepplr.render.trail.TrailManager;
@@ -52,6 +54,8 @@ import org.apache.logging.log4j.Logger;
 import org.lwjgl.glfw.GLFW;
 import picante.math.vectorspace.RotationMatrixIJK;
 import picante.math.vectorspace.VectorIJK;
+import picante.mechanics.EphemerisID;
+import picante.surfaces.Ellipsoid;
 
 /**
  * Main JMonkeyEngine application for KEPPLR.
@@ -64,8 +68,9 @@ import picante.math.vectorspace.VectorIJK;
  * <h3>Multi-frustum rendering (§8)</h3>
  *
  * <p>Three camera/viewport pairs share the same position and orientation but have different near/far planes. They
- * render in far→mid→near order; far clears color and depth, mid and near clear depth only. Bodies are assigned to the
- * nearest frustum whose expanded range fully contains their bounding volume (§8.3).
+ * render in far→mid→near order; far clears color and depth, mid and near clear depth only. Bodies are assigned by
+ * nearest visible edge, and the NEAR viewport expands its far plane for nearby large bodies whose visible limb extends
+ * beyond the default 1100 km depth range.
  *
  * <h3>Sun light (§7.6)</h3>
  *
@@ -175,6 +180,8 @@ public class KepplrApp extends SimpleApplication {
     // unblocks.  Without this, the script thread could queue transitions against bodies whose
     // positions have not yet been computed in the new scene.
     private volatile java.util.concurrent.CountDownLatch postRebuildLatch;
+
+    private record NearFrustumRange(double nearKm, double farKm) {}
 
     @Override
     public void simpleInitApp() {
@@ -489,18 +496,21 @@ public class KepplrApp extends SimpleApplication {
         com.jme3.math.Quaternion rot = cam.getRotation();
         simulationState.setCameraOrientationJ2000(new float[] {rot.getX(), rot.getY(), rot.getZ(), rot.getW()});
 
+        double currentEt = simulationState.currentEtProperty().get();
+
         // Sync slave cameras to master orientation, aspect ratio, and FOV (position is always ZERO
         // in floating-origin). FOV sync is required because TransitionController calls cam.setFov()
         // only on the master; midCam and nearCam retain their own near/far planes but must share
         // the same vertical FOV so all three layers project bodies consistently.
+        float fov = cam.getFov();
+        float aspect = (float) cam.getWidth() / cam.getHeight();
+        NearFrustumRange nearRange = computeNearFrustumRange(currentEt, cameraHelioJ2000, cam);
         midCam.setLocation(cam.getLocation());
         midCam.setRotation(cam.getRotation());
         nearCam.setLocation(cam.getLocation());
         nearCam.setRotation(cam.getRotation());
-        float fov = cam.getFov();
-        float aspect = (float) cam.getWidth() / cam.getHeight();
         midCam.setFrustumPerspective(fov, aspect, (float) FrustumLayer.MID.nearKm, (float) FrustumLayer.MID.farKm);
-        nearCam.setFrustumPerspective(fov, aspect, (float) FrustumLayer.NEAR.nearKm, (float) FrustumLayer.NEAR.farKm);
+        nearCam.setFrustumPerspective(fov, aspect, (float) nearRange.nearKm(), (float) nearRange.farKm());
 
         // Update Sun light position in all three layers (Sun helio pos = origin; scene pos = −cam)
         Vector3f sunScenePos = sunScenePosition();
@@ -508,7 +518,6 @@ public class KepplrApp extends SimpleApplication {
         sunLightMid.setPosition(sunScenePos);
         sunLightNear.setPosition(sunScenePos);
 
-        double currentEt = simulationState.currentEtProperty().get();
         int focusedBodyId = simulationState.focusedBodyIdProperty().get();
         List<BodyInView> inView = bodySceneManager.update(currentEt, cameraHelioJ2000, cam);
 
@@ -562,6 +571,63 @@ public class KepplrApp extends SimpleApplication {
         if (restoreLatch != null) {
             restoreLatch.countDown();
         }
+    }
+
+    /**
+     * Expand the NEAR frustum far plane when a nearby full-render body would otherwise span beyond the default 1100 km
+     * depth range.
+     *
+     * <p>The layer chooser keeps any body whose near edge lies in the NEAR band in the NEAR viewport. For large nearby
+     * bodies such as Europa, the visible limb can still extend well beyond 1100 km even though the near cap is much
+     * closer. In that case, use the tangent distance to the visible horizon as the required far plane.
+     */
+    private NearFrustumRange computeNearFrustumRange(double et, double[] cameraPosJ2000, Camera masterCam) {
+        KEPPLREphemeris eph = KEPPLRConfiguration.getInstance().getEphemeris();
+        double requiredFarKm = FrustumLayer.NEAR.farKm;
+        int viewportHeight = masterCam.getHeight();
+        float fovYDeg = masterCam.getFov();
+
+        for (EphemerisID bodyId : eph.getKnownBodies()) {
+            VectorIJK helioPos = eph.getHeliocentricPositionJ2000(bodyId, et);
+            if (helioPos == null) continue;
+
+            int naifId = eph.getSpiceBundle().getObjectCode(bodyId).orElse(-999);
+            if (!simulationState.bodyVisibleProperty(naifId).get()) continue;
+
+            double dx = helioPos.getI() - cameraPosJ2000[0];
+            double dy = helioPos.getJ() - cameraPosJ2000[1];
+            double dz = helioPos.getK() - cameraPosJ2000[2];
+            double distKm = Math.sqrt(dx * dx + dy * dy + dz * dz);
+
+            Ellipsoid shape = eph.getShape(bodyId);
+            double radiusKm = meanRadiusKm(shape);
+            if (!(radiusKm > 0.0)) continue;
+
+            double apparentPx = BodyCuller.computeApparentRadiusPx(radiusKm, distKm, viewportHeight, fovYDeg);
+            if (BodyCuller.decide(apparentPx) != CullDecision.DRAW_FULL) continue;
+
+            double nearEdgeKm = Math.max(0.0, distKm - radiusKm);
+            if (nearEdgeKm >= FrustumLayer.NEAR.farKm + 100.0) continue;
+
+            double visibleFarKm = farthestVisibleSurfaceDistanceKm(distKm, radiusKm);
+            double farMarginKm = Math.max(100.0, visibleFarKm * 0.15);
+            requiredFarKm = Math.max(requiredFarKm, visibleFarKm + farMarginKm);
+        }
+
+        return new NearFrustumRange(FrustumLayer.NEAR.nearKm, requiredFarKm);
+    }
+
+    private static double farthestVisibleSurfaceDistanceKm(double distKm, double radiusKm) {
+        if (!(distKm > 0.0) || !(radiusKm > 0.0)) return FrustumLayer.NEAR.farKm;
+        if (distKm <= radiusKm) {
+            return distKm + radiusKm;
+        }
+        return Math.sqrt(Math.max(0.0, distKm * distKm - radiusKm * radiusKm));
+    }
+
+    private static double meanRadiusKm(Ellipsoid shape) {
+        if (shape == null) return 0.0;
+        return (shape.getA() + shape.getB() + shape.getC()) / 3.0;
     }
 
     @Override
