@@ -1048,6 +1048,7 @@ public class KepplrApp extends SimpleApplication {
         settings.setWidth(1280);
         settings.setHeight(720);
         settings.setRenderer(AppSettings.LWJGL_OPENGL33);
+        settings.setSamples(8);
         settings.setResizable(true);
         app.setSettings(settings);
         app.setShowSettings(false);
