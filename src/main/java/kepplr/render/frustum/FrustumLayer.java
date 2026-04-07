@@ -9,8 +9,8 @@ import kepplr.util.KepplrConstants;
  * {@link KepplrConstants#FRUSTUM_OVERLAP_FRACTION} (§8.2). The overlap is applied symmetrically: the far plane of a
  * layer extends 10% beyond the base boundary, and the near plane of the next layer begins 10% before it.
  *
- * <p>Layers are ordered from most-local (NEAR) to most-distant (FAR). Assignment tries NEAR first so bodies near the
- * camera are always rendered in the most precise frustum available.
+ * <p>Layers are ordered from most-local (NEAR) to most-distant (FAR). Assignment is driven by the body's nearest
+ * visible edge so bodies close to the camera stay in the most local frustum available.
  */
 public enum FrustumLayer {
 
@@ -41,10 +41,11 @@ public enum FrustumLayer {
     }
 
     /**
-     * Assign a body to the nearest frustum layer that fully contains its bounding volume.
+     * Assign a body to the nearest frustum layer whose far plane lies beyond the body's nearest edge.
      *
-     * <p>Per §8.3: tries NEAR first, then MID, then FAR. If no single layer fully contains the bounding volume (e.g., a
-     * very large body), returns the layer with the greatest containment fraction.
+     * <p>Large nearby bodies can span more than one frustum. In that case, assigning by full containment or greatest
+     * overlap causes the body's near cap to jump into MID and get cut by MID's near plane. Prioritising the nearest
+     * edge keeps the body in the closest frustum that can see it.
      *
      * @param distKm camera-to-body-center distance (km); must be &ge; 0
      * @param bodyRadiusKm body bounding radius (km); use 0 for a point
@@ -52,32 +53,16 @@ public enum FrustumLayer {
      */
     public static FrustumLayer assign(double distKm, double bodyRadiusKm) {
         double lo = Math.max(0.0, distKm - bodyRadiusKm);
-        double hi = distKm + bodyRadiusKm;
 
-        // Try nearest-first: NEAR → MID → FAR
+        // Nearest-first: use the first layer whose far plane extends beyond the body's nearest
+        // visible edge. KepplrApp dynamically enlarges the NEAR camera far plane when a nearby
+        // large body needs additional depth range for its visible limb.
         for (FrustumLayer layer : values()) {
-            if (lo >= layer.nearKm && hi <= layer.farKm) {
+            if (lo < layer.farKm) {
                 return layer;
             }
         }
 
-        // No layer fully contains the bounding volume: pick the one with the greatest overlap
-        FrustumLayer best = FAR;
-        double bestOverlapFraction = -1.0;
-        double boundingSpan = hi - lo;
-
-        for (FrustumLayer layer : values()) {
-            double overlapLo = Math.max(lo, layer.nearKm);
-            double overlapHi = Math.min(hi, layer.farKm);
-            if (overlapHi > overlapLo) {
-                double fraction = (overlapHi - overlapLo) / (boundingSpan > 0 ? boundingSpan : 1.0);
-                if (fraction > bestOverlapFraction) {
-                    bestOverlapFraction = fraction;
-                    best = layer;
-                }
-            }
-        }
-
-        return best;
+        return FAR;
     }
 }

@@ -9,6 +9,7 @@ import com.jme3.scene.Geometry;
 import com.jme3.scene.Mesh;
 import com.jme3.scene.Node;
 import com.jme3.scene.VertexBuffer;
+import com.jme3.scene.shape.Cylinder;
 import com.jme3.util.BufferUtils;
 import java.util.EnumMap;
 import java.util.LinkedHashMap;
@@ -52,16 +53,19 @@ class VectorRenderer {
     private static final Logger logger = LogManager.getLogger(VectorRenderer.class);
 
     /** Fraction of the arrow shaft length used for the arrowhead cone height. */
-    private static final float ARROWHEAD_LENGTH_FRACTION = 0.12f;
+    private static final float ARROWHEAD_LENGTH_FRACTION = 0.09f;
 
     /** Ratio of arrowhead base radius to arrowhead height. */
-    private static final float ARROWHEAD_RADIUS_RATIO = 0.35f;
+    private static final float ARROWHEAD_RADIUS_RATIO = 0.20f;
+
+    /** Ratio of shaft radius to arrowhead base radius. */
+    private static final float SHAFT_RADIUS_RATIO = 0.35f;
+
+    /** Number of radial segments for the shaft cylinder mesh. */
+    private static final int SHAFT_SEGMENTS = 16;
 
     /** Number of radial segments for the arrowhead cone mesh. */
-    private static final int ARROWHEAD_SEGMENTS = 8;
-
-    /** Line width in pixels for vector shafts. */
-    private static final float LINE_WIDTH = 2f;
+    private static final int ARROWHEAD_SEGMENTS = 16;
 
     private final AssetManager assetManager;
     private final Map<FrustumLayer, Node> layerNodes;
@@ -235,7 +239,7 @@ class VectorRenderer {
         Material mat = new Material(assetManager, "Common/MatDefs/Misc/Unshaded.j3md");
         mat.setColor("Color", def.getColor());
 
-        // 6. Build the line shaft (origin → shaft end, leaving room for arrowhead).
+        // 6. Build the shaft mesh (origin → shaft end, leaving room for arrowhead).
         Vector3f startF = new Vector3f((float) ox, (float) oy, (float) oz);
         Vector3f endF = new Vector3f((float) ex, (float) ey, (float) ez);
         Vector3f dirF = endF.subtract(startF);
@@ -246,34 +250,40 @@ class VectorRenderer {
         Vector3f dirUnit = dirF.divide(shaftLen);
 
         float headLen = shaftLen * ARROWHEAD_LENGTH_FRACTION;
+        float headRadius = headLen * ARROWHEAD_RADIUS_RATIO;
+        float shaftRadius = headRadius * SHAFT_RADIUS_RATIO;
         Vector3f shaftEnd = endF.subtract(dirUnit.mult(headLen));
+        Vector3f shaftVector = shaftEnd.subtract(startF);
+        float shaftBodyLen = shaftVector.length();
+        if (shaftBodyLen < 1e-12f) {
+            return;
+        }
+        Vector3f shaftMid = startF.add(shaftVector.mult(0.5f));
 
-        Mesh lineMesh = new Mesh();
-        lineMesh.setMode(Mesh.Mode.Lines);
-        lineMesh.setLineWidth(LINE_WIDTH);
-        lineMesh.setBuffer(VertexBuffer.Type.Position, 3, BufferUtils.createFloatBuffer(startF, shaftEnd));
-        lineMesh.setBuffer(VertexBuffer.Type.Index, 2, BufferUtils.createIntBuffer(new int[] {0, 1}));
-        lineMesh.updateBound();
-
-        Geometry lineGeom = new Geometry("vector-" + def.getLabel(), lineMesh);
-        lineGeom.setMaterial(mat);
-        layerNodes.get(layer).attachChild(lineGeom);
-        attachedGeoms.put(lineGeom, layer);
+        Cylinder shaftMesh = new Cylinder(2, SHAFT_SEGMENTS, shaftRadius, shaftBodyLen, true);
+        Geometry shaftGeom = new Geometry("vector-" + def.getLabel(), shaftMesh);
+        shaftGeom.setMaterial(mat);
 
         // 7. Build the arrowhead cone at the tip.
-        float headRadius = headLen * ARROWHEAD_RADIUS_RATIO;
         Mesh coneMesh = buildConeMesh(headLen, headRadius);
         Geometry coneGeom = new Geometry("arrow-" + def.getLabel(), coneMesh);
         coneGeom.setMaterial(mat);
 
-        // Orient cone: default cone axis is +Y; rotate to align with dirUnit.
+        // Orient the shaft and cone. JME's Cylinder is authored along +Z, while this cone mesh
+        // is authored along +Y, so they need different local-axis corrections.
         Quaternion rot = new Quaternion();
         rot.lookAt(dirUnit, Vector3f.UNIT_Y);
-        // lookAt aligns -Z with dirUnit; we need +Y aligned, so apply a 90° pitch correction.
+        Quaternion shaftRotation = rot;
+        // lookAt aligns the mesh's forward axis; the cone's local +Y must be pitched into that axis.
         Quaternion pitch = new Quaternion().fromAngleAxis((float) (Math.PI / 2.0), Vector3f.UNIT_X);
-        coneGeom.setLocalRotation(rot.mult(pitch));
+        Quaternion coneRotation = rot.mult(pitch);
+        shaftGeom.setLocalRotation(shaftRotation);
+        shaftGeom.setLocalTranslation(shaftMid);
+        coneGeom.setLocalRotation(coneRotation);
         coneGeom.setLocalTranslation(shaftEnd);
 
+        layerNodes.get(layer).attachChild(shaftGeom);
+        attachedGeoms.put(shaftGeom, layer);
         layerNodes.get(layer).attachChild(coneGeom);
         attachedGeoms.put(coneGeom, layer);
     }

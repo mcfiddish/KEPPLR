@@ -313,16 +313,16 @@ public final class InstrumentFrustumManager {
         String name = entry.instrument.id().getName();
 
         // Apex heliocentric J2000 (= center body position, e.g. spacecraft)
-        logger.info("=== Frustum diagnostic for {} at ET={} ===", name, currentEt);
-        logger.info(
+        logger.debug("=== Frustum diagnostic for {} at ET={} ===", name, currentEt);
+        logger.debug(
                 "  Camera helio-J2000  : ({}, {}, {})", cameraHelioJ2000[0], cameraHelioJ2000[1], cameraHelioJ2000[2]);
-        logger.info(
+        logger.debug(
                 "  Apex helio-J2000    : ({}, {}, {})",
                 centerPosJ2000.getI(),
                 centerPosJ2000.getJ(),
                 centerPosJ2000.getK());
-        logger.info("  Apex camera-relative: ({}, {}, {})", apexX, apexY, apexZ);
-        logger.info("  Apex dist from cam  : {} km", Math.sqrt(apexX * apexX + apexY * apexY + apexZ * apexZ));
+        logger.debug("  Apex camera-relative: ({}, {}, {})", apexX, apexY, apexZ);
+        logger.debug("  Apex dist from cam  : {} km", Math.sqrt(apexX * apexX + apexY * apexY + apexZ * apexZ));
 
         // Boresight: transform from instrument frame to J2000 via transpose of j2000ToInstrument
         VectorIJK boresightJ2000 = new VectorIJK();
@@ -332,20 +332,20 @@ public final class InstrumentFrustumManager {
             boresightJ2000 = new VectorIJK(
                     boresightJ2000.getI() / bLen, boresightJ2000.getJ() / bLen, boresightJ2000.getK() / bLen);
         }
-        logger.info(
+        logger.debug(
                 "  Boresight J2000 (unit): ({}, {}, {})",
                 boresightJ2000.getI(),
                 boresightJ2000.getJ(),
                 boresightJ2000.getK());
 
         // All configured bodies — position at current ET
-        logger.info("  --- Helio-J2000 positions of configured bodies at ET={} ---", currentEt);
+        logger.debug("  --- Helio-J2000 positions of configured bodies at ET={} ---", currentEt);
         KEPPLRConfiguration config = KEPPLRConfiguration.getInstance();
         for (String bodyName : config.bodies()) {
             int naifId = config.bodyBlock(bodyName).naifID();
             VectorIJK pos = eph.getHeliocentricPositionJ2000(naifId, currentEt);
             if (pos != null) {
-                logger.info(
+                logger.debug(
                         "    {} ({}): ({}, {}, {})",
                         BodyLookupService.formatName(naifId),
                         naifId,
@@ -353,14 +353,14 @@ public final class InstrumentFrustumManager {
                         pos.getJ(),
                         pos.getK());
             } else {
-                logger.info("    {} ({}): position unavailable", bodyName, naifId);
+                logger.debug("    {} ({}): position unavailable", bodyName, naifId);
             }
         }
         for (var sc : eph.getSpacecraft()) {
             int naifId = sc.code();
             VectorIJK pos = eph.getHeliocentricPositionJ2000(naifId, currentEt);
             if (pos != null) {
-                logger.info(
+                logger.debug(
                         "    {} ({}): ({}, {}, {})",
                         BodyLookupService.formatName(naifId),
                         naifId,
@@ -368,10 +368,10 @@ public final class InstrumentFrustumManager {
                         pos.getJ(),
                         pos.getK());
             } else {
-                logger.info("    {} ({}): position unavailable", sc.id().getName(), naifId);
+                logger.debug("    {} ({}): position unavailable", sc.id().getName(), naifId);
             }
         }
-        logger.info("=== end frustum diagnostic ===");
+        logger.debug("=== end frustum diagnostic ===");
     }
 
     // ── FOV polygon approximation ─────────────────────────────────────────────

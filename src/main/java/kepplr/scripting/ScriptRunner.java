@@ -92,20 +92,20 @@ public final class ScriptRunner {
     /**
      * Run an inline Groovy snippet.
      *
-     * <p>If a script is already running, it is interrupted and any active transition is cancelled before the new
-     * script starts.
+     * <p>If a script is already running, it is interrupted and any active transition is cancelled before the new script
+     * starts.
      *
      * @param displayName label used in output/status messages
      * @param scriptSource Groovy source to evaluate
-     * @param wrapWithKepplrWith when true, evaluate inside {@code kepplr.with \{ ... \}} so the {@code kepplr.}
-     *     prefix is optional
+     * @param wrapWithKepplrWith when true, evaluate inside {@code kepplr.with \{ ... \}} so the {@code kepplr.} prefix
+     *     is optional
      */
     public void runInlineScript(String displayName, String scriptSource, boolean wrapWithKepplrWith) {
         synchronized (lock) {
             stopInternal();
 
-            Thread thread = new Thread(
-                    () -> executeInlineScript(displayName, scriptSource, wrapWithKepplrWith), THREAD_NAME);
+            Thread thread =
+                    new Thread(() -> executeInlineScript(displayName, scriptSource, wrapWithKepplrWith), THREAD_NAME);
             thread.setDaemon(true);
             scriptThread = thread;
             thread.start();

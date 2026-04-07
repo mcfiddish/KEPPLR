@@ -126,17 +126,43 @@ class FrustumLayerTest {
         assertEquals(FrustumLayer.FAR, FrustumLayer.assign(1.2e9, 0.0));
     }
 
-    // ── Body spanning multiple layers: pick greatest containment ─────────────────────────────
+    // ── Body spanning multiple layers: near-edge priority ────────────────────────────────────
 
     @Test
-    void largeBodySpanningNearMid_assignsByMostContainment() {
-        // Body centered at 1050 km, radius 500 km → spans [550, 1550].
-        // NEAR can contain up to 1100 km: overlap = [550, 1100] = 550 km
-        // MID from 900 km: overlap = [900, 1100] = 200 km... wait let me recalculate.
-        // Actually: lo=550, hi=1550
-        // NEAR [0.001, 1100]: overlap = [550, 1100] = 550 / 1000 span = 55%
-        // MID [900, 1.1e9]: overlap = [900, 1550] = 650 / 1000 span = 65% → MID wins
-        assertEquals(FrustumLayer.MID, FrustumLayer.assign(1050.0, 500.0));
+    void largeBodySpanningNearMid_assignsNear() {
+        // Body centered at 1050 km, radius 500 km → lo=550, hi=1550.
+        // lo=550 < NEAR.farKm=1100 → NEAR is chosen to avoid clipping the near edge.
+        // The far hemisphere (1100–1550 km) is occluded by the body itself from this vantage;
+        // clipping it at the NEAR far plane causes no visible artifact.
+        assertEquals(FrustumLayer.NEAR, FrustumLayer.assign(1050.0, 500.0));
+    }
+
+    @Test
+    void closeApproachToLargeMoon_assignsNear() {
+        // Camera ~1660 km from Europa center (radius 1560 km) → lo=100, hi=3220.
+        // Near edge at 100 km is within NEAR range; MID near plane (900 km) would clip it.
+        assertEquals(FrustumLayer.NEAR, FrustumLayer.assign(1660.0, 1560.0));
+    }
+
+    @Test
+    void europaAt2458km_assignsNear() {
+        // Screenshot regression: dist=2458 km, radius=1562 km → lo=896 km.
+        // The near edge is still inside the NEAR band, so MID would clip the centre cap.
+        assertEquals(FrustumLayer.NEAR, FrustumLayer.assign(2458.0, 1562.0));
+    }
+
+    @Test
+    void europaAt2461km_assignsNear() {
+        // Screenshot regression: dist=2461 km, radius=1562 km → lo=899 km.
+        // Still too close to hand off to MID; keep the body in NEAR.
+        assertEquals(FrustumLayer.NEAR, FrustumLayer.assign(2461.0, 1562.0));
+    }
+
+    @Test
+    void landerOnSurface_assignsNear() {
+        // Camera on Europa surface: dist ≈ radius → lo ≈ 0, hi ≈ 3120.
+        // Must use NEAR so the surface geometry is not clipped.
+        assertEquals(FrustumLayer.NEAR, FrustumLayer.assign(1560.0, 1560.0));
     }
 
     @Test

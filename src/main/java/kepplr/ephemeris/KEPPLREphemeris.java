@@ -3,6 +3,7 @@ package kepplr.ephemeris;
 import com.google.common.collect.ImmutableList;
 import java.io.File;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import kepplr.config.KEPPLRConfiguration;
 import kepplr.config.SpacecraftBlock;
 import kepplr.ephemeris.spice.SpiceBundle;
@@ -14,6 +15,7 @@ import picante.math.vectorspace.VectorIJK;
 import picante.mechanics.*;
 import picante.mechanics.providers.aberrated.AberrationCorrection;
 import picante.mechanics.providers.reference.ReferenceEphemerisLinkEvaluationException;
+import picante.mechanics.providers.reference.ReferenceFrameLinkEvaluationException;
 import picante.spice.fov.FOV;
 import picante.spice.fov.FOVFactory;
 import picante.surfaces.Ellipsoid;
@@ -59,6 +61,9 @@ public class KEPPLREphemeris {
     private Map<EphemerisID, StateVectorFunction> sunToBodyMap;
     private final double speedOfLightKmPerSec =
             FundamentalPhysicalConstants.getInstance().getSpeedOfLightInKmPerSec();
+
+    private final Set<EphemerisID> warningBodies = ConcurrentHashMap.newKeySet();
+    private final Set<EphemerisID> warningFrames = ConcurrentHashMap.newKeySet();
 
     /**
      * Creates a new ephemeris service backed by the supplied metakernels.
@@ -275,7 +280,15 @@ public class KEPPLREphemeris {
     public RotationMatrixIJK getJ2000ToBodyFixedRotation(EphemerisID id, double et) {
         StateTransformFunction func = getJ2000ToBodyFixed(id);
         if (func == null) return null;
-        return func.getTransform(et);
+        try {
+            return func.getTransform(et);
+        } catch (ReferenceFrameLinkEvaluationException e) {
+            if (!warningFrames.contains(id)) {
+                warningFrames.add(id);
+                logger.warn(e.getLocalizedMessage());
+            }
+        }
+        return null;
     }
 
     /**
@@ -338,10 +351,14 @@ public class KEPPLREphemeris {
         }
         try {
             return stateVector.getPosition(et);
-        } catch (ReferenceEphemerisLinkEvaluationException e) {
-            KEPPLRConfiguration config = KEPPLRConfiguration.getInstance();
-            TimeConversion tc = config.getTimeConversion();
-            logger.warn("Can't connect {} to SUN at {}", body.getName(), tc.tdbToUTCString(et, config.timeFormat()));
+        } catch (ReferenceEphemerisLinkEvaluationException | ReferenceFrameLinkEvaluationException e) {
+            if (!warningBodies.contains(body)) {
+                warningBodies.add(body);
+                KEPPLRConfiguration config = KEPPLRConfiguration.getInstance();
+                TimeConversion tc = config.getTimeConversion();
+                logger.warn(
+                        "Can't connect {} to SUN at {}", body.getName(), tc.tdbToUTCString(et, config.timeFormat()));
+            }
             return null;
         }
     }
