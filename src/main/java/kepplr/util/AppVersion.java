@@ -1,4 +1,3 @@
-
 package kepplr.util;
 
 public class AppVersion {

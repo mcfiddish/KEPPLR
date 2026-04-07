@@ -173,6 +173,22 @@ public class KepplrApp extends SimpleApplication {
 
     private volatile PendingCapture pendingCapture;
 
+    // ── Render fences for scripts waiting on scene visibility ─────────────────────────────────
+    private record PendingRenderFence(int remainingFrames, java.util.concurrent.CountDownLatch latch) {
+        PendingRenderFence {
+            if (remainingFrames <= 0) {
+                throw new IllegalArgumentException("remainingFrames must be positive");
+            }
+        }
+
+        PendingRenderFence afterOneFrame() {
+            return new PendingRenderFence(remainingFrames - 1, latch);
+        }
+    }
+
+    private final java.util.concurrent.ConcurrentLinkedQueue<PendingRenderFence> pendingRenderFences =
+            new java.util.concurrent.ConcurrentLinkedQueue<>();
+
     // ── Post-rebuild latch (Step 27 fix) ─────────────────────────────────────────────────────
     // When loadConfiguration() triggers a scene rebuild, the latch is stored here (by the
     // enqueued callable) and counted down at the END of simpleUpdate() — guaranteeing that the
@@ -235,6 +251,10 @@ public class KepplrApp extends SimpleApplication {
         // render pass completes (see update() override). This ensures the framebuffer reflects the
         // current frame's scene graph, including focus-body tracking from simpleUpdate().
         commands.setScreenshotCallback((outputPath, latch) -> pendingCapture = new PendingCapture(outputPath, latch));
+        commands.setRenderFenceCallback((frameCount, latch) -> enqueue(() -> {
+            pendingRenderFences.add(new PendingRenderFence(frameCount, latch));
+            return null;
+        }));
         commands.setWindowResizeCallback((w, h) -> enqueue(() -> {
             long glfwWindowHandle = getGlfwWindowHandle();
             if (glfwWindowHandle != 0) {
@@ -570,6 +590,18 @@ public class KepplrApp extends SimpleApplication {
         // and all state properties (cameraPositionJ2000, cameraBodyFixedSpherical, etc.) written above.
         if (restoreLatch != null) {
             restoreLatch.countDown();
+        }
+
+        PendingRenderFence fence;
+        int fenceCount = pendingRenderFences.size();
+        for (int i = 0; i < fenceCount; i++) {
+            fence = pendingRenderFences.poll();
+            if (fence == null) break;
+            if (fence.remainingFrames() <= 1) {
+                fence.latch().countDown();
+            } else {
+                pendingRenderFences.add(fence.afterOneFrame());
+            }
         }
     }
 

@@ -345,6 +345,9 @@ Waiting
    * - ``waitTransition()``
      - Block until any in-progress camera transition completes.
      - ``kepplr.goTo("Saturn", 10, 5); kepplr.waitTransition()``
+   * - ``waitRenderFrames(int frameCount)``
+     - Block until the given number of JME update/render frames have completed.
+     - ``kepplr.setWindowSize(1920, 1080); kepplr.waitRenderFrames(2)``
    * - ``waitWall(double seconds)``
      - Pause the script for the given number of wall-clock seconds.
      - ``kepplr.waitWall(2.0)``

@@ -22,7 +22,8 @@ import picante.mechanics.EphemerisID;
  *
  * <ul>
  *   <li>String overloads for all NAIF-ID methods, resolved via {@link BodyLookupService}
- *   <li>Timing primitives: {@link #waitWall}, {@link #waitSim}, {@link #waitUntilSim}, {@link #waitTransition}
+ *   <li>Timing primitives: {@link #waitRenderFrames}, {@link #waitWall}, {@link #waitSim}, {@link #waitUntilSim},
+ *       {@link #waitTransition}
  * </ul>
  *
  * <p>No camera math or simulation logic lives here — every action is a thin delegation to {@link SimulationCommands}.
@@ -70,7 +71,7 @@ public final class KepplrScript {
     public KepplrScript(SimulationCommands commands, SimulationState state) {
         this.commands = commands;
         this.state = state;
-        this.waitTransition = new WaitTransition(state);
+        this.waitTransition = new WaitTransition(commands, state);
     }
 
     // ── State access ────────────────────────────────────────────────────────────
@@ -1130,6 +1131,22 @@ public final class KepplrScript {
     }
 
     // ── Timing primitives (§11.2) ───────────────────────────────────────────────
+
+    /**
+     * Block the script thread until the given number of JME update/render frames have completed.
+     *
+     * <p><b>Execution semantics:</b> <em>Blocking</em>.
+     *
+     * <p>Use this as a render fence after queued scene changes such as {@link #setWindowSize(int, int)} or after
+     * overlay/HUD updates that must be visible before a screenshot or capture sequence begins.
+     *
+     * <p>Example: {@code kepplr.waitRenderFrames(2)}
+     *
+     * @param frameCount number of rendered frames to wait for; values &le; 0 return immediately
+     */
+    public void waitRenderFrames(int frameCount) {
+        commands.waitRenderFrames(frameCount);
+    }
 
     /**
      * Block the script thread until the given number of wall-clock seconds have elapsed.

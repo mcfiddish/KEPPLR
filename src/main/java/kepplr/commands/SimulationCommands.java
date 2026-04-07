@@ -441,6 +441,18 @@ public interface SimulationCommands {
      */
     void saveScreenshot(String outputPath);
 
+    /**
+     * Block until the given number of JME update/render frames have completed.
+     *
+     * <p>Use this as a render-thread fence after queued scene changes such as window resize, overlay changes, or HUD
+     * message updates when a script needs the fully rendered result before continuing.
+     *
+     * <p>Values less than or equal to zero return immediately.
+     *
+     * @param frameCount number of rendered frames to wait for
+     */
+    void waitRenderFrames(int frameCount);
+
     // ── State snapshot (Step 26) ──
 
     /**
