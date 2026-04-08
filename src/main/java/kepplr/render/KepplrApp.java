@@ -646,6 +646,14 @@ public class KepplrApp extends SimpleApplication {
             requiredFarKm = Math.max(requiredFarKm, visibleFarKm + farMarginKm);
         }
 
+        if (instrumentFrustumManager != null) {
+            double frustumFarKm = instrumentFrustumManager.requiredNearFrustumFarKm(et, cameraPosJ2000);
+            if (frustumFarKm > FrustumLayer.NEAR.farKm) {
+                double farMarginKm = Math.max(100.0, frustumFarKm * 0.05);
+                requiredFarKm = Math.max(requiredFarKm, frustumFarKm + farMarginKm);
+            }
+        }
+
         return new NearFrustumRange(FrustumLayer.NEAR.nearKm, requiredFarKm);
     }
 

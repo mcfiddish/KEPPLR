@@ -60,12 +60,7 @@ class InstrumentFrustumManagerTest {
         Ellipsoid shape = Surfaces.createEllipsoidalSurface(10.0, 10.0, 10.0);
         RotationMatrixIJK identity = new RotationMatrixIJK();
         InstrumentFrustumManager.BodyIntersection target = new InstrumentFrustumManager.BodyIntersection(
-                TEST_BODY,
-                new VectorIJK(100.0, 0.0, 0.0),
-                identity,
-                shape,
-                new VectorIJK(-10.0, 0.0, 0.0),
-                0.0);
+                TEST_BODY, new VectorIJK(100.0, 0.0, 0.0), identity, shape, new VectorIJK(-10.0, 0.0, 0.0), 0.0);
 
         InstrumentFrustumManager.BodyIntersection hit = InstrumentFrustumManager.intersectTargetBody(
                 new VectorIJK(80.0, 0.0, 0.0), new VectorIJK(1.0, 0.0, 0.0), target);

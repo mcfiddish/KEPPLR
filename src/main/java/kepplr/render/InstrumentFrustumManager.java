@@ -42,8 +42,8 @@ import picante.surfaces.Ellipsoid;
  *
  * <p>Each frustum is a closed pyramid whose apex sits at the camera-relative J2000 position of the instrument's center
  * body. When the instrument boresight intersects another body's reference ellipsoid, the frustum is shortened against
- * that body and a live footprint polyline is drawn on the surface. Otherwise the base vertices fall back to the
- * default fixed extent:
+ * that body and a live footprint polyline is drawn on the surface. Otherwise the base vertices fall back to the default
+ * fixed extent:
  *
  * <pre>
  * base[i] = apex + normalize(boundVector_in_J2000) × INSTRUMENT_FRUSTUM_DEFAULT_EXTENT_KM
@@ -66,9 +66,9 @@ import picante.surfaces.Ellipsoid;
  *
  * <ul>
  *   <li>Boresight line rendering
-*   <li>Per-instrument color configuration (hardcoded cyan)
-*   <li>LOD or distance culling of frustums
-* </ul>
+ *   <li>Per-instrument color configuration (hardcoded cyan)
+ *   <li>LOD or distance culling of frustums
+ * </ul>
  */
 public final class InstrumentFrustumManager {
 
@@ -76,6 +76,8 @@ public final class InstrumentFrustumManager {
 
     /** Translucent cyan material color (hardcoded for this step). */
     private static final ColorRGBA FRUSTUM_COLOR = new ColorRGBA(0f, 1f, 1f, 0.25f);
+
+    private static final ColorRGBA FRUSTUM_OUTLINE_COLOR = new ColorRGBA(1f, 1f, 1f, 1f);
     private static final ColorRGBA FOOTPRINT_COLOR = new ColorRGBA(0f, 1f, 1f, 0.9f);
     private static final double FOOTPRINT_SURFACE_OFFSET_KM = 0.01;
 
@@ -161,6 +163,61 @@ public final class InstrumentFrustumManager {
         buildEntries();
     }
 
+    /**
+     * Compute the far-plane distance required to keep all visible frustums intact when rendered in the NEAR layer.
+     *
+     * <p>This is used by {@link kepplr.render.KepplrApp} to expand the near camera range before rendering long
+     * instrument frustums whose apex is nearby but whose default extent reaches far beyond the normal near-layer depth.
+     */
+    public double requiredNearFrustumFarKm(double currentEt, double[] cameraHelioJ2000) {
+        if (entriesByCode.isEmpty()) {
+            return FrustumLayer.NEAR.farKm;
+        }
+
+        KEPPLREphemeris eph = KEPPLRConfiguration.getInstance().getEphemeris();
+        double requiredFarKm = FrustumLayer.NEAR.farKm;
+
+        for (FrustumEntry entry : entriesByCode.values()) {
+            if (!entry.visible) continue;
+
+            VectorIJK centerPosJ2000 = eph.getHeliocentricPositionJ2000(entry.instrument.center(), currentEt);
+            if (centerPosJ2000 == null) {
+                continue;
+            }
+
+            StateTransformFunction stf = eph.j2000ToFrame(entry.instrument.frameID());
+            RotationMatrixIJK j2000ToInstrument;
+            try {
+                j2000ToInstrument = stf.getStateTransform(currentEt).getRotation();
+            } catch (Exception e) {
+                continue;
+            }
+
+            double apexX = centerPosJ2000.getI() - cameraHelioJ2000[0];
+            double apexY = centerPosJ2000.getJ() - cameraHelioJ2000[1];
+            double apexZ = centerPosJ2000.getK() - cameraHelioJ2000[2];
+            double apexDistKm = Math.sqrt(apexX * apexX + apexY * apexY + apexZ * apexZ);
+            requiredFarKm = Math.max(requiredFarKm, apexDistKm);
+
+            VectorIJK scratch = new VectorIJK();
+            for (UnwritableVectorIJK bound : entry.effectiveBounds) {
+                j2000ToInstrument.mtxv(bound, scratch);
+                double len = scratch.getLength();
+                if (len < 1e-10) {
+                    continue;
+                }
+                double ext = KepplrConstants.INSTRUMENT_FRUSTUM_DEFAULT_EXTENT_KM / len;
+                double baseX = apexX + scratch.getI() * ext;
+                double baseY = apexY + scratch.getJ() * ext;
+                double baseZ = apexZ + scratch.getK() * ext;
+                double baseDistKm = Math.sqrt(baseX * baseX + baseY * baseY + baseZ * baseZ);
+                requiredFarKm = Math.max(requiredFarKm, baseDistKm);
+            }
+        }
+
+        return requiredFarKm;
+    }
+
     // ── Per-frame update ──────────────────────────────────────────────────────
 
     /**
@@ -214,12 +271,12 @@ public final class InstrumentFrustumManager {
             }
 
             VectorIJK boresightJ2000 = instrumentToJ2000(entry.fovSpice.getBoresight(), j2000ToInstrument);
-            BodyIntersection target = findNearestIntersection(
-                    eph, entry.instrument.center(), centerPosJ2000, boresightJ2000, currentEt);
+            BodyIntersection target =
+                    findNearestIntersection(eph, entry.instrument.center(), centerPosJ2000, boresightJ2000, currentEt);
 
             // Update the frustum mesh and live footprint from the same target body solution.
-            double footprintDistanceKm =
-                    entry.updateGeometry(apexX, apexY, apexZ, centerPosJ2000, j2000ToInstrument, target, cameraHelioJ2000);
+            GeometryMetrics metrics = entry.updateGeometry(
+                    apexX, apexY, apexZ, centerPosJ2000, j2000ToInstrument, target, cameraHelioJ2000);
 
             // One-shot diagnostics: log apex, boresight, and all body positions on first render
             // after the frustum is toggled on.
@@ -237,17 +294,18 @@ public final class InstrumentFrustumManager {
                         eph);
             }
 
-            // Assign to the frustum layer that contains the apex (spacecraft position).
-            // Using the apex distance — not apex + extent — matches the VectorRenderer pattern
-            // (§8.3: assign to the layer containing the geometry's origin).  The base vertices
-            // may extend beyond the assigned layer's far plane and be clipped by the GPU, but
-            // the visually critical apex region is always rendered in the correct layer.
-            double apexDist = Math.sqrt(apexX * apexX + apexY * apexY + apexZ * apexZ);
-            FrustumLayer layer = FrustumLayer.assign(apexDist, 0.0);
-            layerNodes.get(layer).attachChild(entry.geometry);
+            // Render the frustum in the layer that contains its actually-rendered geometry so it
+            // shares a depth buffer with the target body and can be occluded by that body.
+            FrustumLayer frustumLayer = FrustumLayer.assign(Math.max(metrics.renderedMaxDistanceKm(), 0.0), 0.0);
+            layerNodes.get(frustumLayer).attachChild(entry.geometry);
+            layerNodes.get(frustumLayer).attachChild(entry.outlineGeometry);
+            if (entry.hasNearSegment()) {
+                layerNodes.get(FrustumLayer.NEAR).attachChild(entry.nearGeometry);
+                layerNodes.get(FrustumLayer.NEAR).attachChild(entry.nearOutlineGeometry);
+            }
 
             if (entry.hasLiveFootprint()) {
-                FrustumLayer footprintLayer = FrustumLayer.assign(Math.max(footprintDistanceKm, 0.0), 0.0);
+                FrustumLayer footprintLayer = FrustumLayer.assign(Math.max(metrics.footprintDistanceKm(), 0.0), 0.0);
                 layerNodes.get(footprintLayer).attachChild(entry.footprintGeometry);
             }
         }
@@ -279,6 +337,9 @@ public final class InstrumentFrustumManager {
         entry.visible = visible;
         if (!visible) {
             entry.geometry.removeFromParent();
+            entry.outlineGeometry.removeFromParent();
+            entry.nearGeometry.removeFromParent();
+            entry.nearOutlineGeometry.removeFromParent();
             entry.footprintGeometry.removeFromParent();
         }
     }
@@ -301,6 +362,9 @@ public final class InstrumentFrustumManager {
     private void detachAll() {
         for (FrustumEntry entry : entriesByCode.values()) {
             entry.geometry.removeFromParent();
+            entry.outlineGeometry.removeFromParent();
+            entry.nearGeometry.removeFromParent();
+            entry.nearOutlineGeometry.removeFromParent();
             entry.footprintGeometry.removeFromParent();
         }
     }
@@ -584,6 +648,8 @@ public final class InstrumentFrustumManager {
             VectorIJK hitBodyFixed,
             double distanceKm) {}
 
+    static record GeometryMetrics(double renderedMaxDistanceKm, double footprintDistanceKm) {}
+
     // ── Inner class: per-instrument render state ──────────────────────────────
 
     private static final class FrustumEntry {
@@ -594,11 +660,19 @@ public final class InstrumentFrustumManager {
         final List<UnwritableVectorIJK> effectiveBounds;
 
         final Geometry geometry;
+        final Geometry outlineGeometry;
+        final Geometry nearGeometry;
+        final Geometry nearOutlineGeometry;
         final Geometry footprintGeometry;
         /** Direct reference to the position buffer for in-place vertex updates. */
         final FloatBuffer posBuffer;
+
+        final FloatBuffer outlinePosBuffer;
+        final FloatBuffer nearPosBuffer;
+        final FloatBuffer nearOutlinePosBuffer;
         final FloatBuffer footprintPosBuffer;
         boolean footprintVisible = false;
+        boolean nearSegmentVisible = false;
 
         boolean visible = false;
         /**
@@ -640,6 +714,49 @@ public final class InstrumentFrustumManager {
             this.geometry.setMaterial(mat);
             this.geometry.setQueueBucket(RenderQueue.Bucket.Transparent);
 
+            Mesh nearMesh = new Mesh();
+            nearMesh.setMode(Mesh.Mode.Triangles);
+            this.nearPosBuffer = BufferUtils.createFloatBuffer(numVerts * 3);
+            nearMesh.setBuffer(VertexBuffer.Type.Position, 3, nearPosBuffer);
+            nearMesh.updateBound();
+
+            this.nearGeometry =
+                    new Geometry("instrument-frustum-near-" + instrument.id().getName(), nearMesh);
+            this.nearGeometry.setMaterial(mat.clone());
+            this.nearGeometry.setQueueBucket(RenderQueue.Bucket.Transparent);
+            this.nearGeometry.setCullHint(com.jme3.scene.Spatial.CullHint.Always);
+
+            Mesh outlineMesh = new Mesh();
+            outlineMesh.setMode(Mesh.Mode.Lines);
+            this.outlinePosBuffer = BufferUtils.createFloatBuffer(n * 4 * 3);
+            outlineMesh.setBuffer(VertexBuffer.Type.Position, 3, outlinePosBuffer);
+            outlineMesh.updateCounts();
+            outlineMesh.updateBound();
+
+            Material outlineMat = new Material(assetManager, "Common/MatDefs/Misc/Unshaded.j3md");
+            outlineMat.setColor("Color", FRUSTUM_OUTLINE_COLOR);
+            outlineMat.getAdditionalRenderState().setLineWidth(3f);
+            outlineMat.getAdditionalRenderState().setDepthWrite(false);
+            outlineMat.getAdditionalRenderState().setFaceCullMode(RenderState.FaceCullMode.Off);
+
+            this.outlineGeometry =
+                    new Geometry("instrument-frustum-outline-" + instrument.id().getName(), outlineMesh);
+            this.outlineGeometry.setMaterial(outlineMat);
+            this.outlineGeometry.setQueueBucket(RenderQueue.Bucket.Transparent);
+
+            Mesh nearOutlineMesh = new Mesh();
+            nearOutlineMesh.setMode(Mesh.Mode.Lines);
+            this.nearOutlinePosBuffer = BufferUtils.createFloatBuffer(n * 4 * 3);
+            nearOutlineMesh.setBuffer(VertexBuffer.Type.Position, 3, nearOutlinePosBuffer);
+            nearOutlineMesh.updateCounts();
+            nearOutlineMesh.updateBound();
+
+            this.nearOutlineGeometry = new Geometry(
+                    "instrument-frustum-near-outline-" + instrument.id().getName(), nearOutlineMesh);
+            this.nearOutlineGeometry.setMaterial(outlineMat.clone());
+            this.nearOutlineGeometry.setQueueBucket(RenderQueue.Bucket.Transparent);
+            this.nearOutlineGeometry.setCullHint(com.jme3.scene.Spatial.CullHint.Always);
+
             Mesh footprintMesh = new Mesh();
             footprintMesh.setMode(Mesh.Mode.LineStrip);
             this.footprintPosBuffer = BufferUtils.createFloatBuffer((n + 1) * 3);
@@ -653,7 +770,8 @@ public final class InstrumentFrustumManager {
             footprintMat.getAdditionalRenderState().setDepthWrite(false);
             footprintMat.getAdditionalRenderState().setFaceCullMode(RenderState.FaceCullMode.Off);
 
-            this.footprintGeometry = new Geometry("instrument-footprint-" + instrument.id().getName(), footprintMesh);
+            this.footprintGeometry =
+                    new Geometry("instrument-footprint-" + instrument.id().getName(), footprintMesh);
             this.footprintGeometry.setMaterial(footprintMat);
             this.footprintGeometry.setQueueBucket(RenderQueue.Bucket.Transparent);
             this.footprintGeometry.setCullHint(com.jme3.scene.Spatial.CullHint.Always);
@@ -670,9 +788,9 @@ public final class InstrumentFrustumManager {
          *     applied to each bound vector via {@link RotationMatrixIJK#mtxv}
          * @param targetBody boresight-selected target body intersection, or {@code null} when the boresight misses
          * @param cameraHelioJ2000 camera heliocentric J2000 position in km
-         * @return representative camera-relative distance of the live footprint, or {@code -1} when no live footprint
+         * @return max camera-relative frustum distance plus representative live-footprint distance
          */
-        double updateGeometry(
+        GeometryMetrics updateGeometry(
                 double apexX,
                 double apexY,
                 double apexZ,
@@ -683,11 +801,16 @@ public final class InstrumentFrustumManager {
             List<UnwritableVectorIJK> bounds = effectiveBounds;
             int n = bounds.size();
 
-            // Transform bound vectors from instrument frame to J2000 and compute base vertices.
+            // Transform bound vectors from instrument frame to J2000 and compute:
+            //   1. default-extent base vertices
+            //   2. optional body-intersection points used for both clipping and the live footprint
             // j2000ToInstrument.mtxv(v) = transpose(j2000ToInstrument) × v = instrumentToJ2000 × v
             float[] bx = new float[n];
             float[] by = new float[n];
             float[] bz = new float[n];
+            float[] clipX = new float[n];
+            float[] clipY = new float[n];
+            float[] clipZ = new float[n];
             float[] footprintX = new float[n];
             float[] footprintY = new float[n];
             float[] footprintZ = new float[n];
@@ -706,45 +829,52 @@ public final class InstrumentFrustumManager {
                     bx[i] = (float) apexX;
                     by[i] = (float) apexY;
                     bz[i] = (float) apexZ;
+                    clipX[i] = (float) apexX;
+                    clipY[i] = (float) apexY;
+                    clipZ[i] = (float) apexZ;
                 } else {
                     double ext = KepplrConstants.INSTRUMENT_FRUSTUM_DEFAULT_EXTENT_KM / len;
-                    BodyIntersection edgeHit = intersectTargetBody(sourceJ2000, scratch, targetBody);
-                    if (edgeHit != null) {
-                        edgeHit.j2000ToBodyFixed().mtxv(edgeHit.hitBodyFixed(), worldPoint);
-                        worldPoint.setTo(
-                                worldPoint.getI() + edgeHit.bodyPosJ2000().getI(),
-                                worldPoint.getJ() + edgeHit.bodyPosJ2000().getJ(),
-                                worldPoint.getK() + edgeHit.bodyPosJ2000().getK());
+                    bx[i] = (float) (apexX + scratch.getI() * ext);
+                    by[i] = (float) (apexY + scratch.getJ() * ext);
+                    bz[i] = (float) (apexZ + scratch.getK() * ext);
+                    clipX[i] = bx[i];
+                    clipY[i] = by[i];
+                    clipZ[i] = bz[i];
+                    double baseDistanceKm =
+                            Math.sqrt((double) bx[i] * bx[i] + (double) by[i] * by[i] + (double) bz[i] * bz[i]);
+                    if (targetBody != null) {
+                        BodyIntersection edgeHit = intersectTargetBody(sourceJ2000, scratch, targetBody);
+                        if (edgeHit != null) {
+                            edgeHit.j2000ToBodyFixed().mtxv(edgeHit.hitBodyFixed(), worldPoint);
+                            worldPoint.setTo(
+                                    worldPoint.getI() + edgeHit.bodyPosJ2000().getI(),
+                                    worldPoint.getJ() + edgeHit.bodyPosJ2000().getJ(),
+                                    worldPoint.getK() + edgeHit.bodyPosJ2000().getK());
 
-                        bx[i] = (float) (worldPoint.getI() - cameraHelioJ2000[0]);
-                        by[i] = (float) (worldPoint.getJ() - cameraHelioJ2000[1]);
-                        bz[i] = (float) (worldPoint.getK() - cameraHelioJ2000[2]);
+                            float hitX = (float) (worldPoint.getI() - cameraHelioJ2000[0]);
+                            float hitY = (float) (worldPoint.getJ() - cameraHelioJ2000[1]);
+                            float hitZ = (float) (worldPoint.getK() - cameraHelioJ2000[2]);
+                            clipX[i] = hitX;
+                            clipY[i] = hitY;
+                            clipZ[i] = hitZ;
 
-                        VectorIJK normalBodyFixed =
-                                edgeHit.shape().computeOutwardNormal(edgeHit.hitBodyFixed(), new VectorIJK());
-                        edgeHit
-                                .j2000ToBodyFixed()
-                                .mtxv(normalBodyFixed, worldNormal);
-                        double normalLen = worldNormal.getLength();
-                        double scale = normalLen > 1e-12 ? FOOTPRINT_SURFACE_OFFSET_KM / normalLen : 0.0;
-                        footprintX[i] =
-                                (float) (bx[i] + worldNormal.getI() * scale);
-                        footprintY[i] =
-                                (float) (by[i] + worldNormal.getJ() * scale);
-                        footprintZ[i] =
-                                (float) (bz[i] + worldNormal.getK() * scale);
-                        footprintCount++;
-                        hitMask[i] = true;
+                            VectorIJK normalBodyFixed =
+                                    edgeHit.shape().computeOutwardNormal(edgeHit.hitBodyFixed(), new VectorIJK());
+                            edgeHit.j2000ToBodyFixed().mtxv(normalBodyFixed, worldNormal);
+                            double normalLen = worldNormal.getLength();
+                            double scale = normalLen > 1e-12 ? FOOTPRINT_SURFACE_OFFSET_KM / normalLen : 0.0;
+                            footprintX[i] = (float) (hitX + worldNormal.getI() * scale);
+                            footprintY[i] = (float) (hitY + worldNormal.getJ() * scale);
+                            footprintZ[i] = (float) (hitZ + worldNormal.getK() * scale);
+                            footprintCount++;
+                            hitMask[i] = true;
 
-                        double hitDistanceKm =
-                                Math.sqrt((double) bx[i] * bx[i] + (double) by[i] * by[i] + (double) bz[i] * bz[i]);
-                        if (footprintDistanceKm < 0.0 || hitDistanceKm < footprintDistanceKm) {
-                            footprintDistanceKm = hitDistanceKm;
+                            double hitDistanceKm =
+                                    Math.sqrt((double) hitX * hitX + (double) hitY * hitY + (double) hitZ * hitZ);
+                            if (footprintDistanceKm < 0.0 || hitDistanceKm < footprintDistanceKm) {
+                                footprintDistanceKm = hitDistanceKm;
+                            }
                         }
-                    } else {
-                        bx[i] = (float) (apexX + scratch.getI() * ext);
-                        by[i] = (float) (apexY + scratch.getJ() * ext);
-                        bz[i] = (float) (apexZ + scratch.getK() * ext);
                     }
                 }
             }
@@ -753,47 +883,110 @@ public final class InstrumentFrustumManager {
             float ay = (float) apexY;
             float az = (float) apexZ;
 
-            int sideStart = 0;
-            int sideCount = n;
-            boolean closedFootprint = false;
-            if (targetBody != null) {
-                int hitCount = 0;
-                for (boolean hit : hitMask) {
-                    if (hit) {
-                        hitCount++;
+            posBuffer.clear();
+            outlinePosBuffer.clear();
+            nearPosBuffer.clear();
+            nearOutlinePosBuffer.clear();
+
+            int[] run = longestHitRun(hitMask);
+            int clipStart = run[0];
+            int clipCount = run[1];
+            boolean closedClip = targetBody != null && clipCount == n;
+            double renderedMaxDistanceKm = Math.sqrt(apexX * apexX + apexY * apexY + apexZ * apexZ);
+            double apexDistanceKm = renderedMaxDistanceKm;
+            double nearLimitKm = FrustumLayer.NEAR.farKm;
+            boolean buildNearSegment = apexDistanceKm < nearLimitKm;
+
+            if (closedClip) {
+                for (int i = 0; i < n; i++) {
+                    int j = (i + 1) % n;
+                    renderedMaxDistanceKm = Math.max(renderedMaxDistanceKm, distanceKm(clipX[i], clipY[i], clipZ[i]));
+                    renderedMaxDistanceKm = Math.max(renderedMaxDistanceKm, distanceKm(clipX[j], clipY[j], clipZ[j]));
+                    posBuffer.put(ax).put(ay).put(az);
+                    posBuffer.put(clipX[i]).put(clipY[i]).put(clipZ[i]);
+                    posBuffer.put(clipX[j]).put(clipY[j]).put(clipZ[j]);
+
+                    outlinePosBuffer.put(ax).put(ay).put(az);
+                    outlinePosBuffer.put(clipX[i]).put(clipY[i]).put(clipZ[i]);
+                    outlinePosBuffer.put(clipX[i]).put(clipY[i]).put(clipZ[i]);
+                    outlinePosBuffer.put(clipX[j]).put(clipY[j]).put(clipZ[j]);
+
+                    if (buildNearSegment) {
+                        appendNearTriangle(
+                                nearPosBuffer,
+                                nearOutlinePosBuffer,
+                                ax,
+                                ay,
+                                az,
+                                clipX[i],
+                                clipY[i],
+                                clipZ[i],
+                                clipX[j],
+                                clipY[j],
+                                clipZ[j],
+                                nearLimitKm);
                     }
                 }
-                if (hitCount == n) {
-                    closedFootprint = true;
-                } else if (hitCount >= 2) {
-                    int[] run = longestHitRun(hitMask);
-                    sideStart = run[0];
-                    sideCount = run[1];
-                } else {
-                    sideCount = 0;
+            } else if (clipCount >= 2) {
+                for (int step = 0; step < clipCount - 1; step++) {
+                    int i = (clipStart + step) % n;
+                    int j = (clipStart + step + 1) % n;
+                    renderedMaxDistanceKm = Math.max(renderedMaxDistanceKm, distanceKm(clipX[i], clipY[i], clipZ[i]));
+                    renderedMaxDistanceKm = Math.max(renderedMaxDistanceKm, distanceKm(clipX[j], clipY[j], clipZ[j]));
+                    posBuffer.put(ax).put(ay).put(az);
+                    posBuffer.put(clipX[i]).put(clipY[i]).put(clipZ[i]);
+                    posBuffer.put(clipX[j]).put(clipY[j]).put(clipZ[j]);
+
+                    outlinePosBuffer.put(ax).put(ay).put(az);
+                    outlinePosBuffer.put(clipX[i]).put(clipY[i]).put(clipZ[i]);
+                    outlinePosBuffer.put(clipX[i]).put(clipY[i]).put(clipZ[i]);
+                    outlinePosBuffer.put(clipX[j]).put(clipY[j]).put(clipZ[j]);
+
+                    if (buildNearSegment) {
+                        appendNearTriangle(
+                                nearPosBuffer,
+                                nearOutlinePosBuffer,
+                                ax,
+                                ay,
+                                az,
+                                clipX[i],
+                                clipY[i],
+                                clipZ[i],
+                                clipX[j],
+                                clipY[j],
+                                clipZ[j],
+                                nearLimitKm);
+                    }
                 }
             } else {
-                closedFootprint = true;
-            }
-
-            posBuffer.clear();
-
-            // Side faces: one triangle per adjacent sampled pair in the visible run.
-            int sidePairs = closedFootprint ? n : Math.max(0, sideCount - 1);
-            for (int step = 0; step < sidePairs; step++) {
-                int i = (sideStart + step) % n;
-                int j = (sideStart + step + 1) % n;
-                posBuffer.put(ax).put(ay).put(az);
-                posBuffer.put(bx[i]).put(by[i]).put(bz[i]);
-                posBuffer.put(bx[j]).put(by[j]).put(bz[j]);
-            }
-
-            // Base cap only when the whole sampled boundary hits the target (or no target exists).
-            if (closedFootprint) {
-                for (int i = 1; i < n - 1; i++) {
-                    posBuffer.put(bx[0]).put(by[0]).put(bz[0]);
+                for (int i = 0; i < n; i++) {
+                    int j = (i + 1) % n;
+                    renderedMaxDistanceKm = Math.max(renderedMaxDistanceKm, distanceKm(bx[i], by[i], bz[i]));
+                    renderedMaxDistanceKm = Math.max(renderedMaxDistanceKm, distanceKm(bx[j], by[j], bz[j]));
+                    posBuffer.put(ax).put(ay).put(az);
                     posBuffer.put(bx[i]).put(by[i]).put(bz[i]);
-                    posBuffer.put(bx[i + 1]).put(by[i + 1]).put(bz[i + 1]);
+                    posBuffer.put(bx[j]).put(by[j]).put(bz[j]);
+
+                    outlinePosBuffer.put(ax).put(ay).put(az);
+                    outlinePosBuffer.put(bx[i]).put(by[i]).put(bz[i]);
+                    outlinePosBuffer.put(bx[i]).put(by[i]).put(bz[i]);
+                    outlinePosBuffer.put(bx[j]).put(by[j]).put(bz[j]);
+
+                    if (buildNearSegment) {
+                        appendNearTriangle(
+                                nearPosBuffer,
+                                nearOutlinePosBuffer,
+                                ax,
+                                ay,
+                                az,
+                                bx[i],
+                                by[i],
+                                bz[i],
+                                bx[j],
+                                by[j],
+                                bz[j],
+                                nearLimitKm);
+                    }
                 }
             }
 
@@ -802,7 +995,37 @@ public final class InstrumentFrustumManager {
             geometry.getMesh().updateCounts();
             geometry.getMesh().updateBound();
 
+            outlinePosBuffer.flip();
+            outlineGeometry.getMesh().setBuffer(VertexBuffer.Type.Position, 3, outlinePosBuffer);
+            outlineGeometry.getMesh().updateCounts();
+            outlineGeometry.getMesh().updateBound();
+
+            nearPosBuffer.flip();
+            if (nearPosBuffer.hasRemaining()) {
+                nearGeometry.getMesh().setBuffer(VertexBuffer.Type.Position, 3, nearPosBuffer);
+                nearGeometry.getMesh().updateCounts();
+                nearGeometry.getMesh().updateBound();
+                nearGeometry.setCullHint(com.jme3.scene.Spatial.CullHint.Inherit);
+                nearSegmentVisible = true;
+            } else {
+                nearGeometry.setCullHint(com.jme3.scene.Spatial.CullHint.Always);
+                nearSegmentVisible = false;
+            }
+
+            nearOutlinePosBuffer.flip();
+            if (nearOutlinePosBuffer.hasRemaining()) {
+                nearOutlineGeometry.getMesh().setBuffer(VertexBuffer.Type.Position, 3, nearOutlinePosBuffer);
+                nearOutlineGeometry.getMesh().updateCounts();
+                nearOutlineGeometry.getMesh().updateBound();
+                nearOutlineGeometry.setCullHint(com.jme3.scene.Spatial.CullHint.Inherit);
+            } else {
+                nearOutlineGeometry.setCullHint(com.jme3.scene.Spatial.CullHint.Always);
+            }
+
             if (footprintCount >= 3) {
+                int footprintStart = clipStart;
+                int footprintCountVisible = clipCount;
+                boolean closedFootprint = footprintCount == n;
                 footprintPosBuffer.clear();
                 if (closedFootprint) {
                     for (int i = 0; i < footprintCount; i++) {
@@ -810,10 +1033,12 @@ public final class InstrumentFrustumManager {
                     }
                     footprintPosBuffer.put(footprintX[0]).put(footprintY[0]).put(footprintZ[0]);
                 } else {
-                    for (int step = 0; step < sideCount; step++) {
-                        int idx = (sideStart + step) % n;
-                        footprintPosBuffer.put(
-                                footprintX[idx]).put(footprintY[idx]).put(footprintZ[idx]);
+                    for (int step = 0; step < footprintCountVisible; step++) {
+                        int idx = (footprintStart + step) % n;
+                        footprintPosBuffer
+                                .put(footprintX[idx])
+                                .put(footprintY[idx])
+                                .put(footprintZ[idx]);
                     }
                 }
                 footprintPosBuffer.flip();
@@ -822,16 +1047,20 @@ public final class InstrumentFrustumManager {
                 footprintGeometry.getMesh().updateBound();
                 footprintGeometry.setCullHint(com.jme3.scene.Spatial.CullHint.Inherit);
                 footprintVisible = true;
-                return footprintDistanceKm;
+                return new GeometryMetrics(renderedMaxDistanceKm, footprintDistanceKm);
             }
 
             footprintGeometry.setCullHint(com.jme3.scene.Spatial.CullHint.Always);
             footprintVisible = false;
-            return -1.0;
+            return new GeometryMetrics(renderedMaxDistanceKm, -1.0);
         }
 
         boolean hasLiveFootprint() {
             return footprintVisible;
+        }
+
+        boolean hasNearSegment() {
+            return nearSegmentVisible;
         }
 
         private static int[] longestHitRun(boolean[] hitMask) {
@@ -859,6 +1088,72 @@ public final class InstrumentFrustumManager {
             }
 
             return new int[] {bestStart, Math.min(bestLen, n)};
+        }
+
+        private static double distanceKm(float x, float y, float z) {
+            return Math.sqrt((double) x * x + (double) y * y + (double) z * z);
+        }
+
+        private static void appendNearTriangle(
+                FloatBuffer triBuffer,
+                FloatBuffer lineBuffer,
+                float ax,
+                float ay,
+                float az,
+                float bx,
+                float by,
+                float bz,
+                float cx,
+                float cy,
+                float cz,
+                double nearLimitKm) {
+            float[] bNear = clampEndpoint(ax, ay, az, bx, by, bz, nearLimitKm);
+            float[] cNear = clampEndpoint(ax, ay, az, cx, cy, cz, nearLimitKm);
+            if (bNear == null || cNear == null) {
+                return;
+            }
+
+            triBuffer.put(ax).put(ay).put(az);
+            triBuffer.put(bNear[0]).put(bNear[1]).put(bNear[2]);
+            triBuffer.put(cNear[0]).put(cNear[1]).put(cNear[2]);
+
+            lineBuffer.put(ax).put(ay).put(az);
+            lineBuffer.put(bNear[0]).put(bNear[1]).put(bNear[2]);
+            lineBuffer.put(bNear[0]).put(bNear[1]).put(bNear[2]);
+            lineBuffer.put(cNear[0]).put(cNear[1]).put(cNear[2]);
+        }
+
+        private static float[] clampEndpoint(
+                float ax, float ay, float az, float bx, float by, float bz, double nearLimitKm) {
+            double bDist = distanceKm(bx, by, bz);
+            if (bDist <= nearLimitKm) {
+                return new float[] {bx, by, bz};
+            }
+
+            double dx = bx - ax;
+            double dy = by - ay;
+            double dz = bz - az;
+            double qa = dx * dx + dy * dy + dz * dz;
+            double qb = 2.0 * (ax * dx + ay * dy + az * dz);
+            double qc = ax * ax + ay * ay + az * az - nearLimitKm * nearLimitKm;
+            double disc = qb * qb - 4.0 * qa * qc;
+            if (disc < 0.0 || qa < 1e-12) {
+                return null;
+            }
+
+            double sqrtDisc = Math.sqrt(disc);
+            double t0 = (-qb - sqrtDisc) / (2.0 * qa);
+            double t1 = (-qb + sqrtDisc) / (2.0 * qa);
+            double t = Double.NaN;
+            if (t0 >= 0.0 && t0 <= 1.0) {
+                t = t0;
+            } else if (t1 >= 0.0 && t1 <= 1.0) {
+                t = t1;
+            }
+            if (Double.isNaN(t)) {
+                return null;
+            }
+            return new float[] {(float) (ax + dx * t), (float) (ay + dy * t), (float) (az + dz * t)};
         }
     }
 }
