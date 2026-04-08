@@ -404,12 +404,19 @@ Groovy scripting API implemented via three new classes in `kepplr.scripting`:
   strategy rather than recorded verbatim (see D-024). Commands with
   `durationSeconds > 0` are never coalesced.
 
-Timing primitives on `KepplrScript`: `waitWall(double seconds)`,
-`waitSim(double seconds)`, `waitUntilSim(double etSeconds)`,
-`waitUntilSim(String utc)`, `waitTransition()`. No generic `wait()` per §11.2.
-`waitSim` and `waitUntilSim` poll at `SCRIPT_WAIT_POLL_INTERVAL_MS` intervals;
-both block indefinitely if the simulation is paused or the time rate works
-against the target — documented in Javadoc.
+Timing primitives on `KepplrScript`: `waitRenderFrames(int frameCount)`,
+`waitWall(double seconds)`, `waitSim(double seconds)`,
+`waitUntilSim(double etSeconds)`, `waitUntilSim(String utc)`,
+`waitTransition()`. No generic `wait()` per §11.2. `waitRenderFrames()`
+is a blocking render-thread fence for queued scene work such as window resize,
+HUD message display, overlay updates, and other changes that must be visible in
+the framebuffer before a screenshot or `captureSequence()` begins.
+`waitTransition()` now uses that frame fence to ensure a just-queued camera
+transition has actually been consumed by the JME thread before it starts
+waiting for completion. `waitSim` and `waitUntilSim` poll at
+`SCRIPT_WAIT_POLL_INTERVAL_MS` intervals; both block indefinitely if the
+simulation is paused or the time rate works against the target — documented in
+Javadoc.
 
 `cancelTransition()` added to `SimulationCommands` and implemented through
 `TransitionController` to support clean script interruption.
@@ -586,11 +593,14 @@ and `File → Save Screenshot` menu item.
 **(2) Capture sequences.** `CaptureService.captureSequence(outputDir, startET,
 frameCount, etStep, commands, state)` in `kepplr.core` — a blocking loop
 that pauses the simulation, advances ET per step, and captures each frame.
-Frame filenames auto-widen padding (4 digits up to 9999 frames, 5 for 10000+,
-etc.). Writes `capture_info.json` sidecar with start ET, step, frame count,
-resolution, and capture timestamp (dimensions read from the first captured PNG).
-NOT on `SimulationCommands` — called directly from `KepplrScript` and the
-GUI capture dialog.
+An overload adds `startFrameIndex` so multiple capture blocks can write a
+single contiguous frame sequence into the same output directory. Frame
+filenames auto-widen padding (4 digits up to 9999 frames, 5 for 10000+, etc.)
+based on the highest emitted frame index. Writes `capture_info.json` sidecar
+with start ET, step, frame count, starting frame index, resolution, and
+capture timestamp (dimensions read from the first captured PNG). NOT on
+`SimulationCommands` — called directly from `KepplrScript` and the GUI capture
+dialog.
 
 **(3) GUI integration.** `File → Capture Sequence…` opens a dialog (Start UTC,
 ET step, frame count) with a `DirectoryChooser`, runs on a dedicated daemon

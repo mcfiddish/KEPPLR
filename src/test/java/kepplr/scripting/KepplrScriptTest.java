@@ -268,6 +268,14 @@ class KepplrScriptTest {
         }
 
         @Test
+        @DisplayName("waitRenderFrames delegates to commands")
+        void waitRenderFramesDelegates() {
+            script.waitRenderFrames(2);
+            assertEquals("waitRenderFrames", spy.lastMethod);
+            assertEquals(2, spy.lastIntArg);
+        }
+
+        @Test
         @DisplayName("waitUntilSim returns immediately if target ET already passed (forward time)")
         void waitUntilSimAlreadyPassed() throws InterruptedException {
             state.setCurrentEt(1000.0);
@@ -495,6 +503,12 @@ class KepplrScriptTest {
         @Override
         public void saveScreenshot(String outputPath) {
             lastMethod = "saveScreenshot";
+        }
+
+        @Override
+        public void waitRenderFrames(int frameCount) {
+            lastMethod = "waitRenderFrames";
+            lastIntArg = frameCount;
         }
 
         @Override

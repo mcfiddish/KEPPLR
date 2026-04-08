@@ -23,7 +23,7 @@ import org.apache.logging.log4j.Logger;
  * <h3>Example</h3>
  *
  * <pre>{@code
- * CaptureService.captureSequence("/tmp/frames", 4.895e8, 60, 2.0, commands, state);
+ * CaptureService.captureSequence("/tmp/frames", 4.895e8, 60, 2.0, 0, commands, state);
  * }</pre>
  */
 public final class CaptureService {
@@ -70,8 +70,34 @@ public final class CaptureService {
             double etStep,
             SimulationCommands commands,
             SimulationState state) {
+        captureSequence(outputDir, startET, frameCount, etStep, 0, commands, state);
+    }
+
+    /**
+     * Capture a sequence of frames as PNG files with an explicit starting frame index.
+     *
+     * @param outputDir directory for output PNG files (created if it doesn't exist)
+     * @param startET starting ET (TDB seconds past J2000)
+     * @param frameCount number of frames to capture; must be positive
+     * @param etStep ET advance per frame in seconds
+     * @param startFrameIndex index used for the first output filename; must be non-negative
+     * @param commands simulation commands for time control and screenshot
+     * @param state simulation state for reading current ET and viewport dimensions
+     * @throws IllegalArgumentException if frameCount is not positive or startFrameIndex is negative
+     */
+    public static void captureSequence(
+            String outputDir,
+            double startET,
+            int frameCount,
+            double etStep,
+            int startFrameIndex,
+            SimulationCommands commands,
+            SimulationState state) {
         if (frameCount <= 0) {
             throw new IllegalArgumentException("frameCount must be positive: " + frameCount);
+        }
+        if (startFrameIndex < 0) {
+            throw new IllegalArgumentException("startFrameIndex must be non-negative: " + startFrameIndex);
         }
 
         Path outPath = Path.of(outputDir);
@@ -82,7 +108,7 @@ public final class CaptureService {
             return;
         }
 
-        String format = computeFrameNameFormat(frameCount);
+        String format = computeFrameNameFormat(startFrameIndex + frameCount);
 
         // Set start time and pause
         commands.setET(startET);
@@ -90,10 +116,11 @@ public final class CaptureService {
 
         double currentET = startET;
         logger.info(
-                "Capture sequence starting: {} frames, startET={}, etStep={}, dir={}",
+                "Capture sequence starting: {} frames, startET={}, etStep={}, startFrameIndex={}, dir={}",
                 frameCount,
                 startET,
                 etStep,
+                startFrameIndex,
                 outputDir);
 
         for (int i = 0; i < frameCount; i++) {
@@ -110,7 +137,9 @@ public final class CaptureService {
             // Wait for one frame to render so the scene graph updates with the new ET.
             // saveScreenshot itself enqueues on the JME thread and blocks, which serves as
             // both the fence and the capture.
-            String framePath = outPath.resolve(String.format(format, i)).toString();
+            int frameIndex = startFrameIndex + i;
+            String framePath =
+                    outPath.resolve(String.format(format, frameIndex)).toString();
             commands.saveScreenshot(framePath);
 
             if ((i + 1) % 10 == 0 || i == frameCount - 1) {
@@ -119,20 +148,21 @@ public final class CaptureService {
         }
 
         // Write capture_info.json sidecar
-        writeCaptureInfo(outPath, startET, etStep, frameCount, state);
+        writeCaptureInfo(outPath, startET, etStep, frameCount, startFrameIndex, state);
         logger.info("Capture sequence complete: {} frames to {}", frameCount, outputDir);
     }
 
     /**
-     * Compute the frame filename format string, auto-widening the zero-pad if {@code frameCount >= 10000}.
+     * Compute the frame filename format string, auto-widening the zero-pad if the highest emitted frame index needs
+     * more than 4 digits.
      *
-     * @param frameCount total number of frames in the sequence
+     * @param frameCountExclusive one greater than the highest frame index that may be emitted
      * @return a format string like {@code "frame_%04d.png"} or {@code "frame_%05d.png"}
      */
-    static String computeFrameNameFormat(int frameCount) {
+    static String computeFrameNameFormat(int frameCountExclusive) {
         int digits = 4; // minimum 4 digits
         int threshold = 10_000;
-        while (frameCount >= threshold) {
+        while (frameCountExclusive >= threshold) {
             digits++;
             threshold *= 10;
         }
@@ -145,13 +175,13 @@ public final class CaptureService {
      * <p>Reads width and height from the first captured PNG file to avoid requiring JME access.
      */
     private static void writeCaptureInfo(
-            Path outPath, double startET, double etStep, int frameCount, SimulationState state) {
+            Path outPath, double startET, double etStep, int frameCount, int startFrameIndex, SimulationState state) {
         try {
             // Read viewport dimensions from the first captured frame
             int width = 0;
             int height = 0;
-            String format = computeFrameNameFormat(frameCount);
-            Path firstFrame = outPath.resolve(String.format(format, 0));
+            String format = computeFrameNameFormat(startFrameIndex + frameCount);
+            Path firstFrame = outPath.resolve(String.format(format, startFrameIndex));
             if (Files.isRegularFile(firstFrame)) {
                 try {
                     java.awt.image.BufferedImage img = javax.imageio.ImageIO.read(firstFrame.toFile());
@@ -170,6 +200,7 @@ public final class CaptureService {
                       "startEt": %s,
                       "etStep": %s,
                       "frameCount": %d,
+                      "startFrameIndex": %d,
                       "width": %d,
                       "height": %d,
                       "captureTimestamp": "%s"
@@ -178,6 +209,7 @@ public final class CaptureService {
                     Double.toString(startET),
                     Double.toString(etStep),
                     frameCount,
+                    startFrameIndex,
                     width,
                     height,
                     Instant.now().toString());

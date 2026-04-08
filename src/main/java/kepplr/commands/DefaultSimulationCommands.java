@@ -78,6 +78,13 @@ public final class DefaultSimulationCommands implements SimulationCommands {
     private ScreenshotCallback screenshotCallback;
 
     /**
+     * Accepts a frame count and a {@link CountDownLatch}, scheduling a JME-thread render fence that counts the latch
+     * down after the requested number of frames have completed. Set by {@code KepplrApp} after construction;
+     * {@code null} in unit tests.
+     */
+    private RenderFenceCallback renderFenceCallback;
+
+    /**
      * @param state mutable state object this instance will write to for interaction commands
      * @param clock simulation clock this instance will delegate time commands to
      * @param transitionController camera transition controller; receives {@code pointAt}/{@code goTo} requests
@@ -462,6 +469,17 @@ public final class DefaultSimulationCommands implements SimulationCommands {
     }
 
     /**
+     * Callback interface for a JME-thread render fence.
+     *
+     * <p>Accepts a frame count and a {@link CountDownLatch}. The implementation must count the latch down after the
+     * requested number of full JME update/render frames have completed.
+     */
+    @FunctionalInterface
+    public interface RenderFenceCallback {
+        void awaitFrames(int frameCount, CountDownLatch latch);
+    }
+
+    /**
      * Set the callback that enqueues a JME-thread framebuffer capture for use by {@link #saveScreenshot}.
      *
      * <p>Called by {@code KepplrApp} after construction; may be left {@code null} in unit tests.
@@ -470,6 +488,17 @@ public final class DefaultSimulationCommands implements SimulationCommands {
      */
     public void setScreenshotCallback(ScreenshotCallback callback) {
         this.screenshotCallback = callback;
+    }
+
+    /**
+     * Set the callback that waits for JME update/render frames.
+     *
+     * <p>Called by {@code KepplrApp} after construction; may be left {@code null} in unit tests.
+     *
+     * @param callback the render-fence callback; may be null
+     */
+    public void setRenderFenceCallback(RenderFenceCallback callback) {
+        this.renderFenceCallback = callback;
     }
 
     /**
@@ -497,6 +526,35 @@ public final class DefaultSimulationCommands implements SimulationCommands {
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             logger.warn("saveScreenshot: interrupted while waiting for capture");
+        }
+    }
+
+    /**
+     * Wait for a number of fully rendered JME frames.
+     *
+     * <p>Blocks the calling thread until the requested number of frames have completed. If the callback is null (unit
+     * tests), this method is a no-op.
+     */
+    @Override
+    public void waitRenderFrames(int frameCount) {
+        if (frameCount <= 0) return;
+        if (renderFenceCallback == null) {
+            logger.warn("waitRenderFrames: no render fence callback set (unit test mode)");
+            return;
+        }
+
+        CountDownLatch latch = new CountDownLatch(1);
+        renderFenceCallback.awaitFrames(frameCount, latch);
+        try {
+            boolean done = latch.await(KepplrConstants.CONFIG_RELOAD_TIMEOUT_SEC, TimeUnit.SECONDS);
+            if (!done) {
+                logger.warn(
+                        "waitRenderFrames: fence did not complete within {} s",
+                        KepplrConstants.CONFIG_RELOAD_TIMEOUT_SEC);
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            logger.warn("waitRenderFrames: interrupted while waiting for fence");
         }
     }
 

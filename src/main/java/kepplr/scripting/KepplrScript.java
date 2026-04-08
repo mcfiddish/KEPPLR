@@ -22,7 +22,8 @@ import picante.mechanics.EphemerisID;
  *
  * <ul>
  *   <li>String overloads for all NAIF-ID methods, resolved via {@link BodyLookupService}
- *   <li>Timing primitives: {@link #waitWall}, {@link #waitSim}, {@link #waitUntilSim}, {@link #waitTransition}
+ *   <li>Timing primitives: {@link #waitRenderFrames}, {@link #waitWall}, {@link #waitSim}, {@link #waitUntilSim},
+ *       {@link #waitTransition}
  * </ul>
  *
  * <p>No camera math or simulation logic lives here — every action is a thin delegation to {@link SimulationCommands}.
@@ -70,7 +71,7 @@ public final class KepplrScript {
     public KepplrScript(SimulationCommands commands, SimulationState state) {
         this.commands = commands;
         this.state = state;
-        this.waitTransition = new WaitTransition(state);
+        this.waitTransition = new WaitTransition(commands, state);
     }
 
     // ── State access ────────────────────────────────────────────────────────────
@@ -1027,6 +1028,26 @@ public final class KepplrScript {
     }
 
     /**
+     * Capture a sequence of frames as PNG files with an explicit starting frame index.
+     *
+     * <p><b>Execution semantics:</b> <em>Blocking</em> — blocks the script thread until all frames are captured.
+     *
+     * <p>Use {@code startFrameIndex} to continue numbering across multiple capture blocks in the same output directory.
+     *
+     * <p>Example: {@code kepplr.captureSequence("/tmp/frames", 4.895e8, 60, 2.0, 120)}
+     *
+     * @param outputDir directory for output PNG files (created if it doesn't exist)
+     * @param startET starting ET (TDB seconds past J2000)
+     * @param frameCount number of frames to capture; must be positive
+     * @param etStep ET advance per frame in seconds
+     * @param startFrameIndex index used for the first output filename; must be non-negative
+     */
+    public void captureSequence(String outputDir, double startET, int frameCount, double etStep, int startFrameIndex) {
+        kepplr.core.CaptureService.captureSequence(
+                outputDir, startET, frameCount, etStep, startFrameIndex, commands, state);
+    }
+
+    /**
      * Capture a sequence of frames as PNG files, starting from a UTC string (Step 25).
      *
      * <p><b>Execution semantics:</b> <em>Blocking</em> — blocks the script thread until all frames are captured.
@@ -1044,6 +1065,24 @@ public final class KepplrScript {
     public void captureSequence(String outputDir, String startUTC, int frameCount, double etStep) {
         double startET = KEPPLRConfiguration.getInstance().getTimeConversion().utcStringToTDB(startUTC);
         captureSequence(outputDir, startET, frameCount, etStep);
+    }
+
+    /**
+     * Capture a sequence of frames as PNG files from a UTC string with an explicit starting frame index.
+     *
+     * <p><b>Execution semantics:</b> <em>Blocking</em> — blocks the script thread until all frames are captured.
+     *
+     * <p>Example: {@code kepplr.captureSequence("/tmp/frames", "2015 Jul 14 07:59:00", 60, 2.0, 120)}
+     *
+     * @param outputDir directory for output PNG files (created if it doesn't exist)
+     * @param startUTC UTC time string in Picante format
+     * @param frameCount number of frames to capture; must be positive
+     * @param etStep ET advance per frame in seconds
+     * @param startFrameIndex index used for the first output filename; must be non-negative
+     */
+    public void captureSequence(String outputDir, String startUTC, int frameCount, double etStep, int startFrameIndex) {
+        double startET = KEPPLRConfiguration.getInstance().getTimeConversion().utcStringToTDB(startUTC);
+        captureSequence(outputDir, startET, frameCount, etStep, startFrameIndex);
     }
 
     // ── Configuration reload (Step 27) ──────────────────────────────────────────
@@ -1130,6 +1169,22 @@ public final class KepplrScript {
     }
 
     // ── Timing primitives (§11.2) ───────────────────────────────────────────────
+
+    /**
+     * Block the script thread until the given number of JME update/render frames have completed.
+     *
+     * <p><b>Execution semantics:</b> <em>Blocking</em>.
+     *
+     * <p>Use this as a render fence after queued scene changes such as {@link #setWindowSize(int, int)} or after
+     * overlay/HUD updates that must be visible before a screenshot or capture sequence begins.
+     *
+     * <p>Example: {@code kepplr.waitRenderFrames(2)}
+     *
+     * @param frameCount number of rendered frames to wait for; values &le; 0 return immediately
+     */
+    public void waitRenderFrames(int frameCount) {
+        commands.waitRenderFrames(frameCount);
+    }
 
     /**
      * Block the script thread until the given number of wall-clock seconds have elapsed.

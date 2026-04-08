@@ -284,6 +284,9 @@ class ScriptRunnerTest {
         public void saveScreenshot(String outputPath) {}
 
         @Override
+        public void waitRenderFrames(int frameCount) {}
+
+        @Override
         public void displayMessage(String text, double durationSeconds) {}
 
         @Override

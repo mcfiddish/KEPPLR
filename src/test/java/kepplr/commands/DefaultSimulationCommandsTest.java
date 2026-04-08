@@ -34,6 +34,8 @@ class DefaultSimulationCommandsTest {
 
     @BeforeEach
     void setUp() {
+        TestHarness.resetSingleton();
+        KEPPLRConfiguration.getTestTemplate();
         state = new DefaultSimulationState();
         clock = new SimulationClock(state, 0.0);
         TransitionController tc = new TransitionController(state);
@@ -412,6 +414,40 @@ class DefaultSimulationCommandsTest {
         @DisplayName("cancelTransition delegates to TransitionController without throwing")
         void cancelTransitionDelegates() {
             assertDoesNotThrow(() -> commands.cancelTransition());
+        }
+    }
+
+    @Nested
+    @DisplayName("Render fences")
+    class RenderFenceTests {
+
+        @Test
+        @DisplayName("waitRenderFrames invokes configured callback with requested count")
+        void waitRenderFramesInvokesCallback() {
+            int[] requestedFrames = {-1};
+            commands.setRenderFenceCallback((frameCount, latch) -> {
+                requestedFrames[0] = frameCount;
+                latch.countDown();
+            });
+
+            commands.waitRenderFrames(2);
+
+            assertEquals(2, requestedFrames[0]);
+        }
+
+        @Test
+        @DisplayName("waitRenderFrames ignores non-positive values")
+        void waitRenderFramesIgnoresNonPositive() {
+            boolean[] called = {false};
+            commands.setRenderFenceCallback((frameCount, latch) -> {
+                called[0] = true;
+                latch.countDown();
+            });
+
+            commands.waitRenderFrames(0);
+            commands.waitRenderFrames(-1);
+
+            assertFalse(called[0]);
         }
     }
 

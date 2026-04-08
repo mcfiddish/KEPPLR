@@ -551,6 +551,12 @@ public final class CommandRecorder implements SimulationCommands {
         delegate.saveScreenshot(outputPath);
     }
 
+    @Override
+    public void waitRenderFrames(int frameCount) {
+        recordCommand("kepplr.waitRenderFrames(" + frameCount + ")");
+        delegate.waitRenderFrames(frameCount);
+    }
+
     // ── Configuration reload (Step 27) ──
 
     @Override

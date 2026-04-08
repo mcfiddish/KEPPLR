@@ -60,6 +60,15 @@ class CaptureServiceTest {
             assertEquals("frame_00000.png", String.format(fmt, 0));
             assertEquals("frame_12344.png", String.format(fmt, 12344));
         }
+
+        @Test
+        @DisplayName("Format widens based on explicit start frame index")
+        void widenedByStartFrameIndex() {
+            String fmt = CaptureService.computeFrameNameFormat(10001);
+            assertEquals("frame_%05d.png", fmt);
+            assertEquals("frame_09999.png", String.format(fmt, 9999));
+            assertEquals("frame_10000.png", String.format(fmt, 10000));
+        }
     }
 
     @Nested
@@ -82,6 +91,7 @@ class CaptureServiceTest {
                       "startEt": 9.322824693587389E8,
                       "etStep": 2.0,
                       "frameCount": 60,
+                      "startFrameIndex": 240,
                       "width": 1920,
                       "height": 1080,
                       "captureTimestamp": "2026-03-22T14:30:00Z"
@@ -96,6 +106,7 @@ class CaptureServiceTest {
             assertTrue(content.contains("\"startEt\""));
             assertTrue(content.contains("\"etStep\""));
             assertTrue(content.contains("\"frameCount\""));
+            assertTrue(content.contains("\"startFrameIndex\""));
             assertTrue(content.contains("\"width\""));
             assertTrue(content.contains("\"height\""));
             assertTrue(content.contains("\"captureTimestamp\""));
@@ -109,6 +120,14 @@ class CaptureServiceTest {
                 IllegalArgumentException.class, () -> CaptureService.captureSequence("/tmp", 0, 0, 1.0, null, null));
         assertThrows(
                 IllegalArgumentException.class, () -> CaptureService.captureSequence("/tmp", 0, -5, 1.0, null, null));
+    }
+
+    @Test
+    @DisplayName("captureSequence rejects negative startFrameIndex")
+    void rejectsNegativeStartFrameIndex() {
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> CaptureService.captureSequence("/tmp", 0, 1, 1.0, -1, null, null));
     }
 
     /** Write a minimal valid 1x1 PNG file. */

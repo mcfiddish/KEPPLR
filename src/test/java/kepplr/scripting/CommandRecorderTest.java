@@ -619,6 +619,11 @@ class CommandRecorderTest {
         }
 
         @Override
+        public void waitRenderFrames(int frameCount) {
+            lastMethod = "waitRenderFrames";
+        }
+
+        @Override
         public void displayMessage(String text, double durationSeconds) {
             lastMethod = "displayMessage";
         }

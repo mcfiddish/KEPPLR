@@ -289,9 +289,15 @@ Output
    * - ``captureSequence(String outputDir, double startET, int frameCount, double etStep)``
      - Capture a sequence of frames as PNG images.
      - ``kepplr.captureSequence("/tmp/out/", 490078800.0, 120, 6.0)``
+   * - ``captureSequence(String outputDir, double startET, int frameCount, double etStep, int startFrameIndex)``
+     - Capture a sequence of frames as PNG images, starting numbering at ``startFrameIndex``.
+     - ``kepplr.captureSequence("/tmp/out/", 490078800.0, 120, 6.0, 240)``
    * - ``captureSequence(String outputDir, String startUTC, int frameCount, double etStep)``
      - Capture a sequence of frames, specifying the start time as a UTC string.
      - ``kepplr.captureSequence("/tmp/out/", "2015 Jul 14 07:00:00", 4800, 6)``
+   * - ``captureSequence(String outputDir, String startUTC, int frameCount, double etStep, int startFrameIndex)``
+     - Capture a sequence of frames from a UTC string, starting numbering at ``startFrameIndex``.
+     - ``kepplr.captureSequence("/tmp/out/", "2015 Jul 14 07:00:00", 4800, 6, 240)``
    * - ``setWindowSize(int width, int height)``
      - Resize the display window.
      - ``kepplr.setWindowSize(1920, 1080)``
@@ -345,6 +351,9 @@ Waiting
    * - ``waitTransition()``
      - Block until any in-progress camera transition completes.
      - ``kepplr.goTo("Saturn", 10, 5); kepplr.waitTransition()``
+   * - ``waitRenderFrames(int frameCount)``
+     - Block until the given number of JME update/render frames have completed.
+     - ``kepplr.setWindowSize(1920, 1080); kepplr.waitRenderFrames(2)``
    * - ``waitWall(double seconds)``
      - Pause the script for the given number of wall-clock seconds.
      - ``kepplr.waitWall(2.0)``

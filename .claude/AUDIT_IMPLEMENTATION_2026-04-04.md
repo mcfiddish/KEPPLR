@@ -204,7 +204,7 @@ Assessment:
 Implemented and verified:
 - `KepplrScript` API with int and string overloads
 - `ScriptRunner` on dedicated daemon thread
-- `waitWall`, `waitSim`, `waitUntilSim`, `waitTransition`
+- `waitRenderFrames`, `waitWall`, `waitSim`, `waitUntilSim`, `waitTransition`
 - `CommandRecorder` decorator and script serialization
 - `VectorType.toScript()`
 - screenshot capture
@@ -212,6 +212,13 @@ Implemented and verified:
 - state snapshot strings with binary/base64url encoding
 - startup `-script` and `-state`
 - script-triggered configuration reload
+
+Notes:
+- `waitRenderFrames(int)` is the scripting/render-thread fence for queued scene
+  changes that must be visible before capture.
+- `waitTransition()` now waits by rendered frames rather than a fixed wall-clock
+  sleep, avoiding races where the script thread could outrun a just-queued
+  camera transition.
 
 Primary code:
 - `src/main/java/kepplr/scripting/KepplrScript.java`
