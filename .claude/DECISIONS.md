@@ -1854,11 +1854,49 @@ not layer-assignment policy.
 
 ---
 
-*Last updated: D-069 (close large bodies stay in NEAR with dynamic far-plane expansion and 
-per-body hysteresis), D-068 (macOS JavaFX startup deferred to simpleInitApp and called exactly 
-once), D-067 (BODY_FIXED trail reference always focus body), D-066 (synodic trail uses active 
-frame and override IDs), D-065 (configurable trail reference body), D-064 (synodic frame 
-override state seeded from focus + selected), D-063 (focus-tracking anchor reset on state 
-restore)*
+## D-070: Add `waitRenderFrames()` and make `waitTransition()` frame-fenced
+**Status:** Accepted
+
+**Context:** Scripts that prepared a scene and then called `captureSequence()` needed
+a real render-thread fence. `waitWall()` only sleeps the Groovy thread and does not
+guarantee that queued scene changes such as window resize, HUD messages, or overlay
+updates have become visible in the framebuffer. A second race existed in
+`waitTransition()`: it waited on `transitionActiveProperty()` after a fixed 50 ms
+sleep, but that property only reflects transitions after the JME thread has consumed
+the queued request. In practice, a script could call `setCameraPosition(..., 5)`,
+`waitTransition()`, and still resume before the transition had actually started,
+causing subsequent setup or `captureSequence()` to run against stale camera/frame
+state.
+
+**Decision:** Add `waitRenderFrames(int frameCount)` to `SimulationCommands` and expose
+it through `KepplrScript` as a blocking scripting primitive. The implementation uses a
+JME-thread `CountDownLatch` fence that counts down after the requested number of full
+update/render frames. Also change `waitTransition()` to use `waitRenderFrames(1)`
+before polling `transitionActiveProperty()`, and to continue waiting in rendered-frame
+steps instead of wall-clock sleeps.
+
+**Alternatives considered:** Continuing to recommend `waitWall(...)` in scripts —
+rejected because it is timing-dependent and does not guarantee framebuffer visibility.
+Using `saveScreenshot()` as an implicit fence — functional but wasteful and pollutes the
+output directory. Expanding `transitionActiveProperty()` to include pending inbox work —
+rejected for now because the render-frame fence solves both the transition race and the
+general scene-visibility problem without widening the meaning of a UI-visible state
+property.
+
+**Consequences:** Scripts now have an explicit, deterministic way to wait for queued
+scene work to become visible before screenshot capture or `captureSequence()`.
+`waitTransition()` no longer depends on a fixed 50 ms heuristic and correctly waits for
+just-enqueued transitions to start and finish. Documentation for scripting timing must
+distinguish `waitWall()` from `waitRenderFrames()`: the former is elapsed real time,
+the latter is rendered-frame visibility.
+
+---
+
+*Last updated: D-070 (`waitRenderFrames()` added; `waitTransition()` made frame-fenced), 
+D-069 (close large bodies stay in NEAR with dynamic far-plane expansion and per-body hysteresis), 
+D-068 (macOS JavaFX startup deferred to simpleInitApp and called exactly once), D-067 
+(BODY_FIXED trail reference always focus body), D-066 (synodic trail uses active frame and 
+override IDs), D-065 (configurable trail reference body), D-064 (synodic frame override state 
+seeded from focus + selected)*
 *Backfill note: Entries D-001 through D-009 were reconstructed retrospectively.
 D-010 onwards recorded in real time.*

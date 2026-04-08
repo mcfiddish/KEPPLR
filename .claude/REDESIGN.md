@@ -474,8 +474,12 @@ All menu items call `SimulationCommands` only — no rendering logic in `ui/`.
   * `waitUntilSim(String utc)` — block until simulation time reaches the given
     UTC string (same format accepted by `setUTC()`). Converts UTC to ET via
     ephemeris at the point of call, then delegates to `waitUntilSim(double)`.
-  * `waitTransition()` — block until `transitionActiveProperty()` is false
-    [D-015]
+  * `waitRenderFrames(int frameCount)` — block until the given number of JME
+    update/render frames have completed; this is the fence for queued scene
+    work that must be visible before capture.
+  * `waitTransition()` — first wait for one rendered frame so a just-queued
+    transition is consumed by the JME thread, then block until
+    `transitionActiveProperty()` is false [D-015, D-070]
 
 * The scripting API must **not** include a generic `wait(...)` function.
 

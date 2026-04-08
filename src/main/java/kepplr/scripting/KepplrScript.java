@@ -1028,6 +1028,26 @@ public final class KepplrScript {
     }
 
     /**
+     * Capture a sequence of frames as PNG files with an explicit starting frame index.
+     *
+     * <p><b>Execution semantics:</b> <em>Blocking</em> — blocks the script thread until all frames are captured.
+     *
+     * <p>Use {@code startFrameIndex} to continue numbering across multiple capture blocks in the same output directory.
+     *
+     * <p>Example: {@code kepplr.captureSequence("/tmp/frames", 4.895e8, 60, 2.0, 120)}
+     *
+     * @param outputDir directory for output PNG files (created if it doesn't exist)
+     * @param startET starting ET (TDB seconds past J2000)
+     * @param frameCount number of frames to capture; must be positive
+     * @param etStep ET advance per frame in seconds
+     * @param startFrameIndex index used for the first output filename; must be non-negative
+     */
+    public void captureSequence(String outputDir, double startET, int frameCount, double etStep, int startFrameIndex) {
+        kepplr.core.CaptureService.captureSequence(
+                outputDir, startET, frameCount, etStep, startFrameIndex, commands, state);
+    }
+
+    /**
      * Capture a sequence of frames as PNG files, starting from a UTC string (Step 25).
      *
      * <p><b>Execution semantics:</b> <em>Blocking</em> — blocks the script thread until all frames are captured.
@@ -1045,6 +1065,24 @@ public final class KepplrScript {
     public void captureSequence(String outputDir, String startUTC, int frameCount, double etStep) {
         double startET = KEPPLRConfiguration.getInstance().getTimeConversion().utcStringToTDB(startUTC);
         captureSequence(outputDir, startET, frameCount, etStep);
+    }
+
+    /**
+     * Capture a sequence of frames as PNG files from a UTC string with an explicit starting frame index.
+     *
+     * <p><b>Execution semantics:</b> <em>Blocking</em> — blocks the script thread until all frames are captured.
+     *
+     * <p>Example: {@code kepplr.captureSequence("/tmp/frames", "2015 Jul 14 07:59:00", 60, 2.0, 120)}
+     *
+     * @param outputDir directory for output PNG files (created if it doesn't exist)
+     * @param startUTC UTC time string in Picante format
+     * @param frameCount number of frames to capture; must be positive
+     * @param etStep ET advance per frame in seconds
+     * @param startFrameIndex index used for the first output filename; must be non-negative
+     */
+    public void captureSequence(String outputDir, String startUTC, int frameCount, double etStep, int startFrameIndex) {
+        double startET = KEPPLRConfiguration.getInstance().getTimeConversion().utcStringToTDB(startUTC);
+        captureSequence(outputDir, startET, frameCount, etStep, startFrameIndex);
     }
 
     // ── Configuration reload (Step 27) ──────────────────────────────────────────
