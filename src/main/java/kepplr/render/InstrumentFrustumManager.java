@@ -294,8 +294,10 @@ public final class InstrumentFrustumManager {
                         eph);
             }
 
-            // Render the frustum in the layer that contains its actually-rendered geometry so it
-            // shares a depth buffer with the target body and can be occluded by that body.
+            // Render the shell in the layer containing its actually-rendered geometry. Boundary
+            // rays that hit the target stop at the surface; miss rays continue to the default
+            // extent, preserving off-body regions without letting the shell emerge from the far
+            // side of the body along hit directions.
             FrustumLayer frustumLayer = FrustumLayer.assign(Math.max(metrics.renderedMaxDistanceKm(), 0.0), 0.0);
             layerNodes.get(frustumLayer).attachChild(entry.geometry);
             layerNodes.get(frustumLayer).attachChild(entry.outlineGeometry);
@@ -802,8 +804,8 @@ public final class InstrumentFrustumManager {
             int n = bounds.size();
 
             // Transform bound vectors from instrument frame to J2000 and compute:
-            //   1. default-extent base vertices
-            //   2. optional body-intersection points used for both clipping and the live footprint
+            //   1. default-extent base vertices for the full frustum shell
+            //   2. optional body-intersection points used for the live footprint
             // j2000ToInstrument.mtxv(v) = transpose(j2000ToInstrument) × v = instrumentToJ2000 × v
             float[] bx = new float[n];
             float[] by = new float[n];
@@ -811,6 +813,9 @@ public final class InstrumentFrustumManager {
             float[] clipX = new float[n];
             float[] clipY = new float[n];
             float[] clipZ = new float[n];
+            float[] endX = new float[n];
+            float[] endY = new float[n];
+            float[] endZ = new float[n];
             float[] footprintX = new float[n];
             float[] footprintY = new float[n];
             float[] footprintZ = new float[n];
@@ -832,6 +837,9 @@ public final class InstrumentFrustumManager {
                     clipX[i] = (float) apexX;
                     clipY[i] = (float) apexY;
                     clipZ[i] = (float) apexZ;
+                    endX[i] = (float) apexX;
+                    endY[i] = (float) apexY;
+                    endZ[i] = (float) apexZ;
                 } else {
                     double ext = KepplrConstants.INSTRUMENT_FRUSTUM_DEFAULT_EXTENT_KM / len;
                     bx[i] = (float) (apexX + scratch.getI() * ext);
@@ -840,6 +848,9 @@ public final class InstrumentFrustumManager {
                     clipX[i] = bx[i];
                     clipY[i] = by[i];
                     clipZ[i] = bz[i];
+                    endX[i] = bx[i];
+                    endY[i] = by[i];
+                    endZ[i] = bz[i];
                     double baseDistanceKm =
                             Math.sqrt((double) bx[i] * bx[i] + (double) by[i] * by[i] + (double) bz[i] * bz[i]);
                     if (targetBody != null) {
@@ -857,6 +868,9 @@ public final class InstrumentFrustumManager {
                             clipX[i] = hitX;
                             clipY[i] = hitY;
                             clipZ[i] = hitZ;
+                            endX[i] = hitX;
+                            endY[i] = hitY;
+                            endZ[i] = hitZ;
 
                             VectorIJK normalBodyFixed =
                                     edgeHit.shape().computeOutwardNormal(edgeHit.hitBodyFixed(), new VectorIJK());
@@ -897,96 +911,33 @@ public final class InstrumentFrustumManager {
             double nearLimitKm = FrustumLayer.NEAR.farKm;
             boolean buildNearSegment = apexDistanceKm < nearLimitKm;
 
-            if (closedClip) {
-                for (int i = 0; i < n; i++) {
-                    int j = (i + 1) % n;
-                    renderedMaxDistanceKm = Math.max(renderedMaxDistanceKm, distanceKm(clipX[i], clipY[i], clipZ[i]));
-                    renderedMaxDistanceKm = Math.max(renderedMaxDistanceKm, distanceKm(clipX[j], clipY[j], clipZ[j]));
-                    posBuffer.put(ax).put(ay).put(az);
-                    posBuffer.put(clipX[i]).put(clipY[i]).put(clipZ[i]);
-                    posBuffer.put(clipX[j]).put(clipY[j]).put(clipZ[j]);
+            for (int i = 0; i < n; i++) {
+                int j = (i + 1) % n;
+                renderedMaxDistanceKm = Math.max(renderedMaxDistanceKm, distanceKm(endX[i], endY[i], endZ[i]));
+                renderedMaxDistanceKm = Math.max(renderedMaxDistanceKm, distanceKm(endX[j], endY[j], endZ[j]));
+                posBuffer.put(ax).put(ay).put(az);
+                posBuffer.put(endX[i]).put(endY[i]).put(endZ[i]);
+                posBuffer.put(endX[j]).put(endY[j]).put(endZ[j]);
 
-                    outlinePosBuffer.put(ax).put(ay).put(az);
-                    outlinePosBuffer.put(clipX[i]).put(clipY[i]).put(clipZ[i]);
-                    outlinePosBuffer.put(clipX[i]).put(clipY[i]).put(clipZ[i]);
-                    outlinePosBuffer.put(clipX[j]).put(clipY[j]).put(clipZ[j]);
+                outlinePosBuffer.put(ax).put(ay).put(az);
+                outlinePosBuffer.put(endX[i]).put(endY[i]).put(endZ[i]);
+                outlinePosBuffer.put(endX[i]).put(endY[i]).put(endZ[i]);
+                outlinePosBuffer.put(endX[j]).put(endY[j]).put(endZ[j]);
 
-                    if (buildNearSegment) {
-                        appendNearTriangle(
-                                nearPosBuffer,
-                                nearOutlinePosBuffer,
-                                ax,
-                                ay,
-                                az,
-                                clipX[i],
-                                clipY[i],
-                                clipZ[i],
-                                clipX[j],
-                                clipY[j],
-                                clipZ[j],
-                                nearLimitKm);
-                    }
-                }
-            } else if (clipCount >= 2) {
-                for (int step = 0; step < clipCount - 1; step++) {
-                    int i = (clipStart + step) % n;
-                    int j = (clipStart + step + 1) % n;
-                    renderedMaxDistanceKm = Math.max(renderedMaxDistanceKm, distanceKm(clipX[i], clipY[i], clipZ[i]));
-                    renderedMaxDistanceKm = Math.max(renderedMaxDistanceKm, distanceKm(clipX[j], clipY[j], clipZ[j]));
-                    posBuffer.put(ax).put(ay).put(az);
-                    posBuffer.put(clipX[i]).put(clipY[i]).put(clipZ[i]);
-                    posBuffer.put(clipX[j]).put(clipY[j]).put(clipZ[j]);
-
-                    outlinePosBuffer.put(ax).put(ay).put(az);
-                    outlinePosBuffer.put(clipX[i]).put(clipY[i]).put(clipZ[i]);
-                    outlinePosBuffer.put(clipX[i]).put(clipY[i]).put(clipZ[i]);
-                    outlinePosBuffer.put(clipX[j]).put(clipY[j]).put(clipZ[j]);
-
-                    if (buildNearSegment) {
-                        appendNearTriangle(
-                                nearPosBuffer,
-                                nearOutlinePosBuffer,
-                                ax,
-                                ay,
-                                az,
-                                clipX[i],
-                                clipY[i],
-                                clipZ[i],
-                                clipX[j],
-                                clipY[j],
-                                clipZ[j],
-                                nearLimitKm);
-                    }
-                }
-            } else {
-                for (int i = 0; i < n; i++) {
-                    int j = (i + 1) % n;
-                    renderedMaxDistanceKm = Math.max(renderedMaxDistanceKm, distanceKm(bx[i], by[i], bz[i]));
-                    renderedMaxDistanceKm = Math.max(renderedMaxDistanceKm, distanceKm(bx[j], by[j], bz[j]));
-                    posBuffer.put(ax).put(ay).put(az);
-                    posBuffer.put(bx[i]).put(by[i]).put(bz[i]);
-                    posBuffer.put(bx[j]).put(by[j]).put(bz[j]);
-
-                    outlinePosBuffer.put(ax).put(ay).put(az);
-                    outlinePosBuffer.put(bx[i]).put(by[i]).put(bz[i]);
-                    outlinePosBuffer.put(bx[i]).put(by[i]).put(bz[i]);
-                    outlinePosBuffer.put(bx[j]).put(by[j]).put(bz[j]);
-
-                    if (buildNearSegment) {
-                        appendNearTriangle(
-                                nearPosBuffer,
-                                nearOutlinePosBuffer,
-                                ax,
-                                ay,
-                                az,
-                                bx[i],
-                                by[i],
-                                bz[i],
-                                bx[j],
-                                by[j],
-                                bz[j],
-                                nearLimitKm);
-                    }
+                if (buildNearSegment) {
+                    appendNearTriangle(
+                            nearPosBuffer,
+                            nearOutlinePosBuffer,
+                            ax,
+                            ay,
+                            az,
+                            endX[i],
+                            endY[i],
+                            endZ[i],
+                            endX[j],
+                            endY[j],
+                            endZ[j],
+                            nearLimitKm);
                 }
             }
 
