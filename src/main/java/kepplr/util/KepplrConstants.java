@@ -754,6 +754,13 @@ public final class KepplrConstants {
      */
     public static final int INSTRUMENT_FRUSTUM_EDGE_SUBDIVISIONS = 32;
 
+    /**
+     * Minimum per-vertex body-fixed motion required before a newly drawn live footprint is retained as a new stamp.
+     *
+     * <p>Prevents recording nearly identical footprints every frame while persistence is enabled.
+     */
+    public static final double INSTRUMENT_PERSISTED_FOOTPRINT_MIN_VERTEX_DELTA_KM = 1.0;
+
     // ── Screenshot and capture (Step 25) ──────────────────────────────────────────────────────
 
     /**

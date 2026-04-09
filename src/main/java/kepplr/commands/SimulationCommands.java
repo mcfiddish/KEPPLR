@@ -407,6 +407,31 @@ public interface SimulationCommands {
      */
     void setFrustumVisible(String instrumentName, boolean visible);
 
+    /**
+     * Enable or disable retained surface-footprint recording for an instrument by NAIF code.
+     *
+     * @param instrumentNaifCode NAIF code of the instrument
+     * @param enabled {@code true} to retain newly drawn footprints, {@code false} to stop retaining them
+     */
+    void setFrustumPersistenceEnabled(int instrumentNaifCode, boolean enabled);
+
+    /**
+     * Enable or disable retained surface-footprint recording for an instrument by name.
+     *
+     * @param instrumentName instrument name as registered in the kernel pool
+     * @param enabled {@code true} to retain newly drawn footprints, {@code false} to stop retaining them
+     */
+    void setFrustumPersistenceEnabled(String instrumentName, boolean enabled);
+
+    /** Clear retained frustum footprints for the given instrument NAIF code. */
+    void clearFrustumFootprints(int instrumentNaifCode);
+
+    /** Clear retained frustum footprints for the given instrument name. */
+    void clearFrustumFootprints(String instrumentName);
+
+    /** Clear retained frustum footprints for all instruments. */
+    void clearFrustumFootprints();
+
     // ── Transition control (Step 20) ──
 
     /**

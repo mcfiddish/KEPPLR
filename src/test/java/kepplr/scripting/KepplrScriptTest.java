@@ -478,6 +478,35 @@ class KepplrScriptTest {
         }
 
         @Override
+        public void setFrustumPersistenceEnabled(int code, boolean enabled) {
+            lastMethod = "setFrustumPersistenceEnabled";
+            lastIntArg = code;
+            lastBoolArg = enabled;
+        }
+
+        @Override
+        public void setFrustumPersistenceEnabled(String name, boolean enabled) {
+            lastMethod = "setFrustumPersistenceEnabled";
+            lastBoolArg = enabled;
+        }
+
+        @Override
+        public void clearFrustumFootprints(int instrumentNaifCode) {
+            lastMethod = "clearFrustumFootprints";
+            lastIntArg = instrumentNaifCode;
+        }
+
+        @Override
+        public void clearFrustumFootprints(String instrumentName) {
+            lastMethod = "clearFrustumFootprints";
+        }
+
+        @Override
+        public void clearFrustumFootprints() {
+            lastMethod = "clearFrustumFootprints";
+        }
+
+        @Override
         public void truck(double km, double dur) {
             lastMethod = "truck";
             lastDoubleArg = km;

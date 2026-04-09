@@ -223,6 +223,13 @@ public interface SimulationState {
     ReadOnlyBooleanProperty frustumVisibleProperty(int naifCode);
 
     /**
+     * Whether retained surface-footprint recording is enabled for the given instrument NAIF code.
+     *
+     * @param naifCode NAIF code of the instrument
+     */
+    ReadOnlyBooleanProperty frustumPersistenceEnabledProperty(int naifCode);
+
+    /**
      * Whether the given body is visible in the scene (Step 28).
      *
      * <p>Default: {@code true}. When set to {@code false}, the body is not rendered (culled before pass 1).

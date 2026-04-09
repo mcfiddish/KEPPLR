@@ -819,6 +819,18 @@ public class KepplrApp extends SimpleApplication {
         for (var entry : simulationState.getFrustumVisibilityMap().entrySet()) {
             instrumentFrustumManager.setVisible(entry.getKey(), entry.getValue().get());
         }
+        for (var entry : simulationState.getFrustumPersistenceEnabledMap().entrySet()) {
+            instrumentFrustumManager.setPersistenceEnabled(
+                    entry.getKey(), entry.getValue().get());
+        }
+        Integer clearRequest;
+        while ((clearRequest = simulationState.pollPendingFrustumFootprintClear()) != null) {
+            if (clearRequest == DefaultSimulationState.CLEAR_ALL_FRUSTUM_FOOTPRINTS) {
+                instrumentFrustumManager.clearPersistentFootprints();
+            } else {
+                instrumentFrustumManager.clearPersistentFootprints(clearRequest);
+            }
+        }
     }
 
     /** Returns true if {@code naifId} identifies a natural satellite or Pluto (orbiting its barycenter). */

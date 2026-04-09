@@ -930,6 +930,53 @@ public final class KepplrScript {
         commands.setFrustumVisible(resolve(instrumentName), visible);
     }
 
+    /**
+     * Enable or disable retained surface-footprint recording by instrument NAIF code.
+     *
+     * <p><b>Execution semantics:</b> <em>Immediate</em>.
+     *
+     * <p>While enabled, newly drawn live footprints for the visible frustum are retained on the target body's surface.
+     */
+    public void setFrustumPersistenceEnabled(int instrumentNaifCode, boolean enabled) {
+        commands.setFrustumPersistenceEnabled(instrumentNaifCode, enabled);
+    }
+
+    /**
+     * Enable or disable retained surface-footprint recording by instrument name.
+     *
+     * <p><b>Execution semantics:</b> <em>Immediate</em>.
+     */
+    public void setFrustumPersistenceEnabled(String instrumentName, boolean enabled) {
+        commands.setFrustumPersistenceEnabled(resolve(instrumentName), enabled);
+    }
+
+    /**
+     * Clear retained frustum footprints for a specific instrument by NAIF code.
+     *
+     * <p><b>Execution semantics:</b> <em>Immediate</em>.
+     */
+    public void clearFrustumFootprints(int instrumentNaifCode) {
+        commands.clearFrustumFootprints(instrumentNaifCode);
+    }
+
+    /**
+     * Clear retained frustum footprints for a specific instrument by name.
+     *
+     * <p><b>Execution semantics:</b> <em>Immediate</em>.
+     */
+    public void clearFrustumFootprints(String instrumentName) {
+        commands.clearFrustumFootprints(resolve(instrumentName));
+    }
+
+    /**
+     * Clear retained frustum footprints for all instruments.
+     *
+     * <p><b>Execution semantics:</b> <em>Immediate</em>.
+     */
+    public void clearFrustumFootprints() {
+        commands.clearFrustumFootprints();
+    }
+
     // ── Body visibility (Step 28) ──────────────────────────────────────────────
 
     /**

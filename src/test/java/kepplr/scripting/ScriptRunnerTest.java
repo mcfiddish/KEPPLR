@@ -269,6 +269,21 @@ class ScriptRunnerTest {
         public void setFrustumVisible(String name, boolean v) {}
 
         @Override
+        public void setFrustumPersistenceEnabled(int instrumentNaifCode, boolean enabled) {}
+
+        @Override
+        public void setFrustumPersistenceEnabled(String instrumentName, boolean enabled) {}
+
+        @Override
+        public void clearFrustumFootprints(int instrumentNaifCode) {}
+
+        @Override
+        public void clearFrustumFootprints(String instrumentName) {}
+
+        @Override
+        public void clearFrustumFootprints() {}
+
+        @Override
         public void truck(double km, double dur) {}
 
         @Override

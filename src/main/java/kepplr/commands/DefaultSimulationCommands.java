@@ -329,6 +329,31 @@ public final class DefaultSimulationCommands implements SimulationCommands {
         setFrustumVisible(BodyLookupService.resolve(instrumentName), visible);
     }
 
+    @Override
+    public void setFrustumPersistenceEnabled(int instrumentNaifCode, boolean enabled) {
+        state.setFrustumPersistenceEnabled(instrumentNaifCode, enabled);
+    }
+
+    @Override
+    public void setFrustumPersistenceEnabled(String instrumentName, boolean enabled) {
+        setFrustumPersistenceEnabled(BodyLookupService.resolve(instrumentName), enabled);
+    }
+
+    @Override
+    public void clearFrustumFootprints(int instrumentNaifCode) {
+        state.requestClearFrustumFootprints(instrumentNaifCode);
+    }
+
+    @Override
+    public void clearFrustumFootprints(String instrumentName) {
+        clearFrustumFootprints(BodyLookupService.resolve(instrumentName));
+    }
+
+    @Override
+    public void clearFrustumFootprints() {
+        state.requestClearAllFrustumFootprints();
+    }
+
     // ── State snapshot (Step 26) ──────────────────────────────────────────────
 
     @Override

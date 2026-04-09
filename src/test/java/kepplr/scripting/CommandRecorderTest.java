@@ -594,6 +594,31 @@ class CommandRecorderTest {
         }
 
         @Override
+        public void setFrustumPersistenceEnabled(int instrumentNaifCode, boolean enabled) {
+            lastMethod = "setFrustumPersistenceEnabled";
+        }
+
+        @Override
+        public void setFrustumPersistenceEnabled(String instrumentName, boolean enabled) {
+            lastMethod = "setFrustumPersistenceEnabled";
+        }
+
+        @Override
+        public void clearFrustumFootprints(int instrumentNaifCode) {
+            lastMethod = "clearFrustumFootprints";
+        }
+
+        @Override
+        public void clearFrustumFootprints(String instrumentName) {
+            lastMethod = "clearFrustumFootprints";
+        }
+
+        @Override
+        public void clearFrustumFootprints() {
+            lastMethod = "clearFrustumFootprints";
+        }
+
+        @Override
         public void truck(double km, double dur) {
             lastMethod = "truck";
         }

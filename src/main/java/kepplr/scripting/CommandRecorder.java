@@ -530,6 +530,36 @@ public final class CommandRecorder implements SimulationCommands {
         delegate.setFrustumVisible(instrumentName, visible);
     }
 
+    @Override
+    public void setFrustumPersistenceEnabled(int instrumentNaifCode, boolean enabled) {
+        recordCommand("kepplr.setFrustumPersistenceEnabled(" + instrumentNaifCode + ", " + fmtBool(enabled) + ")");
+        delegate.setFrustumPersistenceEnabled(instrumentNaifCode, enabled);
+    }
+
+    @Override
+    public void setFrustumPersistenceEnabled(String instrumentName, boolean enabled) {
+        recordCommand("kepplr.setFrustumPersistenceEnabled(\"" + instrumentName + "\", " + fmtBool(enabled) + ")");
+        delegate.setFrustumPersistenceEnabled(instrumentName, enabled);
+    }
+
+    @Override
+    public void clearFrustumFootprints(int instrumentNaifCode) {
+        recordCommand("kepplr.clearFrustumFootprints(" + instrumentNaifCode + ")");
+        delegate.clearFrustumFootprints(instrumentNaifCode);
+    }
+
+    @Override
+    public void clearFrustumFootprints(String instrumentName) {
+        recordCommand("kepplr.clearFrustumFootprints(\"" + instrumentName + "\")");
+        delegate.clearFrustumFootprints(instrumentName);
+    }
+
+    @Override
+    public void clearFrustumFootprints() {
+        recordCommand("kepplr.clearFrustumFootprints()");
+        delegate.clearFrustumFootprints();
+    }
+
     // ── State snapshot (Step 26) ──
 
     @Override

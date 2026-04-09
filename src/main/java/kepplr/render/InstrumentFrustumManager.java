@@ -92,6 +92,8 @@ public final class InstrumentFrustumManager {
     private final Map<Integer, FrustumEntry> entriesByCode = new LinkedHashMap<>();
     /** Keyed by instrument name (from {@code instrument.id().getName()}) for name-based lookup. */
     private final Map<String, FrustumEntry> entriesByName = new LinkedHashMap<>();
+    /** Accumulated body-surface coverage overlays keyed by instrument/body pair. */
+    private final Map<CoverageKey, PersistentCoverageOverlay> persistentCoverageOverlays = new LinkedHashMap<>();
 
     /**
      * Construct the manager and build one {@link Geometry} per instrument.
@@ -120,6 +122,7 @@ public final class InstrumentFrustumManager {
         detachAll();
         entriesByCode.clear();
         entriesByName.clear();
+        persistentCoverageOverlays.clear();
 
         KEPPLREphemeris eph = KEPPLRConfiguration.getInstance().getEphemeris();
         for (Instrument instrument : eph.getInstruments()) {
@@ -277,6 +280,9 @@ public final class InstrumentFrustumManager {
             // Update the frustum mesh and live footprint from the same target body solution.
             GeometryMetrics metrics = entry.updateGeometry(
                     apexX, apexY, apexZ, centerPosJ2000, j2000ToInstrument, target, cameraHelioJ2000);
+            if (entry.persistenceEnabled && entry.hasLiveFootprint()) {
+                recordPersistentFootprintIfNeeded(entry);
+            }
 
             // One-shot diagnostics: log apex, boresight, and all body positions on first render
             // after the frustum is toggled on.
@@ -310,6 +316,12 @@ public final class InstrumentFrustumManager {
                 FrustumLayer footprintLayer = FrustumLayer.assign(Math.max(metrics.footprintDistanceKm(), 0.0), 0.0);
                 layerNodes.get(footprintLayer).attachChild(entry.footprintGeometry);
             }
+        }
+
+        for (PersistentCoverageOverlay overlay : persistentCoverageOverlays.values()) {
+            overlay.updateGeometry(currentEt, cameraHelioJ2000);
+            FrustumLayer overlayLayer = FrustumLayer.assign(Math.max(overlay.lastDistanceKm, 0.0), 0.0);
+            layerNodes.get(overlayLayer).attachChild(overlay.geometry);
         }
     }
 
@@ -346,6 +358,39 @@ public final class InstrumentFrustumManager {
         }
     }
 
+    public void setPersistenceEnabled(int naifCode, boolean enabled) {
+        FrustumEntry entry = entriesByCode.get(naifCode);
+        if (entry == null) {
+            logger.debug("setPersistenceEnabled({}, {}) — no entry for code {}", naifCode, enabled, naifCode);
+            return;
+        }
+        entry.persistenceEnabled = enabled;
+    }
+
+    public void setPersistenceEnabled(String instrumentName, boolean enabled) {
+        FrustumEntry entry = entriesByName.get(instrumentName);
+        if (entry != null) {
+            setPersistenceEnabled(entry.instrument.code(), enabled);
+        }
+    }
+
+    public void clearPersistentFootprints() {
+        for (PersistentCoverageOverlay overlay : persistentCoverageOverlays.values()) {
+            overlay.geometry.removeFromParent();
+        }
+        persistentCoverageOverlays.clear();
+    }
+
+    public void clearPersistentFootprints(int instrumentNaifCode) {
+        persistentCoverageOverlays.entrySet().removeIf(entry -> {
+            if (entry.getKey().instrumentCode == instrumentNaifCode) {
+                entry.getValue().geometry.removeFromParent();
+                return true;
+            }
+            return false;
+        });
+    }
+
     /**
      * Show or hide the frustum for the instrument identified by name.
      *
@@ -369,6 +414,20 @@ public final class InstrumentFrustumManager {
             entry.nearOutlineGeometry.removeFromParent();
             entry.footprintGeometry.removeFromParent();
         }
+        for (PersistentCoverageOverlay overlay : persistentCoverageOverlays.values()) {
+            overlay.geometry.removeFromParent();
+        }
+    }
+
+    private void recordPersistentFootprintIfNeeded(FrustumEntry entry) {
+        if (entry.liveFootprintBodyId == null || entry.liveFootprintBodyFixed.isEmpty() || !entry.liveFootprintClosed) {
+            return;
+        }
+        CoverageKey key = new CoverageKey(entry.instrument.code(), entry.liveFootprintBodyId);
+        PersistentCoverageOverlay overlay = persistentCoverageOverlays.computeIfAbsent(
+                key,
+                k -> new PersistentCoverageOverlay(assetManager, entry.instrument.code(), entry.liveFootprintBodyId));
+        overlay.accumulate(entry.liveFootprintBodyFixed);
     }
 
     static VectorIJK instrumentToJ2000(UnwritableVectorIJK instrumentVector, RotationMatrixIJK j2000ToInstrument) {
@@ -652,6 +711,238 @@ public final class InstrumentFrustumManager {
 
     static record GeometryMetrics(double renderedMaxDistanceKm, double footprintDistanceKm) {}
 
+    private record CoverageKey(int instrumentCode, EphemerisID bodyId) {}
+
+    private final class PersistentCoverageOverlay {
+        static final int LON_CELLS = 1440;
+        static final int LAT_CELLS = 720;
+
+        final int instrumentCode;
+        final EphemerisID bodyId;
+        final Ellipsoid shape;
+        final boolean[] covered = new boolean[LON_CELLS * LAT_CELLS];
+        final List<Integer> coveredCells = new ArrayList<>();
+        final Geometry geometry;
+        List<VectorIJK> lastPolygonBodyFixed = List.of();
+        FloatBuffer posBuffer = BufferUtils.createFloatBuffer(3);
+        double lastDistanceKm = -1.0;
+        boolean dirty = true;
+
+        PersistentCoverageOverlay(AssetManager assetManager, int instrumentCode, EphemerisID bodyId) {
+            this.instrumentCode = instrumentCode;
+            this.bodyId = bodyId;
+            this.shape = KEPPLRConfiguration.getInstance().getEphemeris().getShape(bodyId);
+
+            Mesh mesh = new Mesh();
+            mesh.setMode(Mesh.Mode.Triangles);
+            mesh.setBuffer(VertexBuffer.Type.Position, 3, posBuffer);
+            mesh.updateCounts();
+            mesh.updateBound();
+
+            Material mat = new Material(assetManager, "Common/MatDefs/Misc/Unshaded.j3md");
+            mat.setColor("Color", new ColorRGBA(0f, 1f, 1f, 0.35f));
+            mat.getAdditionalRenderState().setBlendMode(RenderState.BlendMode.Alpha);
+            mat.getAdditionalRenderState().setDepthWrite(false);
+            mat.getAdditionalRenderState().setFaceCullMode(RenderState.FaceCullMode.Off);
+
+            this.geometry =
+                    new Geometry("instrument-persistent-coverage-" + instrumentCode + "-" + bodyId.getName(), mesh);
+            this.geometry.setMaterial(mat);
+            this.geometry.setQueueBucket(RenderQueue.Bucket.Transparent);
+        }
+
+        void accumulate(List<VectorIJK> polygonBodyFixed) {
+            if (shape == null || polygonBodyFixed.size() < 3) {
+                return;
+            }
+            accumulatePolygon(polygonBodyFixed);
+            if (lastPolygonBodyFixed.size() == polygonBodyFixed.size()) {
+                int n = polygonBodyFixed.size();
+                for (int i = 0; i < n; i++) {
+                    int j = (i + 1) % n;
+                    accumulatePolygon(List.of(
+                            lastPolygonBodyFixed.get(i),
+                            lastPolygonBodyFixed.get(j),
+                            polygonBodyFixed.get(j),
+                            polygonBodyFixed.get(i)));
+                }
+            }
+            lastPolygonBodyFixed = copyPolygon(polygonBodyFixed);
+        }
+
+        private void accumulatePolygon(List<VectorIJK> polygonBodyFixed) {
+            double[] lon = new double[polygonBodyFixed.size()];
+            double[] lat = new double[polygonBodyFixed.size()];
+            double refLon = longitude(polygonBodyFixed.get(0));
+            double minLon = Double.POSITIVE_INFINITY;
+            double maxLon = Double.NEGATIVE_INFINITY;
+            double minLat = Double.POSITIVE_INFINITY;
+            double maxLat = Double.NEGATIVE_INFINITY;
+            for (int i = 0; i < polygonBodyFixed.size(); i++) {
+                lon[i] = unwrapLongitude(longitude(polygonBodyFixed.get(i)), refLon);
+                lat[i] = latitude(polygonBodyFixed.get(i));
+                minLon = Math.min(minLon, lon[i]);
+                maxLon = Math.max(maxLon, lon[i]);
+                minLat = Math.min(minLat, lat[i]);
+                maxLat = Math.max(maxLat, lat[i]);
+            }
+
+            int lonMinCell = Math.max(0, lonToCell(minLon));
+            int lonMaxCell = Math.min(LON_CELLS - 1, lonToCell(maxLon));
+            int latMinCell = Math.max(0, latToCell(minLat));
+            int latMaxCell = Math.min(LAT_CELLS - 1, latToCell(maxLat));
+
+            for (int latCell = latMinCell; latCell <= latMaxCell; latCell++) {
+                double sampleLat = -Math.PI / 2.0 + (latCell + 0.5) * Math.PI / LAT_CELLS;
+                for (int lonCell = lonMinCell; lonCell <= lonMaxCell; lonCell++) {
+                    double sampleLon = -Math.PI + (lonCell + 0.5) * 2.0 * Math.PI / LON_CELLS;
+                    double unwrappedLon = unwrapLongitude(sampleLon, refLon);
+                    if (pointInPolygon(unwrappedLon, sampleLat, lon, lat)) {
+                        int idx = latCell * LON_CELLS + lonCell;
+                        if (!covered[idx]) {
+                            covered[idx] = true;
+                            coveredCells.add(idx);
+                            dirty = true;
+                        }
+                    }
+                }
+            }
+        }
+
+        private List<VectorIJK> copyPolygon(List<VectorIJK> polygonBodyFixed) {
+            List<VectorIJK> copy = new ArrayList<>(polygonBodyFixed.size());
+            for (VectorIJK p : polygonBodyFixed) {
+                copy.add(new VectorIJK(p));
+            }
+            return copy;
+        }
+
+        void updateGeometry(double currentEt, double[] cameraHelioJ2000) {
+            KEPPLREphemeris eph = KEPPLRConfiguration.getInstance().getEphemeris();
+            VectorIJK bodyPosJ2000 = eph.getHeliocentricPositionJ2000(bodyId, currentEt);
+            RotationMatrixIJK j2000ToBodyFixed = eph.getJ2000ToBodyFixedRotation(bodyId, currentEt);
+            if (shape == null || bodyPosJ2000 == null || j2000ToBodyFixed == null || coveredCells.isEmpty()) {
+                geometry.setCullHint(com.jme3.scene.Spatial.CullHint.Always);
+                lastDistanceKm = -1.0;
+                return;
+            }
+
+            int triangleVertexCount = coveredCells.size() * 6;
+            if (dirty || posBuffer.capacity() < triangleVertexCount * 3) {
+                posBuffer = BufferUtils.createFloatBuffer(Math.max(triangleVertexCount, 1) * 3);
+                geometry.getMesh().setBuffer(VertexBuffer.Type.Position, 3, posBuffer);
+            } else {
+                posBuffer.clear();
+            }
+
+            lastDistanceKm = -1.0;
+            for (int idx : coveredCells) {
+                int latCell = idx / LON_CELLS;
+                int lonCell = idx % LON_CELLS;
+                float[] p00 =
+                        projectCellCorner(lonCell, latCell, 0, 0, j2000ToBodyFixed, bodyPosJ2000, cameraHelioJ2000);
+                float[] p10 =
+                        projectCellCorner(lonCell, latCell, 1, 0, j2000ToBodyFixed, bodyPosJ2000, cameraHelioJ2000);
+                float[] p11 =
+                        projectCellCorner(lonCell, latCell, 1, 1, j2000ToBodyFixed, bodyPosJ2000, cameraHelioJ2000);
+                float[] p01 =
+                        projectCellCorner(lonCell, latCell, 0, 1, j2000ToBodyFixed, bodyPosJ2000, cameraHelioJ2000);
+                putVertex(posBuffer, p00);
+                putVertex(posBuffer, p10);
+                putVertex(posBuffer, p11);
+                putVertex(posBuffer, p00);
+                putVertex(posBuffer, p11);
+                putVertex(posBuffer, p01);
+                lastDistanceKm = minDistance(lastDistanceKm, p00);
+                lastDistanceKm = minDistance(lastDistanceKm, p11);
+            }
+            posBuffer.flip();
+            geometry.getMesh().setBuffer(VertexBuffer.Type.Position, 3, posBuffer);
+            geometry.getMesh().updateCounts();
+            geometry.getMesh().updateBound();
+            geometry.setCullHint(com.jme3.scene.Spatial.CullHint.Inherit);
+            dirty = false;
+        }
+
+        private float[] projectCellCorner(
+                int lonCell,
+                int latCell,
+                int lonOffset,
+                int latOffset,
+                RotationMatrixIJK j2000ToBodyFixed,
+                VectorIJK bodyPosJ2000,
+                double[] cameraHelioJ2000) {
+            double lon = -Math.PI + (lonCell + lonOffset) * 2.0 * Math.PI / LON_CELLS;
+            double lat = -Math.PI / 2.0 + (latCell + latOffset) * Math.PI / LAT_CELLS;
+            VectorIJK bodyFixed = pointOnEllipsoid(shape, lon, lat);
+            VectorIJK world = new VectorIJK();
+            j2000ToBodyFixed.mtxv(bodyFixed, world);
+            return new float[] {
+                (float) (world.getI() + bodyPosJ2000.getI() - cameraHelioJ2000[0]),
+                (float) (world.getJ() + bodyPosJ2000.getJ() - cameraHelioJ2000[1]),
+                (float) (world.getK() + bodyPosJ2000.getK() - cameraHelioJ2000[2])
+            };
+        }
+
+        private double longitude(VectorIJK p) {
+            return Math.atan2(p.getJ(), p.getI());
+        }
+
+        private double latitude(VectorIJK p) {
+            double xy = Math.sqrt(p.getI() * p.getI() + p.getJ() * p.getJ());
+            return Math.atan2(p.getK(), xy);
+        }
+
+        private double unwrapLongitude(double lon, double refLon) {
+            while (lon - refLon > Math.PI) lon -= 2.0 * Math.PI;
+            while (lon - refLon < -Math.PI) lon += 2.0 * Math.PI;
+            return lon;
+        }
+
+        private int lonToCell(double lon) {
+            return (int) Math.floor((lon + Math.PI) / (2.0 * Math.PI) * LON_CELLS);
+        }
+
+        private int latToCell(double lat) {
+            return (int) Math.floor((lat + Math.PI / 2.0) / Math.PI * LAT_CELLS);
+        }
+
+        private boolean pointInPolygon(double x, double y, double[] polyX, double[] polyY) {
+            boolean inside = false;
+            for (int i = 0, j = polyX.length - 1; i < polyX.length; j = i++) {
+                boolean intersects = ((polyY[i] > y) != (polyY[j] > y))
+                        && (x < (polyX[j] - polyX[i]) * (y - polyY[i]) / (polyY[j] - polyY[i] + 1e-12) + polyX[i]);
+                if (intersects) inside = !inside;
+            }
+            return inside;
+        }
+
+        private VectorIJK pointOnEllipsoid(Ellipsoid shape, double lon, double lat) {
+            double cosLat = Math.cos(lat);
+            double x = shape.getA() * cosLat * Math.cos(lon);
+            double y = shape.getB() * cosLat * Math.sin(lon);
+            double z = shape.getC() * Math.sin(lat);
+            VectorIJK p = new VectorIJK(x, y, z);
+            VectorIJK normal = shape.computeOutwardNormal(p, new VectorIJK());
+            double nLen = normal.getLength();
+            double scale = nLen > 1e-12 ? FOOTPRINT_SURFACE_OFFSET_KM / nLen : 0.0;
+            return new VectorIJK(
+                    p.getI() + normal.getI() * scale,
+                    p.getJ() + normal.getJ() * scale,
+                    p.getK() + normal.getK() * scale);
+        }
+
+        private double minDistance(double current, float[] vertex) {
+            double d = Math.sqrt(
+                    (double) vertex[0] * vertex[0] + (double) vertex[1] * vertex[1] + (double) vertex[2] * vertex[2]);
+            return current < 0.0 ? d : Math.min(current, d);
+        }
+
+        private void putVertex(FloatBuffer buffer, float[] vertex) {
+            buffer.put(vertex[0]).put(vertex[1]).put(vertex[2]);
+        }
+    }
+
     // ── Inner class: per-instrument render state ──────────────────────────────
 
     private static final class FrustumEntry {
@@ -675,6 +966,10 @@ public final class InstrumentFrustumManager {
         final FloatBuffer footprintPosBuffer;
         boolean footprintVisible = false;
         boolean nearSegmentVisible = false;
+        boolean persistenceEnabled = false;
+        EphemerisID liveFootprintBodyId = null;
+        List<VectorIJK> liveFootprintBodyFixed = List.of();
+        boolean liveFootprintClosed = false;
 
         boolean visible = false;
         /**
@@ -819,6 +1114,7 @@ public final class InstrumentFrustumManager {
             float[] footprintX = new float[n];
             float[] footprintY = new float[n];
             float[] footprintZ = new float[n];
+            VectorIJK[] footprintBodyFixed = new VectorIJK[n];
             boolean[] hitMask = new boolean[n];
             int footprintCount = 0;
             double footprintDistanceKm = -1.0;
@@ -880,6 +1176,7 @@ public final class InstrumentFrustumManager {
                             footprintX[i] = (float) (hitX + worldNormal.getI() * scale);
                             footprintY[i] = (float) (hitY + worldNormal.getJ() * scale);
                             footprintZ[i] = (float) (hitZ + worldNormal.getK() * scale);
+                            footprintBodyFixed[i] = new VectorIJK(edgeHit.hitBodyFixed());
                             footprintCount++;
                             hitMask[i] = true;
 
@@ -977,10 +1274,13 @@ public final class InstrumentFrustumManager {
                 int footprintStart = clipStart;
                 int footprintCountVisible = clipCount;
                 boolean closedFootprint = footprintCount == n;
+                List<VectorIJK> retainedBodyFixed =
+                        new ArrayList<>(closedFootprint ? footprintCount : footprintCountVisible);
                 footprintPosBuffer.clear();
                 if (closedFootprint) {
                     for (int i = 0; i < footprintCount; i++) {
                         footprintPosBuffer.put(footprintX[i]).put(footprintY[i]).put(footprintZ[i]);
+                        retainedBodyFixed.add(new VectorIJK(footprintBodyFixed[i]));
                     }
                     footprintPosBuffer.put(footprintX[0]).put(footprintY[0]).put(footprintZ[0]);
                 } else {
@@ -990,6 +1290,7 @@ public final class InstrumentFrustumManager {
                                 .put(footprintX[idx])
                                 .put(footprintY[idx])
                                 .put(footprintZ[idx]);
+                        retainedBodyFixed.add(new VectorIJK(footprintBodyFixed[idx]));
                     }
                 }
                 footprintPosBuffer.flip();
@@ -998,11 +1299,17 @@ public final class InstrumentFrustumManager {
                 footprintGeometry.getMesh().updateBound();
                 footprintGeometry.setCullHint(com.jme3.scene.Spatial.CullHint.Inherit);
                 footprintVisible = true;
+                liveFootprintBodyId = targetBody != null ? targetBody.bodyId() : null;
+                liveFootprintBodyFixed = retainedBodyFixed;
+                liveFootprintClosed = closedFootprint;
                 return new GeometryMetrics(renderedMaxDistanceKm, footprintDistanceKm);
             }
 
             footprintGeometry.setCullHint(com.jme3.scene.Spatial.CullHint.Always);
             footprintVisible = false;
+            liveFootprintBodyId = null;
+            liveFootprintBodyFixed = List.of();
+            liveFootprintClosed = false;
             return new GeometryMetrics(renderedMaxDistanceKm, -1.0);
         }
 

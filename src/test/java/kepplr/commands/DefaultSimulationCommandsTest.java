@@ -473,6 +473,27 @@ class DefaultSimulationCommandsTest {
             commands.setFrustumVisible(-98300, false);
             assertFalse(state.frustumVisibleProperty(-98300).get());
         }
+
+        @Test
+        @DisplayName("setFrustumPersistenceEnabled(int, true) updates state")
+        void setFrustumPersistenceEnabledInt() {
+            commands.setFrustumPersistenceEnabled(-98300, true);
+            assertTrue(state.frustumPersistenceEnabledProperty(-98300).get());
+        }
+
+        @Test
+        @DisplayName("clearFrustumFootprints(int) queues clear request")
+        void clearFrustumFootprintsIntQueuesRequest() {
+            commands.clearFrustumFootprints(-98300);
+            assertEquals(-98300, state.pollPendingFrustumFootprintClear());
+        }
+
+        @Test
+        @DisplayName("clearFrustumFootprints() queues all-clear request")
+        void clearFrustumFootprintsAllQueuesRequest() {
+            commands.clearFrustumFootprints();
+            assertEquals(DefaultSimulationState.CLEAR_ALL_FRUSTUM_FOOTPRINTS, state.pollPendingFrustumFootprintClear());
+        }
     }
 
     // ─────────────────────────────────────────────────────────────────

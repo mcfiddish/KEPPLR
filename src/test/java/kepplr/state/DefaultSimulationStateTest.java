@@ -408,5 +408,32 @@ class DefaultSimulationStateTest {
             assertTrue(map.containsKey(-98300));
             assertTrue(map.get(-98300).get());
         }
+
+        @Test
+        @DisplayName("frustumPersistenceEnabledProperty defaults to false")
+        void frustumPersistenceEnabledDefault() {
+            assertFalse(state.frustumPersistenceEnabledProperty(-98300).get());
+        }
+
+        @Test
+        @DisplayName("setFrustumPersistenceEnabled(true) enables recording")
+        void setFrustumPersistenceEnabledTrue() {
+            state.setFrustumPersistenceEnabled(-98300, true);
+            assertTrue(state.frustumPersistenceEnabledProperty(-98300).get());
+        }
+
+        @Test
+        @DisplayName("requestClearFrustumFootprints queues instrument-specific clear")
+        void requestClearFrustumFootprintsQueuesRequest() {
+            state.requestClearFrustumFootprints(-98300);
+            assertEquals(-98300, state.pollPendingFrustumFootprintClear());
+        }
+
+        @Test
+        @DisplayName("requestClearAllFrustumFootprints queues all-clear sentinel")
+        void requestClearAllFrustumFootprintsQueuesRequest() {
+            state.requestClearAllFrustumFootprints();
+            assertEquals(DefaultSimulationState.CLEAR_ALL_FRUSTUM_FOOTPRINTS, state.pollPendingFrustumFootprintClear());
+        }
     }
 }
