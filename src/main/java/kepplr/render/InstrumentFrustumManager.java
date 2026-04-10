@@ -40,10 +40,11 @@ import picante.surfaces.Ellipsoid;
  *
  * <h3>Geometry</h3>
  *
- * <p>Each frustum is a closed pyramid whose apex sits at the camera-relative J2000 position of the instrument's center
- * body. When the instrument boresight intersects another body's reference ellipsoid, the frustum is shortened against
- * that body and a live footprint polyline is drawn on the surface. Otherwise the base vertices fall back to the default
- * fixed extent:
+ * <p>Each frustum is a translucent pyramid whose apex sits at the camera-relative J2000 position of the instrument's
+ * center body. Boundary rays that intersect another body's reference ellipsoid stop at that surface; rays that miss
+ * continue to the default fixed extent. A live footprint polyline is drawn from the same body intersections, and when
+ * persistence recording is enabled, closed live footprints are accumulated into a continuous body-fixed surface swath.
+ * Rays with no body hit fall back to the default extent:
  *
  * <pre>
  * base[i] = apex + normalize(boundVector_in_J2000) × INSTRUMENT_FRUSTUM_DEFAULT_EXTENT_KM
@@ -67,7 +68,7 @@ import picante.surfaces.Ellipsoid;
  * <ul>
  *   <li>Boresight line rendering
  *   <li>Per-instrument color configuration (hardcoded cyan)
- *   <li>LOD or distance culling of frustums
+ *   <li>Mesh-model surface intersection (ellipsoids only in the current implementation)
  * </ul>
  */
 public final class InstrumentFrustumManager {
@@ -93,7 +94,7 @@ public final class InstrumentFrustumManager {
     private final Map<Integer, FrustumEntry> entriesByCode = new LinkedHashMap<>();
     /** Keyed by instrument name (from {@code instrument.id().getName()}) for name-based lookup. */
     private final Map<String, FrustumEntry> entriesByName = new LinkedHashMap<>();
-    /** Accumulated body-surface coverage overlays keyed by instrument/body pair. */
+    /** Retained body-surface swaths keyed by instrument/body pair. */
     private final Map<CoverageKey, PersistentCoverageOverlay> persistentCoverageOverlays = new LinkedHashMap<>();
 
     /**
@@ -714,19 +715,23 @@ public final class InstrumentFrustumManager {
 
     private record CoverageKey(int instrumentCode, EphemerisID bodyId) {}
 
+    /**
+     * Retained swath geometry for one instrument/body pair.
+     *
+     * <p>Rather than rasterizing coverage into a fixed-resolution lat/lon mask, the current implementation stores the
+     * actual closed footprint polygons in body-fixed coordinates and renders both those polygons and the swept strips
+     * between successive footprints. That preserves close-up edge fidelity without exploding global tile counts.
+     */
     private final class PersistentCoverageOverlay {
-        final int instrumentCode;
         final EphemerisID bodyId;
         final Ellipsoid shape;
         final Geometry geometry;
         final List<List<VectorIJK>> recordedPolygons = new ArrayList<>();
-        List<VectorIJK> lastPolygonBodyFixed = List.of();
         FloatBuffer posBuffer = BufferUtils.createFloatBuffer(3);
         double lastDistanceKm = -1.0;
         boolean dirty = true;
 
         PersistentCoverageOverlay(AssetManager assetManager, int instrumentCode, EphemerisID bodyId) {
-            this.instrumentCode = instrumentCode;
             this.bodyId = bodyId;
             this.shape = KEPPLRConfiguration.getInstance().getEphemeris().getShape(bodyId);
 
@@ -754,7 +759,6 @@ public final class InstrumentFrustumManager {
                 return;
             }
             recordedPolygons.add(copyPolygon(polygonBodyFixed));
-            lastPolygonBodyFixed = copyPolygon(polygonBodyFixed);
             dirty = true;
         }
 
