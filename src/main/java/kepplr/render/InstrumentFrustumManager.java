@@ -80,6 +80,7 @@ public final class InstrumentFrustumManager {
     private static final ColorRGBA FRUSTUM_OUTLINE_COLOR = new ColorRGBA(1f, 1f, 1f, 1f);
     private static final ColorRGBA FOOTPRINT_COLOR = new ColorRGBA(0f, 1f, 1f, 0.9f);
     private static final double FOOTPRINT_SURFACE_OFFSET_KM = 0.01;
+    private static final double PERSISTENT_COVERAGE_SURFACE_OFFSET_KM = 0.1;
 
     // ── Per-frustum-layer scene nodes ─────────────────────────────────────────
     private final Map<FrustumLayer, Node> layerNodes;
@@ -714,15 +715,11 @@ public final class InstrumentFrustumManager {
     private record CoverageKey(int instrumentCode, EphemerisID bodyId) {}
 
     private final class PersistentCoverageOverlay {
-        static final int LON_CELLS = 1440;
-        static final int LAT_CELLS = 720;
-
         final int instrumentCode;
         final EphemerisID bodyId;
         final Ellipsoid shape;
-        final boolean[] covered = new boolean[LON_CELLS * LAT_CELLS];
-        final List<Integer> coveredCells = new ArrayList<>();
         final Geometry geometry;
+        final List<List<VectorIJK>> recordedPolygons = new ArrayList<>();
         List<VectorIJK> lastPolygonBodyFixed = List.of();
         FloatBuffer posBuffer = BufferUtils.createFloatBuffer(3);
         double lastDistanceKm = -1.0;
@@ -744,6 +741,7 @@ public final class InstrumentFrustumManager {
             mat.getAdditionalRenderState().setBlendMode(RenderState.BlendMode.Alpha);
             mat.getAdditionalRenderState().setDepthWrite(false);
             mat.getAdditionalRenderState().setFaceCullMode(RenderState.FaceCullMode.Off);
+            mat.getAdditionalRenderState().setPolyOffset(-1f, -4f);
 
             this.geometry =
                     new Geometry("instrument-persistent-coverage-" + instrumentCode + "-" + bodyId.getName(), mesh);
@@ -755,58 +753,9 @@ public final class InstrumentFrustumManager {
             if (shape == null || polygonBodyFixed.size() < 3) {
                 return;
             }
-            accumulatePolygon(polygonBodyFixed);
-            if (lastPolygonBodyFixed.size() == polygonBodyFixed.size()) {
-                int n = polygonBodyFixed.size();
-                for (int i = 0; i < n; i++) {
-                    int j = (i + 1) % n;
-                    accumulatePolygon(List.of(
-                            lastPolygonBodyFixed.get(i),
-                            lastPolygonBodyFixed.get(j),
-                            polygonBodyFixed.get(j),
-                            polygonBodyFixed.get(i)));
-                }
-            }
+            recordedPolygons.add(copyPolygon(polygonBodyFixed));
             lastPolygonBodyFixed = copyPolygon(polygonBodyFixed);
-        }
-
-        private void accumulatePolygon(List<VectorIJK> polygonBodyFixed) {
-            double[] lon = new double[polygonBodyFixed.size()];
-            double[] lat = new double[polygonBodyFixed.size()];
-            double refLon = longitude(polygonBodyFixed.get(0));
-            double minLon = Double.POSITIVE_INFINITY;
-            double maxLon = Double.NEGATIVE_INFINITY;
-            double minLat = Double.POSITIVE_INFINITY;
-            double maxLat = Double.NEGATIVE_INFINITY;
-            for (int i = 0; i < polygonBodyFixed.size(); i++) {
-                lon[i] = unwrapLongitude(longitude(polygonBodyFixed.get(i)), refLon);
-                lat[i] = latitude(polygonBodyFixed.get(i));
-                minLon = Math.min(minLon, lon[i]);
-                maxLon = Math.max(maxLon, lon[i]);
-                minLat = Math.min(minLat, lat[i]);
-                maxLat = Math.max(maxLat, lat[i]);
-            }
-
-            int lonMinCell = Math.max(0, lonToCell(minLon));
-            int lonMaxCell = Math.min(LON_CELLS - 1, lonToCell(maxLon));
-            int latMinCell = Math.max(0, latToCell(minLat));
-            int latMaxCell = Math.min(LAT_CELLS - 1, latToCell(maxLat));
-
-            for (int latCell = latMinCell; latCell <= latMaxCell; latCell++) {
-                double sampleLat = -Math.PI / 2.0 + (latCell + 0.5) * Math.PI / LAT_CELLS;
-                for (int lonCell = lonMinCell; lonCell <= lonMaxCell; lonCell++) {
-                    double sampleLon = -Math.PI + (lonCell + 0.5) * 2.0 * Math.PI / LON_CELLS;
-                    double unwrappedLon = unwrapLongitude(sampleLon, refLon);
-                    if (pointInPolygon(unwrappedLon, sampleLat, lon, lat)) {
-                        int idx = latCell * LON_CELLS + lonCell;
-                        if (!covered[idx]) {
-                            covered[idx] = true;
-                            coveredCells.add(idx);
-                            dirty = true;
-                        }
-                    }
-                }
-            }
+            dirty = true;
         }
 
         private List<VectorIJK> copyPolygon(List<VectorIJK> polygonBodyFixed) {
@@ -821,13 +770,26 @@ public final class InstrumentFrustumManager {
             KEPPLREphemeris eph = KEPPLRConfiguration.getInstance().getEphemeris();
             VectorIJK bodyPosJ2000 = eph.getHeliocentricPositionJ2000(bodyId, currentEt);
             RotationMatrixIJK j2000ToBodyFixed = eph.getJ2000ToBodyFixedRotation(bodyId, currentEt);
-            if (shape == null || bodyPosJ2000 == null || j2000ToBodyFixed == null || coveredCells.isEmpty()) {
+            if (shape == null || bodyPosJ2000 == null || j2000ToBodyFixed == null || recordedPolygons.isEmpty()) {
                 geometry.setCullHint(com.jme3.scene.Spatial.CullHint.Always);
                 lastDistanceKm = -1.0;
                 return;
             }
 
-            int triangleVertexCount = coveredCells.size() * 6;
+            int triangleVertexCount = 0;
+            for (List<VectorIJK> polygon : recordedPolygons) {
+                if (polygon.size() >= 3) {
+                    triangleVertexCount += 3 * (polygon.size() - 2);
+                }
+            }
+            for (int i = 1; i < recordedPolygons.size(); i++) {
+                List<VectorIJK> previous = recordedPolygons.get(i - 1);
+                List<VectorIJK> current = recordedPolygons.get(i);
+                if (previous.size() == current.size() && previous.size() >= 2) {
+                    triangleVertexCount += previous.size() * 6;
+                }
+            }
+
             if (dirty || posBuffer.capacity() < triangleVertexCount * 3) {
                 posBuffer = BufferUtils.createFloatBuffer(Math.max(triangleVertexCount, 1) * 3);
                 geometry.getMesh().setBuffer(VertexBuffer.Type.Position, 3, posBuffer);
@@ -836,25 +798,15 @@ public final class InstrumentFrustumManager {
             }
 
             lastDistanceKm = -1.0;
-            for (int idx : coveredCells) {
-                int latCell = idx / LON_CELLS;
-                int lonCell = idx % LON_CELLS;
-                float[] p00 =
-                        projectCellCorner(lonCell, latCell, 0, 0, j2000ToBodyFixed, bodyPosJ2000, cameraHelioJ2000);
-                float[] p10 =
-                        projectCellCorner(lonCell, latCell, 1, 0, j2000ToBodyFixed, bodyPosJ2000, cameraHelioJ2000);
-                float[] p11 =
-                        projectCellCorner(lonCell, latCell, 1, 1, j2000ToBodyFixed, bodyPosJ2000, cameraHelioJ2000);
-                float[] p01 =
-                        projectCellCorner(lonCell, latCell, 0, 1, j2000ToBodyFixed, bodyPosJ2000, cameraHelioJ2000);
-                putVertex(posBuffer, p00);
-                putVertex(posBuffer, p10);
-                putVertex(posBuffer, p11);
-                putVertex(posBuffer, p00);
-                putVertex(posBuffer, p11);
-                putVertex(posBuffer, p01);
-                lastDistanceKm = minDistance(lastDistanceKm, p00);
-                lastDistanceKm = minDistance(lastDistanceKm, p11);
+            for (List<VectorIJK> polygon : recordedPolygons) {
+                appendPolygon(posBuffer, polygon, j2000ToBodyFixed, bodyPosJ2000, cameraHelioJ2000);
+            }
+            for (int i = 1; i < recordedPolygons.size(); i++) {
+                List<VectorIJK> previous = recordedPolygons.get(i - 1);
+                List<VectorIJK> current = recordedPolygons.get(i);
+                if (previous.size() == current.size() && previous.size() >= 2) {
+                    appendBridgeStrip(posBuffer, previous, current, j2000ToBodyFixed, bodyPosJ2000, cameraHelioJ2000);
+                }
             }
             posBuffer.flip();
             geometry.getMesh().setBuffer(VertexBuffer.Type.Position, 3, posBuffer);
@@ -864,17 +816,61 @@ public final class InstrumentFrustumManager {
             dirty = false;
         }
 
-        private float[] projectCellCorner(
-                int lonCell,
-                int latCell,
-                int lonOffset,
-                int latOffset,
+        private void appendPolygon(
+                FloatBuffer buffer,
+                List<VectorIJK> polygon,
                 RotationMatrixIJK j2000ToBodyFixed,
                 VectorIJK bodyPosJ2000,
                 double[] cameraHelioJ2000) {
-            double lon = -Math.PI + (lonCell + lonOffset) * 2.0 * Math.PI / LON_CELLS;
-            double lat = -Math.PI / 2.0 + (latCell + latOffset) * Math.PI / LAT_CELLS;
-            VectorIJK bodyFixed = pointOnEllipsoid(shape, lon, lat);
+            if (polygon.size() < 3) {
+                return;
+            }
+            float[] origin = projectSurfacePoint(polygon.get(0), j2000ToBodyFixed, bodyPosJ2000, cameraHelioJ2000);
+            for (int i = 1; i < polygon.size() - 1; i++) {
+                float[] p1 = projectSurfacePoint(polygon.get(i), j2000ToBodyFixed, bodyPosJ2000, cameraHelioJ2000);
+                float[] p2 = projectSurfacePoint(polygon.get(i + 1), j2000ToBodyFixed, bodyPosJ2000, cameraHelioJ2000);
+                putVertex(buffer, origin);
+                putVertex(buffer, p1);
+                putVertex(buffer, p2);
+                lastDistanceKm = minDistance(lastDistanceKm, origin);
+                lastDistanceKm = minDistance(lastDistanceKm, p1);
+                lastDistanceKm = minDistance(lastDistanceKm, p2);
+            }
+        }
+
+        private void appendBridgeStrip(
+                FloatBuffer buffer,
+                List<VectorIJK> previous,
+                List<VectorIJK> current,
+                RotationMatrixIJK j2000ToBodyFixed,
+                VectorIJK bodyPosJ2000,
+                double[] cameraHelioJ2000) {
+            int n = previous.size();
+            for (int i = 0; i < n; i++) {
+                int j = (i + 1) % n;
+                float[] a0 = projectSurfacePoint(previous.get(i), j2000ToBodyFixed, bodyPosJ2000, cameraHelioJ2000);
+                float[] a1 = projectSurfacePoint(previous.get(j), j2000ToBodyFixed, bodyPosJ2000, cameraHelioJ2000);
+                float[] b1 = projectSurfacePoint(current.get(j), j2000ToBodyFixed, bodyPosJ2000, cameraHelioJ2000);
+                float[] b0 = projectSurfacePoint(current.get(i), j2000ToBodyFixed, bodyPosJ2000, cameraHelioJ2000);
+                putVertex(buffer, a0);
+                putVertex(buffer, a1);
+                putVertex(buffer, b1);
+                putVertex(buffer, a0);
+                putVertex(buffer, b1);
+                putVertex(buffer, b0);
+                lastDistanceKm = minDistance(lastDistanceKm, a0);
+                lastDistanceKm = minDistance(lastDistanceKm, a1);
+                lastDistanceKm = minDistance(lastDistanceKm, b1);
+                lastDistanceKm = minDistance(lastDistanceKm, b0);
+            }
+        }
+
+        private float[] projectSurfacePoint(
+                VectorIJK bodyFixedPoint,
+                RotationMatrixIJK j2000ToBodyFixed,
+                VectorIJK bodyPosJ2000,
+                double[] cameraHelioJ2000) {
+            VectorIJK bodyFixed = offsetSurfacePoint(bodyFixedPoint);
             VectorIJK world = new VectorIJK();
             j2000ToBodyFixed.mtxv(bodyFixed, world);
             return new float[] {
@@ -884,52 +880,14 @@ public final class InstrumentFrustumManager {
             };
         }
 
-        private double longitude(VectorIJK p) {
-            return Math.atan2(p.getJ(), p.getI());
-        }
-
-        private double latitude(VectorIJK p) {
-            double xy = Math.sqrt(p.getI() * p.getI() + p.getJ() * p.getJ());
-            return Math.atan2(p.getK(), xy);
-        }
-
-        private double unwrapLongitude(double lon, double refLon) {
-            while (lon - refLon > Math.PI) lon -= 2.0 * Math.PI;
-            while (lon - refLon < -Math.PI) lon += 2.0 * Math.PI;
-            return lon;
-        }
-
-        private int lonToCell(double lon) {
-            return (int) Math.floor((lon + Math.PI) / (2.0 * Math.PI) * LON_CELLS);
-        }
-
-        private int latToCell(double lat) {
-            return (int) Math.floor((lat + Math.PI / 2.0) / Math.PI * LAT_CELLS);
-        }
-
-        private boolean pointInPolygon(double x, double y, double[] polyX, double[] polyY) {
-            boolean inside = false;
-            for (int i = 0, j = polyX.length - 1; i < polyX.length; j = i++) {
-                boolean intersects = ((polyY[i] > y) != (polyY[j] > y))
-                        && (x < (polyX[j] - polyX[i]) * (y - polyY[i]) / (polyY[j] - polyY[i] + 1e-12) + polyX[i]);
-                if (intersects) inside = !inside;
-            }
-            return inside;
-        }
-
-        private VectorIJK pointOnEllipsoid(Ellipsoid shape, double lon, double lat) {
-            double cosLat = Math.cos(lat);
-            double x = shape.getA() * cosLat * Math.cos(lon);
-            double y = shape.getB() * cosLat * Math.sin(lon);
-            double z = shape.getC() * Math.sin(lat);
-            VectorIJK p = new VectorIJK(x, y, z);
-            VectorIJK normal = shape.computeOutwardNormal(p, new VectorIJK());
+        private VectorIJK offsetSurfacePoint(VectorIJK bodyFixedPoint) {
+            VectorIJK normal = shape.computeOutwardNormal(bodyFixedPoint, new VectorIJK());
             double nLen = normal.getLength();
-            double scale = nLen > 1e-12 ? FOOTPRINT_SURFACE_OFFSET_KM / nLen : 0.0;
+            double scale = nLen > 1e-12 ? PERSISTENT_COVERAGE_SURFACE_OFFSET_KM / nLen : 0.0;
             return new VectorIJK(
-                    p.getI() + normal.getI() * scale,
-                    p.getJ() + normal.getJ() * scale,
-                    p.getK() + normal.getK() * scale);
+                    bodyFixedPoint.getI() + normal.getI() * scale,
+                    bodyFixedPoint.getJ() + normal.getJ() * scale,
+                    bodyFixedPoint.getK() + normal.getK() * scale);
         }
 
         private double minDistance(double current, float[] vertex) {
