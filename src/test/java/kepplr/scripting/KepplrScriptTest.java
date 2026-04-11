@@ -124,6 +124,21 @@ class KepplrScriptTest {
         }
 
         @Test
+        @DisplayName("setCameraPose delegates to commands")
+        void setCameraPoseDelegates() {
+            script.setCameraPose(0, 0, 10000, 0, 0, -1, 0, 1, 0, 2.0);
+            assertEquals("setCameraPoseFocus", spy.lastMethod);
+        }
+
+        @Test
+        @DisplayName("setCameraPose explicit origin delegates to commands")
+        void setCameraPoseExplicitOriginDelegates() {
+            script.setCameraPose(0, 0, 10000, 301, 0, 0, -1, 0, 1, 0, 2.0);
+            assertEquals("setCameraPoseOrigin", spy.lastMethod);
+            assertEquals(301, spy.lastIntArg);
+        }
+
+        @Test
         @DisplayName("Unresolvable name throws IllegalArgumentException")
         void unresolvableNameThrows() {
             assertThrows(IllegalArgumentException.class, () -> script.selectBody("Nonexistent"));
@@ -484,6 +499,38 @@ class KepplrScriptTest {
         @Override
         public void setCameraOrientation(double lx, double ly, double lz, double ux, double uy, double uz, double dur) {
             lastMethod = "setCameraOrientation";
+        }
+
+        @Override
+        public void setCameraPose(
+                double x,
+                double y,
+                double z,
+                double lx,
+                double ly,
+                double lz,
+                double ux,
+                double uy,
+                double uz,
+                double dur) {
+            lastMethod = "setCameraPoseFocus";
+        }
+
+        @Override
+        public void setCameraPose(
+                double x,
+                double y,
+                double z,
+                int id,
+                double lx,
+                double ly,
+                double lz,
+                double ux,
+                double uy,
+                double uz,
+                double dur) {
+            lastMethod = "setCameraPoseOrigin";
+            lastIntArg = id;
         }
 
         @Override

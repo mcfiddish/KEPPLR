@@ -47,6 +47,7 @@ This document defines **behavioral requirements** (what the system must do), not
 
 * The camera pose (position + orientation) **must always be expressible in heliocentric J2000 coordinates**.
 * The camera may be internally represented in other frames (e.g., body-fixed), but it must always be convertible to/from heliocentric J2000 **without loss of meaning**, enabling robust camera frame switching.
+* Scripts must be able to set a complete camera pose (position plus look/up orientation) as one queued operation. A combined pose command must not be implemented as two independent animated camera commands, because separate animated position and orientation commands cancel each other in the transition controller. See D-072.
 
 ### 1.5 Camera Frames [D-005]
 
@@ -508,9 +509,21 @@ All menu items call `SimulationCommands` only — no rendering logic in `ui/`.
   Groovy script and opens a file-save dialog.
 * Instant camera commands (`durationSeconds == 0`) are coalesced within a
   250ms window rather than recorded verbatim — see D-024.
+* Combined instant camera pose commands use last-value-wins coalescing. Animated
+  combined pose commands are recorded verbatim as a single command — see D-072.
 * Commands with `durationSeconds > 0` are always recorded verbatim.
 * `VectorType` arguments are serialized via `VectorType.toScript()` — see
   D-026.
+
+### 11.4a Camera-Keyed Frame Capture [D-072]
+
+* `captureSequence(...)` is a fixed-camera blocking sequence primitive. It advances
+  ET and captures frames internally; scripts must not rely on running Groovy camera
+  commands between frames inside one `captureSequence(...)` call.
+* For animations that require camera motion during the image sequence, scripts must
+  own the per-frame loop: set ET, set a complete camera pose with zero duration,
+  wait for rendered frames as a fence, then save a screenshot.
+* `waitRenderFrames(int)` is the synchronization primitive for this pattern.
 
 ### 11.5 Execution Semantics [D-056]
 

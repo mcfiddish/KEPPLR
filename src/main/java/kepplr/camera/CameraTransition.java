@@ -35,6 +35,8 @@ public final class CameraTransition {
         CAMERA_POSITION,
         /** Set look direction and up vector: slerp orientation (Step 19c). */
         CAMERA_LOOK_DIRECTION,
+        /** Set explicit position offset and look/up vectors together (Step 19c). */
+        CAMERA_POSE,
         /** Pure spatial translation along a fixed axis: lerp position (Step 24 — truck/crane/dolly). */
         TRANSLATE
     }
@@ -42,7 +44,7 @@ public final class CameraTransition {
     private final Type type;
     private final int targetNaifId;
 
-    // ── Orientation fields (POINT_AT, ORBIT, TILT, YAW, ROLL, CAMERA_LOOK_DIRECTION) ──
+    // ── Orientation fields (POINT_AT, ORBIT, TILT, YAW, ROLL, CAMERA_LOOK_DIRECTION, CAMERA_POSE) ──
     private final Quaternion startOrientation;
     private final Quaternion endOrientation;
 
@@ -54,7 +56,7 @@ public final class CameraTransition {
     private final double startFov;
     private final double endFov;
 
-    // ── Position offset fields (ORBIT, CAMERA_POSITION) ──
+    // ── Position offset fields (ORBIT, CAMERA_POSITION, CAMERA_POSE) ──
     private final double[] startOffset;
     private final double[] endOffset;
 
@@ -181,6 +183,37 @@ public final class CameraTransition {
     }
 
     /**
+     * Create a {@link Type#CAMERA_POSE} transition.
+     *
+     * @param originNaifId NAIF ID of the origin body
+     * @param startOff camera offset from origin at start (length 3, km); cloned
+     * @param endOff camera offset from origin at end (length 3, km); cloned
+     * @param startQ camera orientation at transition start; cloned
+     * @param endQ camera orientation at transition end; cloned
+     * @param durationSeconds total duration in seconds
+     */
+    public static CameraTransition cameraPose(
+            int originNaifId,
+            double[] startOff,
+            double[] endOff,
+            Quaternion startQ,
+            Quaternion endQ,
+            double durationSeconds) {
+        return new CameraTransition(
+                Type.CAMERA_POSE,
+                originNaifId,
+                startQ.clone(),
+                endQ.clone(),
+                0,
+                0,
+                0,
+                0,
+                startOff.clone(),
+                endOff.clone(),
+                durationSeconds);
+    }
+
+    /**
      * Create a {@link Type#TRANSLATE} transition (truck, crane, or dolly).
      *
      * @param startPos camera heliocentric J2000 position at transition start (length 3, km); cloned
@@ -260,12 +293,12 @@ public final class CameraTransition {
         return endFov;
     }
 
-    /** Start position offset from origin body (ORBIT, CAMERA_POSITION; length 3, km). */
+    /** Start position offset from origin body (ORBIT, CAMERA_POSITION, CAMERA_POSE; length 3, km). */
     public double[] getStartOffset() {
         return startOffset;
     }
 
-    /** End position offset from origin body (ORBIT, CAMERA_POSITION; length 3, km). */
+    /** End position offset from origin body (ORBIT, CAMERA_POSITION, CAMERA_POSE; length 3, km). */
     public double[] getEndOffset() {
         return endOffset;
     }

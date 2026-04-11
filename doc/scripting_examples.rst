@@ -174,6 +174,35 @@ View the Earth-Moon system from a synodic (co-rotating) frame where both bodies 
    kepplr.displayMessage("Synodic frame: Earth-Moon system co-rotating")
 
 
+Camera-Keyed Frame Capture
+--------------------------
+
+Set an exact camera pose before each saved frame.  This is useful when a capture
+sequence needs scripted camera motion instead of the fixed camera used by
+``captureSequence``.
+
+.. code-block:: groovy
+
+   def out = new File("/tmp/keyed_frames")
+   out.mkdirs()
+
+   int frames = 120
+   double startET = kepplr.getState().currentEtProperty().get()
+   double etStep = 60.0
+
+   kepplr.setPaused(true)
+   frames.times { i ->
+       double t = i / (frames - 1.0)
+       kepplr.setET(startET + i * etStep)
+       kepplr.setCameraPose(
+           -1e6 + 2e6 * t, 5e4, 0,
+           1, -0.05, 0,
+           0, 0, 1,
+           0.0)
+       kepplr.waitRenderFrames(2)
+       kepplr.saveScreenshot(new File(out, String.format("frame_%04d.png", i)).toString())
+   }
+
 
 Laplace Resonance of the Galilean Moons
 ----------------------------------------

@@ -194,6 +194,38 @@ public final class DefaultSimulationCommands implements SimulationCommands {
         transitionController.requestCameraOrientation(lookX, lookY, lookZ, upX, upY, upZ, durationSeconds);
     }
 
+    @Override
+    public void setCameraPose(
+            double x,
+            double y,
+            double z,
+            double lookX,
+            double lookY,
+            double lookZ,
+            double upX,
+            double upY,
+            double upZ,
+            double durationSeconds) {
+        transitionController.requestCameraPose(x, y, z, -1, lookX, lookY, lookZ, upX, upY, upZ, durationSeconds);
+    }
+
+    @Override
+    public void setCameraPose(
+            double x,
+            double y,
+            double z,
+            int originNaifId,
+            double lookX,
+            double lookY,
+            double lookZ,
+            double upX,
+            double upY,
+            double upZ,
+            double durationSeconds) {
+        transitionController.requestCameraPose(
+                x, y, z, originNaifId, lookX, lookY, lookZ, upX, upY, upZ, durationSeconds);
+    }
+
     // ── Cinematic camera commands (Step 24) ──
 
     @Override

@@ -511,6 +511,75 @@ public final class KepplrScript {
         commands.setCameraOrientation(lookX, lookY, lookZ, upX, upY, upZ, durationSeconds);
     }
 
+    /**
+     * Set the camera position and orientation together, relative to the current focus body.
+     *
+     * <p><b>Execution semantics:</b> <em>Queued</em> — enqueued to the JME thread; returns immediately.
+     *
+     * <p>Position, look, and up vectors are expressed in the current camera frame. Use this instead of separate
+     * position and orientation calls when both must change in the same transition or before a captured frame.
+     *
+     * <p>Example: {@code kepplr.setCameraPose(0, 0, 10000, 0, 0, -1, 0, 1, 0, 2.0)}
+     *
+     * @param x x offset in km in the current camera frame
+     * @param y y offset in km in the current camera frame
+     * @param z z offset in km in the current camera frame
+     * @param lookX x component of look direction in the current camera frame
+     * @param lookY y component of look direction in the current camera frame
+     * @param lookZ z component of look direction in the current camera frame
+     * @param upX x component of up vector in the current camera frame
+     * @param upY y component of up vector in the current camera frame
+     * @param upZ z component of up vector in the current camera frame
+     * @param durationSeconds transition duration in seconds
+     */
+    public void setCameraPose(
+            double x,
+            double y,
+            double z,
+            double lookX,
+            double lookY,
+            double lookZ,
+            double upX,
+            double upY,
+            double upZ,
+            double durationSeconds) {
+        commands.setCameraPose(x, y, z, lookX, lookY, lookZ, upX, upY, upZ, durationSeconds);
+    }
+
+    /**
+     * Set the camera position and orientation together, relative to an explicit origin body by NAIF ID.
+     *
+     * <p><b>Execution semantics:</b> <em>Queued</em> — enqueued to the JME thread; returns immediately.
+     *
+     * <p>Position, look, and up vectors are expressed in the current camera frame. This does not change focus.
+     *
+     * @param x x offset in km in the current camera frame
+     * @param y y offset in km in the current camera frame
+     * @param z z offset in km in the current camera frame
+     * @param originNaifId NAIF ID of the origin body
+     * @param lookX x component of look direction in the current camera frame
+     * @param lookY y component of look direction in the current camera frame
+     * @param lookZ z component of look direction in the current camera frame
+     * @param upX x component of up vector in the current camera frame
+     * @param upY y component of up vector in the current camera frame
+     * @param upZ z component of up vector in the current camera frame
+     * @param durationSeconds transition duration in seconds
+     */
+    public void setCameraPose(
+            double x,
+            double y,
+            double z,
+            int originNaifId,
+            double lookX,
+            double lookY,
+            double lookZ,
+            double upX,
+            double upY,
+            double upZ,
+            double durationSeconds) {
+        commands.setCameraPose(x, y, z, originNaifId, lookX, lookY, lookZ, upX, upY, upZ, durationSeconds);
+    }
+
     // ── Cinematic camera commands (Step 24) ──────────────────────────────────────
 
     /**

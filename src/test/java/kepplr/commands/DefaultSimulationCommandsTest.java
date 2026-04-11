@@ -313,6 +313,18 @@ class DefaultSimulationCommandsTest {
         }
 
         @Test
+        @DisplayName("setCameraPose (focus-relative) delegates to TransitionController")
+        void setCameraPoseFocusRelative() {
+            assertDoesNotThrow(() -> commands.setCameraPose(0, 0, 50000, 0, 0, -1, 0, 1, 0, 0));
+        }
+
+        @Test
+        @DisplayName("setCameraPose (explicit origin) delegates to TransitionController")
+        void setCameraPoseExplicitOrigin() {
+            assertDoesNotThrow(() -> commands.setCameraPose(0, 0, 50000, MOON, 0, 0, -1, 0, 1, 0, 0));
+        }
+
+        @Test
         @DisplayName("setSynodicFrame sets override IDs and frame without changing interaction state")
         void setSynodicFrameSetsOverrides() {
             commands.centerBody(EARTH);

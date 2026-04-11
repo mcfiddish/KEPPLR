@@ -1970,8 +1970,43 @@ UI-only paths. GLB mesh-model intersection and GUI color controls remain future 
 
 ---
 
-*Last updated: D-071 (instrument footprints retained as body-fixed vector swaths with
-capture-time color, RGB/hex API, and color-change segment boundaries), D-070 (`waitRenderFrames()` added; `waitTransition()` made frame-fenced),
+## D-072: Combined camera pose command and camera-keyed frame capture
+**Status:** Accepted
+**Roadmap step:** 19c / 25 / post-Step 28 scripting refinement
+
+**Context:** Scripts that need exact per-frame camera control, such as Europa Clipper
+animation frame generation, cannot insert camera commands inside
+`captureSequence(...)` because it is a blocking Java loop. A script can own the frame
+loop with `setET(...)`, `waitRenderFrames(...)`, and `saveScreenshot(...)`, but
+reliable per-frame camera control requires setting position and orientation as one
+operation. Issuing `setCameraPosition(..., duration > 0)` followed by
+`setCameraOrientation(..., duration > 0)` is not equivalent, because the second
+camera command cancels the first transition.
+
+**Decision:** Add `setCameraPose(...)` overloads to `SimulationCommands`,
+`DefaultSimulationCommands`, `KepplrScript`, and `CommandRecorder`. The command takes
+position plus look/up vectors in the active camera frame, with focus-relative and
+explicit-origin NAIF overloads. `TransitionController` owns a `CAMERA_POSE` transition
+type that lerps the position offset and slerps orientation with the same eased `t`.
+For zero or negative duration, the complete pose snaps on the next render frame.
+
+`captureSequence(...)` remains a fixed-camera primitive. Camera-keyed animation is
+implemented by a Groovy-owned loop: set ET for the frame, call
+`setCameraPose(..., 0.0)`, fence with `waitRenderFrames(2)`, then call
+`saveScreenshot(...)`.
+
+**Consequences:** Scripts can generate deterministic image sequences with exact
+camera poses on every frame without adding a closure callback to `captureSequence`.
+Animated pose moves behave as one transition and are compatible with
+`waitTransition()`. `CommandRecorder` records animated pose commands verbatim and
+coalesces instant pose commands with last-value-wins semantics.
+
+---
+
+*Last updated: D-072 (`setCameraPose()` added for combined camera pose transitions and
+camera-keyed frame capture), D-071 (instrument footprints retained as body-fixed vector
+swaths with capture-time color, RGB/hex API, and color-change segment boundaries),
+D-070 (`waitRenderFrames()` added; `waitTransition()` made frame-fenced),
 D-069 (close large bodies stay in NEAR with dynamic far-plane expansion and per-body hysteresis), 
 D-068 (macOS JavaFX startup deferred to simpleInitApp and called exactly once), D-067 
 (BODY_FIXED trail reference always focus body), D-066 (synodic trail uses active frame and 
