@@ -240,6 +240,24 @@ class KepplrScriptTest {
             script.setFrustumVisible(-98300, false);
             assertEquals("setFrustumVisible", spy.lastMethod);
         }
+
+        @Test
+        @DisplayName("setFrustumColor(int, r, g, b) delegates to commands")
+        void setFrustumColorInt() {
+            script.setFrustumColor(-98300, 255, 80, 20);
+            assertEquals("setFrustumColor", spy.lastMethod);
+            assertEquals(-98300, spy.lastIntArg);
+            assertEquals(255, spy.lastColorRed);
+        }
+
+        @Test
+        @DisplayName("setFrustumColor(int, hex) delegates to commands")
+        void setFrustumColorHex() {
+            script.setFrustumColor(-98300, "#ff5014");
+            assertEquals("setFrustumColor", spy.lastMethod);
+            assertEquals(-98300, spy.lastIntArg);
+            assertEquals("#ff5014", spy.lastStringArg);
+        }
     }
 
     // ── Timing primitives ───────────────────────────────────────────────────────
@@ -300,8 +318,10 @@ class KepplrScriptTest {
     /** Minimal recording spy for verifying delegation. Records the last method name and selected arguments. */
     static class SpyCommands implements SimulationCommands {
         String lastMethod;
+        String lastStringArg;
         int lastIntArg;
         int lastIntArg2;
+        int lastColorRed;
         double lastDoubleArg;
         boolean lastBoolArg;
 
@@ -488,6 +508,32 @@ class KepplrScriptTest {
         public void setFrustumPersistenceEnabled(String name, boolean enabled) {
             lastMethod = "setFrustumPersistenceEnabled";
             lastBoolArg = enabled;
+        }
+
+        @Override
+        public void setFrustumColor(int instrumentNaifCode, int red, int green, int blue) {
+            lastMethod = "setFrustumColor";
+            lastIntArg = instrumentNaifCode;
+            lastColorRed = red;
+        }
+
+        @Override
+        public void setFrustumColor(String instrumentName, int red, int green, int blue) {
+            lastMethod = "setFrustumColor";
+            lastColorRed = red;
+        }
+
+        @Override
+        public void setFrustumColor(int instrumentNaifCode, String hexColor) {
+            lastMethod = "setFrustumColor";
+            lastIntArg = instrumentNaifCode;
+            lastStringArg = hexColor;
+        }
+
+        @Override
+        public void setFrustumColor(String instrumentName, String hexColor) {
+            lastMethod = "setFrustumColor";
+            lastStringArg = hexColor;
         }
 
         @Override

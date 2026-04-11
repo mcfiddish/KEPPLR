@@ -951,6 +951,53 @@ public final class KepplrScript {
     }
 
     /**
+     * Set an instrument frustum overlay color by NAIF code.
+     *
+     * <p><b>Execution semantics:</b> <em>Immediate</em>.
+     *
+     * <p>Components are 8-bit RGB values in {@code [0, 255]}. Existing renderer alpha values are preserved for the
+     * translucent frustum fill, live footprint, and retained footprint swaths.
+     *
+     * <p>Example: {@code kepplr.setFrustumColor(-98300, 255, 80, 20)}
+     */
+    public void setFrustumColor(int instrumentNaifCode, int red, int green, int blue) {
+        commands.setFrustumColor(instrumentNaifCode, red, green, blue);
+    }
+
+    /**
+     * Set an instrument frustum overlay color by instrument name.
+     *
+     * <p><b>Execution semantics:</b> <em>Immediate</em>.
+     *
+     * <p>Example: {@code kepplr.setFrustumColor("NH_LORRI", 255, 80, 20)}
+     */
+    public void setFrustumColor(String instrumentName, int red, int green, int blue) {
+        commands.setFrustumColor(resolve(instrumentName), red, green, blue);
+    }
+
+    /**
+     * Set an instrument frustum overlay color by NAIF code from {@code RRGGBB} or {@code #RRGGBB}.
+     *
+     * <p><b>Execution semantics:</b> <em>Immediate</em>.
+     *
+     * <p>Example: {@code kepplr.setFrustumColor(-98300, "#ff5014")}
+     */
+    public void setFrustumColor(int instrumentNaifCode, String hexColor) {
+        commands.setFrustumColor(instrumentNaifCode, hexColor);
+    }
+
+    /**
+     * Set an instrument frustum overlay color by instrument name from {@code RRGGBB} or {@code #RRGGBB}.
+     *
+     * <p><b>Execution semantics:</b> <em>Immediate</em>.
+     *
+     * <p>Example: {@code kepplr.setFrustumColor("NH_LORRI", "#ff5014")}
+     */
+    public void setFrustumColor(String instrumentName, String hexColor) {
+        commands.setFrustumColor(resolve(instrumentName), hexColor);
+    }
+
+    /**
      * Clear retained frustum footprints for a specific instrument by NAIF code.
      *
      * <p><b>Execution semantics:</b> <em>Immediate</em>.

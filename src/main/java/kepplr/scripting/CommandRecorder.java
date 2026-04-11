@@ -543,6 +543,30 @@ public final class CommandRecorder implements SimulationCommands {
     }
 
     @Override
+    public void setFrustumColor(int instrumentNaifCode, int red, int green, int blue) {
+        recordCommand("kepplr.setFrustumColor(" + instrumentNaifCode + ", " + red + ", " + green + ", " + blue + ")");
+        delegate.setFrustumColor(instrumentNaifCode, red, green, blue);
+    }
+
+    @Override
+    public void setFrustumColor(String instrumentName, int red, int green, int blue) {
+        recordCommand("kepplr.setFrustumColor(\"" + instrumentName + "\", " + red + ", " + green + ", " + blue + ")");
+        delegate.setFrustumColor(instrumentName, red, green, blue);
+    }
+
+    @Override
+    public void setFrustumColor(int instrumentNaifCode, String hexColor) {
+        recordCommand("kepplr.setFrustumColor(" + instrumentNaifCode + ", \"" + hexColor + "\")");
+        delegate.setFrustumColor(instrumentNaifCode, hexColor);
+    }
+
+    @Override
+    public void setFrustumColor(String instrumentName, String hexColor) {
+        recordCommand("kepplr.setFrustumColor(\"" + instrumentName + "\", \"" + hexColor + "\")");
+        delegate.setFrustumColor(instrumentName, hexColor);
+    }
+
+    @Override
     public void clearFrustumFootprints(int instrumentNaifCode) {
         recordCommand("kepplr.clearFrustumFootprints(" + instrumentNaifCode + ")");
         delegate.clearFrustumFootprints(instrumentNaifCode);

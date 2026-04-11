@@ -75,11 +75,12 @@ public final class InstrumentFrustumManager {
 
     private static final Logger logger = LogManager.getLogger();
 
-    /** Translucent cyan material color (hardcoded for this step). */
+    /** Default translucent cyan material color. */
     private static final ColorRGBA FRUSTUM_COLOR = new ColorRGBA(0f, 1f, 1f, 0.25f);
 
     private static final ColorRGBA FRUSTUM_OUTLINE_COLOR = new ColorRGBA(1f, 1f, 1f, 1f);
     private static final ColorRGBA FOOTPRINT_COLOR = new ColorRGBA(0f, 1f, 1f, 0.9f);
+    private static final ColorRGBA PERSISTENT_FOOTPRINT_COLOR = new ColorRGBA(0f, 1f, 1f, 0.35f);
     private static final double FOOTPRINT_SURFACE_OFFSET_KM = 0.01;
     private static final double PERSISTENT_COVERAGE_SURFACE_OFFSET_KM = 2.0;
 
@@ -416,6 +417,29 @@ public final class InstrumentFrustumManager {
         }
     }
 
+    void setFootprintColors(int naifCode, ColorRGBA liveFootprintColor, ColorRGBA persistentFootprintColor) {
+        FrustumEntry entry = entriesByCode.get(naifCode);
+        if (entry == null) {
+            logger.debug("setFootprintColors({}, ...) - no entry for code {}", naifCode, naifCode);
+            return;
+        }
+        entry.setFootprintColors(liveFootprintColor, persistentFootprintColor);
+    }
+
+    void setFrustumColor(int naifCode, ColorRGBA color) {
+        FrustumEntry entry = entriesByCode.get(naifCode);
+        if (entry == null) {
+            logger.debug("setFrustumColor({}, ...) - no entry for code {}", naifCode, naifCode);
+            return;
+        }
+        ColorRGBA copied = copyColor(color);
+        ColorRGBA frustumColor = withAlpha(copied, FRUSTUM_COLOR.a);
+        ColorRGBA outlineColor = withAlpha(copied, FRUSTUM_OUTLINE_COLOR.a);
+        ColorRGBA liveFootprintColor = withAlpha(copied, FOOTPRINT_COLOR.a);
+        ColorRGBA persistentFootprintColor = withAlpha(copied, PERSISTENT_FOOTPRINT_COLOR.a);
+        entry.setFrustumColor(frustumColor, outlineColor, liveFootprintColor, persistentFootprintColor);
+    }
+
     // ── Private helpers ───────────────────────────────────────────────────────
 
     private void detachAll() {
@@ -439,7 +463,7 @@ public final class InstrumentFrustumManager {
         PersistentCoverageOverlay overlay = persistentCoverageOverlays.computeIfAbsent(
                 key,
                 k -> new PersistentCoverageOverlay(assetManager, entry.instrument.code(), entry.liveFootprintBodyId));
-        overlay.accumulate(entry.liveFootprintBodyFixed, startsNewSegment);
+        overlay.accumulate(entry.liveFootprintBodyFixed, startsNewSegment, entry.persistentFootprintColor());
     }
 
     static VectorIJK instrumentToJ2000(UnwritableVectorIJK instrumentVector, RotationMatrixIJK j2000ToInstrument) {
@@ -725,6 +749,25 @@ public final class InstrumentFrustumManager {
 
     private record CoverageKey(int instrumentCode, EphemerisID bodyId) {}
 
+    static ColorRGBA copyColor(ColorRGBA color) {
+        Objects.requireNonNull(color, "color");
+        return new ColorRGBA(color.r, color.g, color.b, color.a);
+    }
+
+    static ColorRGBA withAlpha(ColorRGBA color, float alpha) {
+        Objects.requireNonNull(color, "color");
+        return new ColorRGBA(color.r, color.g, color.b, alpha);
+    }
+
+    static boolean sameColor(ColorRGBA a, ColorRGBA b) {
+        return a != null
+                && b != null
+                && Float.compare(a.r, b.r) == 0
+                && Float.compare(a.g, b.g) == 0
+                && Float.compare(a.b, b.b) == 0
+                && Float.compare(a.a, b.a) == 0;
+    }
+
     /**
      * Retained swath geometry for one instrument/body pair.
      *
@@ -737,8 +780,10 @@ public final class InstrumentFrustumManager {
         final Ellipsoid shape;
         final Geometry geometry;
         final List<List<VectorIJK>> recordedPolygons = new ArrayList<>();
+        final List<ColorRGBA> recordedColors = new ArrayList<>();
         final List<Boolean> segmentStarts = new ArrayList<>();
         FloatBuffer posBuffer = BufferUtils.createFloatBuffer(3);
+        FloatBuffer colorBuffer = BufferUtils.createFloatBuffer(4);
         double lastDistanceKm = -1.0;
         boolean dirty = true;
 
@@ -749,11 +794,13 @@ public final class InstrumentFrustumManager {
             Mesh mesh = new Mesh();
             mesh.setMode(Mesh.Mode.Triangles);
             mesh.setBuffer(VertexBuffer.Type.Position, 3, posBuffer);
+            mesh.setBuffer(VertexBuffer.Type.Color, 4, colorBuffer);
             mesh.updateCounts();
             mesh.updateBound();
 
             Material mat = new Material(assetManager, "Common/MatDefs/Misc/Unshaded.j3md");
-            mat.setColor("Color", new ColorRGBA(0f, 1f, 1f, 0.35f));
+            mat.setColor("Color", ColorRGBA.White);
+            mat.setBoolean("VertexColor", true);
             mat.getAdditionalRenderState().setBlendMode(RenderState.BlendMode.Alpha);
             mat.getAdditionalRenderState().setDepthWrite(false);
             mat.getAdditionalRenderState().setFaceCullMode(RenderState.FaceCullMode.Off);
@@ -765,11 +812,12 @@ public final class InstrumentFrustumManager {
             this.geometry.setQueueBucket(RenderQueue.Bucket.Transparent);
         }
 
-        void accumulate(List<VectorIJK> polygonBodyFixed, boolean startsNewSegment) {
+        void accumulate(List<VectorIJK> polygonBodyFixed, boolean startsNewSegment, ColorRGBA color) {
             if (shape == null || polygonBodyFixed.size() < 3) {
                 return;
             }
             recordedPolygons.add(copyPolygon(polygonBodyFixed));
+            recordedColors.add(copyColor(color));
             segmentStarts.add(startsNewSegment || recordedPolygons.size() == 1);
             dirty = true;
         }
@@ -820,10 +868,24 @@ public final class InstrumentFrustumManager {
             } else {
                 posBuffer.clear();
             }
+            if (dirty || colorBuffer.capacity() < triangleVertexCount * 4) {
+                colorBuffer = BufferUtils.createFloatBuffer(Math.max(triangleVertexCount, 1) * 4);
+                geometry.getMesh().setBuffer(VertexBuffer.Type.Color, 4, colorBuffer);
+            } else {
+                colorBuffer.clear();
+            }
 
             lastDistanceKm = -1.0;
-            for (List<VectorIJK> polygon : recordedPolygons) {
-                appendPolygon(posBuffer, polygon, j2000ToBodyFixed, bodyPosJ2000, cameraHelioJ2000, cameraBodyFixed);
+            for (int i = 0; i < recordedPolygons.size(); i++) {
+                appendPolygon(
+                        posBuffer,
+                        colorBuffer,
+                        recordedPolygons.get(i),
+                        recordedColors.get(i),
+                        j2000ToBodyFixed,
+                        bodyPosJ2000,
+                        cameraHelioJ2000,
+                        cameraBodyFixed);
             }
             for (int i = 1; i < recordedPolygons.size(); i++) {
                 if (segmentStarts.get(i)) {
@@ -833,12 +895,21 @@ public final class InstrumentFrustumManager {
                 List<VectorIJK> current = recordedPolygons.get(i);
                 if (previous.size() == current.size() && previous.size() >= 2) {
                     appendBridgeStrip(
-                            posBuffer, previous, current, j2000ToBodyFixed, bodyPosJ2000, cameraHelioJ2000,
+                            posBuffer,
+                            colorBuffer,
+                            previous,
+                            current,
+                            recordedColors.get(i),
+                            j2000ToBodyFixed,
+                            bodyPosJ2000,
+                            cameraHelioJ2000,
                             cameraBodyFixed);
                 }
             }
             posBuffer.flip();
+            colorBuffer.flip();
             geometry.getMesh().setBuffer(VertexBuffer.Type.Position, 3, posBuffer);
+            geometry.getMesh().setBuffer(VertexBuffer.Type.Color, 4, colorBuffer);
             geometry.getMesh().updateCounts();
             geometry.getMesh().updateBound();
             geometry.setCullHint(com.jme3.scene.Spatial.CullHint.Inherit);
@@ -847,7 +918,9 @@ public final class InstrumentFrustumManager {
 
         private void appendPolygon(
                 FloatBuffer buffer,
+                FloatBuffer colors,
                 List<VectorIJK> polygon,
+                ColorRGBA color,
                 RotationMatrixIJK j2000ToBodyFixed,
                 VectorIJK bodyPosJ2000,
                 double[] cameraHelioJ2000,
@@ -865,9 +938,9 @@ public final class InstrumentFrustumManager {
                 }
                 float[] p1 = projectSurfacePoint(p1BodyFixed, j2000ToBodyFixed, bodyPosJ2000, cameraHelioJ2000);
                 float[] p2 = projectSurfacePoint(p2BodyFixed, j2000ToBodyFixed, bodyPosJ2000, cameraHelioJ2000);
-                putVertex(buffer, origin);
-                putVertex(buffer, p1);
-                putVertex(buffer, p2);
+                putVertex(buffer, colors, origin, color);
+                putVertex(buffer, colors, p1, color);
+                putVertex(buffer, colors, p2, color);
                 lastDistanceKm = minDistance(lastDistanceKm, origin);
                 lastDistanceKm = minDistance(lastDistanceKm, p1);
                 lastDistanceKm = minDistance(lastDistanceKm, p2);
@@ -876,8 +949,10 @@ public final class InstrumentFrustumManager {
 
         private void appendBridgeStrip(
                 FloatBuffer buffer,
+                FloatBuffer colors,
                 List<VectorIJK> previous,
                 List<VectorIJK> current,
+                ColorRGBA color,
                 RotationMatrixIJK j2000ToBodyFixed,
                 VectorIJK bodyPosJ2000,
                 double[] cameraHelioJ2000,
@@ -899,12 +974,12 @@ public final class InstrumentFrustumManager {
                 float[] a1 = projectSurfacePoint(a1BodyFixed, j2000ToBodyFixed, bodyPosJ2000, cameraHelioJ2000);
                 float[] b1 = projectSurfacePoint(b1BodyFixed, j2000ToBodyFixed, bodyPosJ2000, cameraHelioJ2000);
                 float[] b0 = projectSurfacePoint(b0BodyFixed, j2000ToBodyFixed, bodyPosJ2000, cameraHelioJ2000);
-                putVertex(buffer, a0);
-                putVertex(buffer, a1);
-                putVertex(buffer, b1);
-                putVertex(buffer, a0);
-                putVertex(buffer, b1);
-                putVertex(buffer, b0);
+                putVertex(buffer, colors, a0, color);
+                putVertex(buffer, colors, a1, color);
+                putVertex(buffer, colors, b1, color);
+                putVertex(buffer, colors, a0, color);
+                putVertex(buffer, colors, b1, color);
+                putVertex(buffer, colors, b0, color);
                 lastDistanceKm = minDistance(lastDistanceKm, a0);
                 lastDistanceKm = minDistance(lastDistanceKm, a1);
                 lastDistanceKm = minDistance(lastDistanceKm, b1);
@@ -912,8 +987,7 @@ public final class InstrumentFrustumManager {
             }
         }
 
-        private boolean isVisibleSurfaceTriangle(
-                VectorIJK a, VectorIJK b, VectorIJK c, VectorIJK cameraBodyFixed) {
+        private boolean isVisibleSurfaceTriangle(VectorIJK a, VectorIJK b, VectorIJK c, VectorIJK cameraBodyFixed) {
             return isVisibleSurfacePoint(a, cameraBodyFixed)
                     && isVisibleSurfacePoint(b, cameraBodyFixed)
                     && isVisibleSurfacePoint(c, cameraBodyFixed);
@@ -958,8 +1032,13 @@ public final class InstrumentFrustumManager {
             return current < 0.0 ? d : Math.min(current, d);
         }
 
-        private void putVertex(FloatBuffer buffer, float[] vertex) {
+        private void putVertex(FloatBuffer buffer, FloatBuffer colors, float[] vertex, ColorRGBA color) {
             buffer.put(vertex[0]).put(vertex[1]).put(vertex[2]);
+            putColor(colors, color);
+        }
+
+        private void putColor(FloatBuffer colors, ColorRGBA color) {
+            colors.put(color.r).put(color.g).put(color.b).put(color.a);
         }
     }
 
@@ -984,6 +1063,10 @@ public final class InstrumentFrustumManager {
         final FloatBuffer nearPosBuffer;
         final FloatBuffer nearOutlinePosBuffer;
         final FloatBuffer footprintPosBuffer;
+        ColorRGBA frustumColor = copyColor(FRUSTUM_COLOR);
+        ColorRGBA outlineColor = copyColor(FRUSTUM_OUTLINE_COLOR);
+        ColorRGBA footprintColor = copyColor(FOOTPRINT_COLOR);
+        ColorRGBA persistentFootprintColor = copyColor(PERSISTENT_FOOTPRINT_COLOR);
         boolean footprintVisible = false;
         boolean nearSegmentVisible = false;
         boolean persistenceEnabled = false;
@@ -1093,6 +1176,39 @@ public final class InstrumentFrustumManager {
             this.footprintGeometry.setMaterial(footprintMat);
             this.footprintGeometry.setQueueBucket(RenderQueue.Bucket.Transparent);
             this.footprintGeometry.setCullHint(com.jme3.scene.Spatial.CullHint.Always);
+        }
+
+        void setFootprintColors(ColorRGBA liveFootprintColor, ColorRGBA persistentFootprintColor) {
+            if (sameColor(this.footprintColor, liveFootprintColor)
+                    && sameColor(this.persistentFootprintColor, persistentFootprintColor)) {
+                return;
+            }
+            this.footprintColor = copyColor(liveFootprintColor);
+            this.persistentFootprintColor = copyColor(persistentFootprintColor);
+            this.footprintGeometry.getMaterial().setColor("Color", this.footprintColor);
+            this.persistenceSegmentActive = false;
+        }
+
+        void setFrustumColor(
+                ColorRGBA frustumColor,
+                ColorRGBA outlineColor,
+                ColorRGBA liveFootprintColor,
+                ColorRGBA persistentFootprintColor) {
+            boolean shellChanged =
+                    !sameColor(this.frustumColor, frustumColor) || !sameColor(this.outlineColor, outlineColor);
+            this.frustumColor = copyColor(frustumColor);
+            this.outlineColor = copyColor(outlineColor);
+            if (shellChanged) {
+                this.geometry.getMaterial().setColor("Color", this.frustumColor);
+                this.nearGeometry.getMaterial().setColor("Color", this.frustumColor);
+                this.outlineGeometry.getMaterial().setColor("Color", this.outlineColor);
+                this.nearOutlineGeometry.getMaterial().setColor("Color", this.outlineColor);
+            }
+            setFootprintColors(liveFootprintColor, persistentFootprintColor);
+        }
+
+        ColorRGBA persistentFootprintColor() {
+            return copyColor(persistentFootprintColor);
         }
 
         /**

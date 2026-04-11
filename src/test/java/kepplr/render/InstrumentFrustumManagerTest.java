@@ -2,6 +2,8 @@ package kepplr.render;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import com.jme3.math.ColorRGBA;
+import java.lang.reflect.Modifier;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import picante.math.vectorspace.RotationMatrixIJK;
@@ -71,5 +73,52 @@ class InstrumentFrustumManagerTest {
         assertEquals(0.0, hit.hitBodyFixed().getJ(), 1e-9);
         assertEquals(0.0, hit.hitBodyFixed().getK(), 1e-9);
         assertEquals(10.0, hit.distanceKm(), 1e-9);
+    }
+
+    @Test
+    @DisplayName("footprint color control exists as an internal render-manager hook")
+    void footprintColorControlIsInternal() throws NoSuchMethodException {
+        var method = InstrumentFrustumManager.class.getDeclaredMethod(
+                "setFootprintColors", int.class, ColorRGBA.class, ColorRGBA.class);
+
+        assertFalse(Modifier.isPublic(method.getModifiers()));
+    }
+
+    @Test
+    @DisplayName("retained footprint implementation has per-vertex color storage")
+    void retainedFootprintsHavePerVertexColorStorage() throws ClassNotFoundException, NoSuchFieldException {
+        Class<?> overlayClass = Class.forName("kepplr.render.InstrumentFrustumManager$PersistentCoverageOverlay");
+
+        assertEquals(
+                java.util.List.class,
+                overlayClass.getDeclaredField("recordedColors").getType());
+        assertEquals(
+                java.nio.FloatBuffer.class,
+                overlayClass.getDeclaredField("colorBuffer").getType());
+    }
+
+    @Test
+    @DisplayName("copyColor returns an independent RGBA value")
+    void copyColorReturnsIndependentValue() {
+        ColorRGBA original = new ColorRGBA(0.1f, 0.2f, 0.3f, 0.4f);
+        ColorRGBA copy = InstrumentFrustumManager.copyColor(original);
+
+        assertNotSame(original, copy);
+        assertEquals(original.r, copy.r);
+        assertEquals(original.g, copy.g);
+        assertEquals(original.b, copy.b);
+        assertEquals(original.a, copy.a);
+
+        original.r = 0.9f;
+        assertEquals(0.1f, copy.r);
+    }
+
+    @Test
+    @DisplayName("sameColor compares RGBA components exactly")
+    void sameColorComparesRgbaComponents() {
+        assertTrue(InstrumentFrustumManager.sameColor(
+                new ColorRGBA(0.1f, 0.2f, 0.3f, 0.4f), new ColorRGBA(0.1f, 0.2f, 0.3f, 0.4f)));
+        assertFalse(InstrumentFrustumManager.sameColor(
+                new ColorRGBA(0.1f, 0.2f, 0.3f, 0.4f), new ColorRGBA(0.1f, 0.2f, 0.3f, 0.5f)));
     }
 }

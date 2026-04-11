@@ -482,6 +482,42 @@ class DefaultSimulationCommandsTest {
         }
 
         @Test
+        @DisplayName("setFrustumColor(int, r, g, b) updates state")
+        void setFrustumColorInt() {
+            commands.setFrustumColor(-98300, 25, 50, 75);
+
+            var color = state.frustumColorProperty(-98300).get();
+            assertNotNull(color);
+            assertEquals(25, color.red());
+            assertEquals(50, color.green());
+            assertEquals(75, color.blue());
+        }
+
+        @Test
+        @DisplayName("setFrustumColor(int, hex) updates state")
+        void setFrustumColorHex() {
+            commands.setFrustumColor(-98300, "#ff5014");
+
+            var color = state.frustumColorProperty(-98300).get();
+            assertNotNull(color);
+            assertEquals(255, color.red());
+            assertEquals(80, color.green());
+            assertEquals(20, color.blue());
+        }
+
+        @Test
+        @DisplayName("setFrustumColor rejects out-of-range components")
+        void setFrustumColorRejectsOutOfRangeComponents() {
+            assertThrows(IllegalArgumentException.class, () -> commands.setFrustumColor(-98300, 256, 50, 75));
+        }
+
+        @Test
+        @DisplayName("setFrustumColor rejects invalid hex")
+        void setFrustumColorRejectsInvalidHex() {
+            assertThrows(IllegalArgumentException.class, () -> commands.setFrustumColor(-98300, "#xyz"));
+        }
+
+        @Test
         @DisplayName("clearFrustumFootprints(int) queues clear request")
         void clearFrustumFootprintsIntQueuesRequest() {
             commands.clearFrustumFootprints(-98300);

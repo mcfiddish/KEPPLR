@@ -45,6 +45,7 @@ import kepplr.stars.catalogs.yaleBSC.YaleBrightStarCatalog;
 import kepplr.state.BodyInView;
 import kepplr.state.DefaultSimulationState;
 import kepplr.state.DefaultSimulationState.VectorKey;
+import kepplr.state.FrustumColor;
 import kepplr.ui.FxDispatch;
 import kepplr.ui.KepplrStatusWindow;
 import kepplr.ui.SimulationStateFxBridge;
@@ -160,6 +161,8 @@ public class KepplrApp extends SimpleApplication {
     private final Set<Integer> activeTrailIds = new HashSet<>();
     /** Currently enabled vector definitions in VectorManager, keyed by state VectorKey. */
     private final Map<VectorKey, VectorDefinition> activeVectorDefs = new HashMap<>();
+    /** Last frustum colors applied to InstrumentFrustumManager, keyed by instrument NAIF code. */
+    private final Map<Integer, FrustumColor> appliedFrustumColors = new HashMap<>();
 
     // ── JavaFX control window ─────────────────────────────────────────────────────────────────
     private volatile KepplrStatusWindow statusWindow;
@@ -823,6 +826,14 @@ public class KepplrApp extends SimpleApplication {
             instrumentFrustumManager.setPersistenceEnabled(
                     entry.getKey(), entry.getValue().get());
         }
+        for (var entry : simulationState.getFrustumColorMap().entrySet()) {
+            FrustumColor color = entry.getValue().get();
+            if (color != null && !color.equals(appliedFrustumColors.get(entry.getKey()))) {
+                instrumentFrustumManager.setFrustumColor(
+                        entry.getKey(), new ColorRGBA(color.redFloat(), color.greenFloat(), color.blueFloat(), 1f));
+                appliedFrustumColors.put(entry.getKey(), color);
+            }
+        }
         Integer clearRequest;
         while ((clearRequest = simulationState.pollPendingFrustumFootprintClear()) != null) {
             if (clearRequest == DefaultSimulationState.CLEAR_ALL_FRUSTUM_FOOTPRINTS) {
@@ -899,6 +910,7 @@ public class KepplrApp extends SimpleApplication {
         labelManager.dispose();
         activeTrailIds.clear();
         activeVectorDefs.clear();
+        appliedFrustumColors.clear();
         // Clear overlay visibility state so scripts start with a clean slate
         simulationState.clearOverlayState();
 

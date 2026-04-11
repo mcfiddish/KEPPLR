@@ -275,6 +275,18 @@ class ScriptRunnerTest {
         public void setFrustumPersistenceEnabled(String instrumentName, boolean enabled) {}
 
         @Override
+        public void setFrustumColor(int instrumentNaifCode, int red, int green, int blue) {}
+
+        @Override
+        public void setFrustumColor(String instrumentName, int red, int green, int blue) {}
+
+        @Override
+        public void setFrustumColor(int instrumentNaifCode, String hexColor) {}
+
+        @Override
+        public void setFrustumColor(String instrumentName, String hexColor) {}
+
+        @Override
         public void clearFrustumFootprints(int instrumentNaifCode) {}
 
         @Override

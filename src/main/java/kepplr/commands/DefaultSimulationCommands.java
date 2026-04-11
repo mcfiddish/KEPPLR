@@ -14,6 +14,7 @@ import kepplr.ephemeris.BodyLookupService;
 import kepplr.render.RenderQuality;
 import kepplr.render.vector.VectorType;
 import kepplr.state.DefaultSimulationState;
+import kepplr.state.FrustumColor;
 import kepplr.state.StateSnapshot;
 import kepplr.state.StateSnapshotCodec;
 import kepplr.util.KepplrConstants;
@@ -337,6 +338,26 @@ public final class DefaultSimulationCommands implements SimulationCommands {
     @Override
     public void setFrustumPersistenceEnabled(String instrumentName, boolean enabled) {
         setFrustumPersistenceEnabled(BodyLookupService.resolve(instrumentName), enabled);
+    }
+
+    @Override
+    public void setFrustumColor(int instrumentNaifCode, int red, int green, int blue) {
+        state.setFrustumColor(instrumentNaifCode, FrustumColor.rgb(red, green, blue));
+    }
+
+    @Override
+    public void setFrustumColor(String instrumentName, int red, int green, int blue) {
+        setFrustumColor(BodyLookupService.resolve(instrumentName), red, green, blue);
+    }
+
+    @Override
+    public void setFrustumColor(int instrumentNaifCode, String hexColor) {
+        state.setFrustumColor(instrumentNaifCode, FrustumColor.hex(hexColor));
+    }
+
+    @Override
+    public void setFrustumColor(String instrumentName, String hexColor) {
+        setFrustumColor(BodyLookupService.resolve(instrumentName), hexColor);
     }
 
     @Override

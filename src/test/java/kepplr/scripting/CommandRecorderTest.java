@@ -428,6 +428,42 @@ class CommandRecorderTest {
                     script.contains("setFrustumVisible(\"NH_LORRI\", false)"),
                     "Expected setFrustumVisible(\"NH_LORRI\", false) in: " + script);
         }
+
+        @Test
+        @DisplayName("setFrustumColor(int, r, g, b) serializes with NAIF code")
+        void setFrustumColorIntSerialized() {
+            recorder.startRecording();
+            recorder.setFrustumColor(-98300, 255, 80, 20);
+            recorder.stopRecording();
+            String script = recorder.getScript();
+            assertTrue(
+                    script.contains("setFrustumColor(-98300, 255, 80, 20)"),
+                    "Expected setFrustumColor(-98300, 255, 80, 20) in: " + script);
+        }
+
+        @Test
+        @DisplayName("setFrustumColor(String, r, g, b) serializes with quoted name")
+        void setFrustumColorNameSerialized() {
+            recorder.startRecording();
+            recorder.setFrustumColor("NH_LORRI", 25, 50, 255);
+            recorder.stopRecording();
+            String script = recorder.getScript();
+            assertTrue(
+                    script.contains("setFrustumColor(\"NH_LORRI\", 25, 50, 255)"),
+                    "Expected setFrustumColor(\"NH_LORRI\", 25, 50, 255) in: " + script);
+        }
+
+        @Test
+        @DisplayName("setFrustumColor(int, hex) serializes with quoted hex")
+        void setFrustumColorHexSerialized() {
+            recorder.startRecording();
+            recorder.setFrustumColor(-98300, "#ff5014");
+            recorder.stopRecording();
+            String script = recorder.getScript();
+            assertTrue(
+                    script.contains("setFrustumColor(-98300, \"#ff5014\")"),
+                    "Expected setFrustumColor(-98300, \"#ff5014\") in: " + script);
+        }
     }
 
     // ── No-op delegate ──────────────────────────────────────────────────────────
@@ -601,6 +637,26 @@ class CommandRecorderTest {
         @Override
         public void setFrustumPersistenceEnabled(String instrumentName, boolean enabled) {
             lastMethod = "setFrustumPersistenceEnabled";
+        }
+
+        @Override
+        public void setFrustumColor(int instrumentNaifCode, int red, int green, int blue) {
+            lastMethod = "setFrustumColor";
+        }
+
+        @Override
+        public void setFrustumColor(String instrumentName, int red, int green, int blue) {
+            lastMethod = "setFrustumColor";
+        }
+
+        @Override
+        public void setFrustumColor(int instrumentNaifCode, String hexColor) {
+            lastMethod = "setFrustumColor";
+        }
+
+        @Override
+        public void setFrustumColor(String instrumentName, String hexColor) {
+            lastMethod = "setFrustumColor";
         }
 
         @Override
