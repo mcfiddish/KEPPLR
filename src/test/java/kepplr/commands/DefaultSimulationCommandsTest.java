@@ -482,6 +482,14 @@ class DefaultSimulationCommandsTest {
         }
 
         @Test
+        @DisplayName("setFrustumPersistenceEnabled(String, false) resolves name and updates state")
+        void setFrustumPersistenceEnabledString() {
+            commands.setFrustumPersistenceEnabled(-98300, true);
+            commands.setFrustumPersistenceEnabled("NH_LORRI", false);
+            assertFalse(state.frustumPersistenceEnabledProperty(-98300).get());
+        }
+
+        @Test
         @DisplayName("setFrustumColor(int, r, g, b) updates state")
         void setFrustumColorInt() {
             commands.setFrustumColor(-98300, 25, 50, 75);
@@ -506,6 +514,30 @@ class DefaultSimulationCommandsTest {
         }
 
         @Test
+        @DisplayName("setFrustumColor(String, r, g, b) resolves name and updates state")
+        void setFrustumColorStringRgb() {
+            commands.setFrustumColor("NH_LORRI", 25, 50, 75);
+
+            var color = state.frustumColorProperty(-98300).get();
+            assertNotNull(color);
+            assertEquals(25, color.red());
+            assertEquals(50, color.green());
+            assertEquals(75, color.blue());
+        }
+
+        @Test
+        @DisplayName("setFrustumColor(String, hex) accepts RRGGBB without leading hash")
+        void setFrustumColorStringHexWithoutHash() {
+            commands.setFrustumColor("NH_LORRI", "ff5014");
+
+            var color = state.frustumColorProperty(-98300).get();
+            assertNotNull(color);
+            assertEquals(255, color.red());
+            assertEquals(80, color.green());
+            assertEquals(20, color.blue());
+        }
+
+        @Test
         @DisplayName("setFrustumColor rejects out-of-range components")
         void setFrustumColorRejectsOutOfRangeComponents() {
             assertThrows(IllegalArgumentException.class, () -> commands.setFrustumColor(-98300, 256, 50, 75));
@@ -521,6 +553,13 @@ class DefaultSimulationCommandsTest {
         @DisplayName("clearFrustumFootprints(int) queues clear request")
         void clearFrustumFootprintsIntQueuesRequest() {
             commands.clearFrustumFootprints(-98300);
+            assertEquals(-98300, state.pollPendingFrustumFootprintClear());
+        }
+
+        @Test
+        @DisplayName("clearFrustumFootprints(String) resolves name and queues clear request")
+        void clearFrustumFootprintsStringQueuesRequest() {
+            commands.clearFrustumFootprints("NH_LORRI");
             assertEquals(-98300, state.pollPendingFrustumFootprintClear());
         }
 

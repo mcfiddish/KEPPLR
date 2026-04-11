@@ -607,7 +607,9 @@ support exists for live footprints and retained swaths.
 Script/API completion and tests.
 
 Status: partially complete. Persistence enable/disable, footprint clearing, and
-frustum color control are exposed through scripting and recording paths.
+frustum color control are exposed through scripting and recording paths. Focused
+unit coverage exists for command delegation, recorder serialization, color parsing,
+pending clear queues, and frustum intersection helpers.
 
 **Requirements**
 - Expose scripting/command methods for live frustum clipping display,
@@ -623,6 +625,13 @@ frustum color control are exposed through scripting and recording paths.
 - Recorded scripts faithfully reproduce the footprint actions.
 - Tests cover the "retain only when actually drawn and persistence is enabled" rule.
 - Tests cover retained-swath continuity and clearing behavior.
+
+**Deferred test scope**
+- Full render-path/layering tests for retained swaths remain deferred until the
+  render test harness can construct JME material-backed frustum entries without
+  relying on the live application context. Current tests cover the non-rendering
+  command, state, parser, and intersection surfaces; the color-sync idempotency
+  requirement is documented in Phase 3 implementation notes.
 
 ### Phase 5
 Mesh-model support.

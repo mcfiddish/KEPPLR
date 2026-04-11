@@ -2,6 +2,7 @@ package kepplr.scripting;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import java.util.Collections;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -164,11 +165,68 @@ class ScriptRunnerTest {
         assertTrue(output.stream().anyMatch(line -> line.equals("— Interrupted: Console input")));
     }
 
+    @Test
+    @DisplayName("Scripts can enable frustum persistence by NAIF code and name")
+    void scriptsCanSetFrustumPersistence() throws Exception {
+        Path script = tempDir.resolve("frustum-persistence.groovy");
+        Files.writeString(
+                script,
+                """
+                kepplr.setFrustumPersistenceEnabled(-98300, true)
+                kepplr.setFrustumPersistenceEnabled("NH_LORRI", false)
+                """);
+
+        runner.runScript(script);
+        Thread.sleep(500);
+
+        assertTrue(commands.calls.contains("setFrustumPersistenceEnabled:-98300:true"), commands.calls.toString());
+        assertTrue(commands.calls.contains("setFrustumPersistenceEnabled:-98300:false"), commands.calls.toString());
+    }
+
+    @Test
+    @DisplayName("Scripts can clear frustum footprints by NAIF code, name, and all-clear")
+    void scriptsCanClearFrustumFootprints() throws Exception {
+        Path script = tempDir.resolve("frustum-clears.groovy");
+        Files.writeString(
+                script,
+                """
+                kepplr.clearFrustumFootprints(-98300)
+                kepplr.clearFrustumFootprints("NH_LORRI")
+                kepplr.clearFrustumFootprints()
+                """);
+
+        runner.runScript(script);
+        Thread.sleep(500);
+
+        assertTrue(commands.calls.contains("clearFrustumFootprints:-98300"), commands.calls.toString());
+        assertEquals(2, Collections.frequency(commands.calls, "clearFrustumFootprints:-98300"));
+        assertTrue(commands.calls.contains("clearFrustumFootprints:all"), commands.calls.toString());
+    }
+
+    @Test
+    @DisplayName("Scripts can set frustum color by instrument name with RGB and hex overloads")
+    void scriptsCanSetFrustumColorByName() throws Exception {
+        Path script = tempDir.resolve("frustum-colors.groovy");
+        Files.writeString(
+                script,
+                """
+                kepplr.setFrustumColor("NH_LORRI", 25, 50, 75)
+                kepplr.setFrustumColor("NH_LORRI", "ff5014")
+                """);
+
+        runner.runScript(script);
+        Thread.sleep(500);
+
+        assertTrue(commands.calls.contains("setFrustumColorRgb:-98300:25:50:75"), commands.calls.toString());
+        assertTrue(commands.calls.contains("setFrustumColorHex:-98300:ff5014"), commands.calls.toString());
+    }
+
     // ── Recording commands ──────────────────────────────────────────────────────
 
     static class RecordingCommands implements SimulationCommands {
         volatile int lastSelectBodyId = -1;
         volatile boolean cancelTransitionCalled = false;
+        final List<String> calls = Collections.synchronizedList(new ArrayList<>());
 
         @Override
         public void selectBody(int naifId) {
@@ -269,31 +327,49 @@ class ScriptRunnerTest {
         public void setFrustumVisible(String name, boolean v) {}
 
         @Override
-        public void setFrustumPersistenceEnabled(int instrumentNaifCode, boolean enabled) {}
+        public void setFrustumPersistenceEnabled(int instrumentNaifCode, boolean enabled) {
+            calls.add("setFrustumPersistenceEnabled:" + instrumentNaifCode + ":" + enabled);
+        }
 
         @Override
-        public void setFrustumPersistenceEnabled(String instrumentName, boolean enabled) {}
+        public void setFrustumPersistenceEnabled(String instrumentName, boolean enabled) {
+            calls.add("setFrustumPersistenceEnabled:" + instrumentName + ":" + enabled);
+        }
 
         @Override
-        public void setFrustumColor(int instrumentNaifCode, int red, int green, int blue) {}
+        public void setFrustumColor(int instrumentNaifCode, int red, int green, int blue) {
+            calls.add("setFrustumColorRgb:" + instrumentNaifCode + ":" + red + ":" + green + ":" + blue);
+        }
 
         @Override
-        public void setFrustumColor(String instrumentName, int red, int green, int blue) {}
+        public void setFrustumColor(String instrumentName, int red, int green, int blue) {
+            calls.add("setFrustumColorRgb:" + instrumentName + ":" + red + ":" + green + ":" + blue);
+        }
 
         @Override
-        public void setFrustumColor(int instrumentNaifCode, String hexColor) {}
+        public void setFrustumColor(int instrumentNaifCode, String hexColor) {
+            calls.add("setFrustumColorHex:" + instrumentNaifCode + ":" + hexColor);
+        }
 
         @Override
-        public void setFrustumColor(String instrumentName, String hexColor) {}
+        public void setFrustumColor(String instrumentName, String hexColor) {
+            calls.add("setFrustumColorHex:" + instrumentName + ":" + hexColor);
+        }
 
         @Override
-        public void clearFrustumFootprints(int instrumentNaifCode) {}
+        public void clearFrustumFootprints(int instrumentNaifCode) {
+            calls.add("clearFrustumFootprints:" + instrumentNaifCode);
+        }
 
         @Override
-        public void clearFrustumFootprints(String instrumentName) {}
+        public void clearFrustumFootprints(String instrumentName) {
+            calls.add("clearFrustumFootprints:" + instrumentName);
+        }
 
         @Override
-        public void clearFrustumFootprints() {}
+        public void clearFrustumFootprints() {
+            calls.add("clearFrustumFootprints:all");
+        }
 
         @Override
         public void truck(double km, double dur) {}

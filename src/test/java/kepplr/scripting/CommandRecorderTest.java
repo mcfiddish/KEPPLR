@@ -464,6 +464,78 @@ class CommandRecorderTest {
                     script.contains("setFrustumColor(-98300, \"#ff5014\")"),
                     "Expected setFrustumColor(-98300, \"#ff5014\") in: " + script);
         }
+
+        @Test
+        @DisplayName("setFrustumColor(String, hex) serializes with quoted name and hex")
+        void setFrustumColorNameHexSerialized() {
+            recorder.startRecording();
+            recorder.setFrustumColor("NH_LORRI", "ff5014");
+            recorder.stopRecording();
+            String script = recorder.getScript();
+            assertTrue(
+                    script.contains("setFrustumColor(\"NH_LORRI\", \"ff5014\")"),
+                    "Expected setFrustumColor(\"NH_LORRI\", \"ff5014\") in: " + script);
+        }
+
+        @Test
+        @DisplayName("setFrustumPersistenceEnabled(int, boolean) serializes with NAIF code")
+        void setFrustumPersistenceEnabledIntSerialized() {
+            recorder.startRecording();
+            recorder.setFrustumPersistenceEnabled(-98300, true);
+            recorder.stopRecording();
+            String script = recorder.getScript();
+            assertTrue(
+                    script.contains("setFrustumPersistenceEnabled(-98300, true)"),
+                    "Expected setFrustumPersistenceEnabled(-98300, true) in: " + script);
+        }
+
+        @Test
+        @DisplayName("setFrustumPersistenceEnabled(String, boolean) serializes with quoted name")
+        void setFrustumPersistenceEnabledNameSerialized() {
+            recorder.startRecording();
+            recorder.setFrustumPersistenceEnabled("NH_LORRI", false);
+            recorder.stopRecording();
+            String script = recorder.getScript();
+            assertTrue(
+                    script.contains("setFrustumPersistenceEnabled(\"NH_LORRI\", false)"),
+                    "Expected setFrustumPersistenceEnabled(\"NH_LORRI\", false) in: " + script);
+        }
+
+        @Test
+        @DisplayName("clearFrustumFootprints(int) serializes with NAIF code")
+        void clearFrustumFootprintsIntSerialized() {
+            recorder.startRecording();
+            recorder.clearFrustumFootprints(-98300);
+            recorder.stopRecording();
+            String script = recorder.getScript();
+            assertTrue(
+                    script.contains("clearFrustumFootprints(-98300)"),
+                    "Expected clearFrustumFootprints(-98300) in: " + script);
+        }
+
+        @Test
+        @DisplayName("clearFrustumFootprints(String) serializes with quoted name")
+        void clearFrustumFootprintsNameSerialized() {
+            recorder.startRecording();
+            recorder.clearFrustumFootprints("NH_LORRI");
+            recorder.stopRecording();
+            String script = recorder.getScript();
+            assertTrue(
+                    script.contains("clearFrustumFootprints(\"NH_LORRI\")"),
+                    "Expected clearFrustumFootprints(\"NH_LORRI\") in: " + script);
+        }
+
+        @Test
+        @DisplayName("clearFrustumFootprints() serializes as all-clear")
+        void clearFrustumFootprintsAllSerialized() {
+            recorder.startRecording();
+            recorder.clearFrustumFootprints();
+            recorder.stopRecording();
+            String script = recorder.getScript();
+            assertTrue(
+                    script.contains("clearFrustumFootprints()"),
+                    "Expected clearFrustumFootprints() in: " + script);
+        }
     }
 
     // ── No-op delegate ──────────────────────────────────────────────────────────
