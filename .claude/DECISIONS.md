@@ -1946,6 +1946,12 @@ when state changes. `InstrumentFrustumManager` also treats repeated identical co
 a no-op. Reapplying an unchanged color must not reset `persistenceSegmentActive`, because
 that would split continuous retained swaths back into a comb of individual footprints.
 
+Changing a retained swath color is a segment boundary. The first retained polygon
+captured after a color change starts a new persistent segment even if persistence was
+already active. Bridge strips are generated only within a segment, so the bridge from
+the last old-color polygon to the first new-color polygon is not drawn and cannot
+repaint the tail of the older swath with the new color.
+
 **Alternatives considered:** A coarse global coverage mask — rejected because it makes
 close-up views tile-limited and forces a global resolution tradeoff. Retaining only
 outline polylines — rejected because the desired visual result is filled swath
@@ -1965,7 +1971,7 @@ UI-only paths. GLB mesh-model intersection and GUI color controls remain future 
 ---
 
 *Last updated: D-071 (instrument footprints retained as body-fixed vector swaths with
-capture-time color and RGB/hex API), D-070 (`waitRenderFrames()` added; `waitTransition()` made frame-fenced),
+capture-time color, RGB/hex API, and color-change segment boundaries), D-070 (`waitRenderFrames()` added; `waitTransition()` made frame-fenced),
 D-069 (close large bodies stay in NEAR with dynamic far-plane expansion and per-body hysteresis), 
 D-068 (macOS JavaFX startup deferred to simpleInitApp and called exactly once), D-067 
 (BODY_FIXED trail reference always focus body), D-066 (synodic trail uses active frame and 

@@ -602,6 +602,9 @@ support exists for live footprints and retained swaths.
 - Color synchronization is idempotent; repeatedly syncing the same color must not
   reset `persistenceSegmentActive` or split a continuous swath into per-frame
   segments.
+- A retained swath color change starts a new persistent segment. This prevents the
+  bridge strip between the last old-color polygon and the first new-color polygon
+  from repainting the tail of the older retained swath.
 
 ### Phase 4
 Script/API completion and tests.
@@ -609,7 +612,8 @@ Script/API completion and tests.
 Status: partially complete. Persistence enable/disable, footprint clearing, and
 frustum color control are exposed through scripting and recording paths. Focused
 unit coverage exists for command delegation, recorder serialization, color parsing,
-pending clear queues, and frustum intersection helpers.
+pending clear queues, frustum intersection helpers, and the color-change segment
+boundary rule for retained swaths.
 
 **Requirements**
 - Expose scripting/command methods for live frustum clipping display,
