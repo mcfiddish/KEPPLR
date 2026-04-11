@@ -181,6 +181,11 @@ Set an exact camera pose before each saved frame.  This is useful when a capture
 sequence needs scripted camera motion instead of the fixed camera used by
 ``captureSequence``.
 
+The smooth camera path comes from the script's interpolation.  Keep
+``setCameraPose`` at ``durationSeconds = 0.0`` inside the frame loop; nonzero
+durations are wall-clock transitions, and starting a new transition every frame
+can cause shake or drift.
+
 .. code-block:: groovy
 
    def out = new File("/tmp/keyed_frames")

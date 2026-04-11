@@ -253,6 +253,10 @@ public interface SimulationCommands {
      * are applied as one queued camera request, so animated transitions move and rotate together instead of cancelling
      * each other.
      *
+     * <p>For deterministic per-frame capture loops, callers should compute the desired pose for each frame and use
+     * {@code durationSeconds = 0.0}. Nonzero durations are wall-clock transitions; issuing one every frame continuously
+     * restarts the transition.
+     *
      * @param x x position component in km
      * @param y y position component in km
      * @param z z position component in km
@@ -280,6 +284,10 @@ public interface SimulationCommands {
      * Set the camera position and orientation together, relative to an explicit origin body in the active camera frame.
      *
      * <p>Does not change the focused body. Position and orientation are applied as one queued camera request.
+     *
+     * <p>For deterministic per-frame capture loops, callers should compute the desired pose for each frame and use
+     * {@code durationSeconds = 0.0}. Nonzero durations are wall-clock transitions; issuing one every frame continuously
+     * restarts the transition.
      *
      * @param x x position component in km
      * @param y y position component in km

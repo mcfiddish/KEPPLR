@@ -519,6 +519,10 @@ public final class KepplrScript {
      * <p>Position, look, and up vectors are expressed in the current camera frame. Use this instead of separate
      * position and orientation calls when both must change in the same transition or before a captured frame.
      *
+     * <p>For deterministic per-frame capture loops, compute the desired pose for each frame in the script and call this
+     * method with {@code durationSeconds = 0.0}. Nonzero durations are wall-clock transitions; issuing one every frame
+     * continuously restarts the transition and can cause shake or drift in captured image sequences.
+     *
      * <p>Example: {@code kepplr.setCameraPose(0, 0, 10000, 0, 0, -1, 0, 1, 0, 2.0)}
      *
      * @param x x offset in km in the current camera frame
@@ -552,6 +556,10 @@ public final class KepplrScript {
      * <p><b>Execution semantics:</b> <em>Queued</em> — enqueued to the JME thread; returns immediately.
      *
      * <p>Position, look, and up vectors are expressed in the current camera frame. This does not change focus.
+     *
+     * <p>For deterministic per-frame capture loops, compute the desired pose for each frame in the script and call this
+     * method with {@code durationSeconds = 0.0}. Nonzero durations are wall-clock transitions; issuing one every frame
+     * continuously restarts the transition and can cause shake or drift in captured image sequences.
      *
      * @param x x offset in km in the current camera frame
      * @param y y offset in km in the current camera frame
