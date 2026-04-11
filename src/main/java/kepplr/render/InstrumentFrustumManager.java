@@ -81,7 +81,7 @@ public final class InstrumentFrustumManager {
     private static final ColorRGBA FRUSTUM_OUTLINE_COLOR = new ColorRGBA(1f, 1f, 1f, 1f);
     private static final ColorRGBA FOOTPRINT_COLOR = new ColorRGBA(0f, 1f, 1f, 0.9f);
     private static final double FOOTPRINT_SURFACE_OFFSET_KM = 0.01;
-    private static final double PERSISTENT_COVERAGE_SURFACE_OFFSET_KM = 0.1;
+    private static final double PERSISTENT_COVERAGE_SURFACE_OFFSET_KM = 2.0;
 
     // ── Per-frustum-layer scene nodes ─────────────────────────────────────────
     private final Map<FrustumLayer, Node> layerNodes;
@@ -757,7 +757,7 @@ public final class InstrumentFrustumManager {
             mat.getAdditionalRenderState().setBlendMode(RenderState.BlendMode.Alpha);
             mat.getAdditionalRenderState().setDepthWrite(false);
             mat.getAdditionalRenderState().setFaceCullMode(RenderState.FaceCullMode.Off);
-            mat.getAdditionalRenderState().setPolyOffset(-1f, -4f);
+            mat.getAdditionalRenderState().setPolyOffset(-4f, -64f);
 
             this.geometry =
                     new Geometry("instrument-persistent-coverage-" + instrumentCode + "-" + bodyId.getName(), mesh);
@@ -791,6 +791,11 @@ public final class InstrumentFrustumManager {
                 lastDistanceKm = -1.0;
                 return;
             }
+            VectorIJK cameraBodyFixed = new VectorIJK(
+                    cameraHelioJ2000[0] - bodyPosJ2000.getI(),
+                    cameraHelioJ2000[1] - bodyPosJ2000.getJ(),
+                    cameraHelioJ2000[2] - bodyPosJ2000.getK());
+            j2000ToBodyFixed.mxv(cameraBodyFixed, cameraBodyFixed);
 
             int triangleVertexCount = 0;
             for (List<VectorIJK> polygon : recordedPolygons) {
@@ -818,7 +823,7 @@ public final class InstrumentFrustumManager {
 
             lastDistanceKm = -1.0;
             for (List<VectorIJK> polygon : recordedPolygons) {
-                appendPolygon(posBuffer, polygon, j2000ToBodyFixed, bodyPosJ2000, cameraHelioJ2000);
+                appendPolygon(posBuffer, polygon, j2000ToBodyFixed, bodyPosJ2000, cameraHelioJ2000, cameraBodyFixed);
             }
             for (int i = 1; i < recordedPolygons.size(); i++) {
                 if (segmentStarts.get(i)) {
@@ -827,7 +832,9 @@ public final class InstrumentFrustumManager {
                 List<VectorIJK> previous = recordedPolygons.get(i - 1);
                 List<VectorIJK> current = recordedPolygons.get(i);
                 if (previous.size() == current.size() && previous.size() >= 2) {
-                    appendBridgeStrip(posBuffer, previous, current, j2000ToBodyFixed, bodyPosJ2000, cameraHelioJ2000);
+                    appendBridgeStrip(
+                            posBuffer, previous, current, j2000ToBodyFixed, bodyPosJ2000, cameraHelioJ2000,
+                            cameraBodyFixed);
                 }
             }
             posBuffer.flip();
@@ -843,14 +850,21 @@ public final class InstrumentFrustumManager {
                 List<VectorIJK> polygon,
                 RotationMatrixIJK j2000ToBodyFixed,
                 VectorIJK bodyPosJ2000,
-                double[] cameraHelioJ2000) {
+                double[] cameraHelioJ2000,
+                VectorIJK cameraBodyFixed) {
             if (polygon.size() < 3) {
                 return;
             }
-            float[] origin = projectSurfacePoint(polygon.get(0), j2000ToBodyFixed, bodyPosJ2000, cameraHelioJ2000);
+            VectorIJK originBodyFixed = polygon.get(0);
+            float[] origin = projectSurfacePoint(originBodyFixed, j2000ToBodyFixed, bodyPosJ2000, cameraHelioJ2000);
             for (int i = 1; i < polygon.size() - 1; i++) {
-                float[] p1 = projectSurfacePoint(polygon.get(i), j2000ToBodyFixed, bodyPosJ2000, cameraHelioJ2000);
-                float[] p2 = projectSurfacePoint(polygon.get(i + 1), j2000ToBodyFixed, bodyPosJ2000, cameraHelioJ2000);
+                VectorIJK p1BodyFixed = polygon.get(i);
+                VectorIJK p2BodyFixed = polygon.get(i + 1);
+                if (!isVisibleSurfaceTriangle(originBodyFixed, p1BodyFixed, p2BodyFixed, cameraBodyFixed)) {
+                    continue;
+                }
+                float[] p1 = projectSurfacePoint(p1BodyFixed, j2000ToBodyFixed, bodyPosJ2000, cameraHelioJ2000);
+                float[] p2 = projectSurfacePoint(p2BodyFixed, j2000ToBodyFixed, bodyPosJ2000, cameraHelioJ2000);
                 putVertex(buffer, origin);
                 putVertex(buffer, p1);
                 putVertex(buffer, p2);
@@ -866,14 +880,25 @@ public final class InstrumentFrustumManager {
                 List<VectorIJK> current,
                 RotationMatrixIJK j2000ToBodyFixed,
                 VectorIJK bodyPosJ2000,
-                double[] cameraHelioJ2000) {
+                double[] cameraHelioJ2000,
+                VectorIJK cameraBodyFixed) {
             int n = previous.size();
             for (int i = 0; i < n; i++) {
                 int j = (i + 1) % n;
-                float[] a0 = projectSurfacePoint(previous.get(i), j2000ToBodyFixed, bodyPosJ2000, cameraHelioJ2000);
-                float[] a1 = projectSurfacePoint(previous.get(j), j2000ToBodyFixed, bodyPosJ2000, cameraHelioJ2000);
-                float[] b1 = projectSurfacePoint(current.get(j), j2000ToBodyFixed, bodyPosJ2000, cameraHelioJ2000);
-                float[] b0 = projectSurfacePoint(current.get(i), j2000ToBodyFixed, bodyPosJ2000, cameraHelioJ2000);
+                VectorIJK a0BodyFixed = previous.get(i);
+                VectorIJK a1BodyFixed = previous.get(j);
+                VectorIJK b1BodyFixed = current.get(j);
+                VectorIJK b0BodyFixed = current.get(i);
+                if (!isVisibleSurfaceTriangle(a0BodyFixed, a1BodyFixed, b1BodyFixed, cameraBodyFixed)) {
+                    continue;
+                }
+                if (!isVisibleSurfaceTriangle(a0BodyFixed, b1BodyFixed, b0BodyFixed, cameraBodyFixed)) {
+                    continue;
+                }
+                float[] a0 = projectSurfacePoint(a0BodyFixed, j2000ToBodyFixed, bodyPosJ2000, cameraHelioJ2000);
+                float[] a1 = projectSurfacePoint(a1BodyFixed, j2000ToBodyFixed, bodyPosJ2000, cameraHelioJ2000);
+                float[] b1 = projectSurfacePoint(b1BodyFixed, j2000ToBodyFixed, bodyPosJ2000, cameraHelioJ2000);
+                float[] b0 = projectSurfacePoint(b0BodyFixed, j2000ToBodyFixed, bodyPosJ2000, cameraHelioJ2000);
                 putVertex(buffer, a0);
                 putVertex(buffer, a1);
                 putVertex(buffer, b1);
@@ -885,6 +910,21 @@ public final class InstrumentFrustumManager {
                 lastDistanceKm = minDistance(lastDistanceKm, b1);
                 lastDistanceKm = minDistance(lastDistanceKm, b0);
             }
+        }
+
+        private boolean isVisibleSurfaceTriangle(
+                VectorIJK a, VectorIJK b, VectorIJK c, VectorIJK cameraBodyFixed) {
+            return isVisibleSurfacePoint(a, cameraBodyFixed)
+                    && isVisibleSurfacePoint(b, cameraBodyFixed)
+                    && isVisibleSurfacePoint(c, cameraBodyFixed);
+        }
+
+        private boolean isVisibleSurfacePoint(VectorIJK bodyFixedPoint, VectorIJK cameraBodyFixed) {
+            VectorIJK normal = shape.computeOutwardNormal(bodyFixedPoint, new VectorIJK());
+            double toCameraX = cameraBodyFixed.getI() - bodyFixedPoint.getI();
+            double toCameraY = cameraBodyFixed.getJ() - bodyFixedPoint.getJ();
+            double toCameraZ = cameraBodyFixed.getK() - bodyFixedPoint.getK();
+            return normal.getI() * toCameraX + normal.getJ() * toCameraY + normal.getK() * toCameraZ > 0.0;
         }
 
         private float[] projectSurfacePoint(
