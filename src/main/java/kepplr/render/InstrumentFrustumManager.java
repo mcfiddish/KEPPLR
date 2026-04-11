@@ -816,9 +816,10 @@ public final class InstrumentFrustumManager {
             if (shape == null || polygonBodyFixed.size() < 3) {
                 return;
             }
+            boolean segmentStart = startsNewPersistentSegment(startsNewSegment, recordedColors, color);
             recordedPolygons.add(copyPolygon(polygonBodyFixed));
             recordedColors.add(copyColor(color));
-            segmentStarts.add(startsNewSegment || recordedPolygons.size() == 1);
+            segmentStarts.add(segmentStart);
             dirty = true;
         }
 
@@ -1040,6 +1041,13 @@ public final class InstrumentFrustumManager {
         private void putColor(FloatBuffer colors, ColorRGBA color) {
             colors.put(color.r).put(color.g).put(color.b).put(color.a);
         }
+    }
+
+    static boolean startsNewPersistentSegment(
+            boolean requestedSegmentStart, List<ColorRGBA> recordedColors, ColorRGBA color) {
+        return requestedSegmentStart
+                || recordedColors.isEmpty()
+                || !sameColor(recordedColors.get(recordedColors.size() - 1), color);
     }
 
     // ── Inner class: per-instrument render state ──────────────────────────────

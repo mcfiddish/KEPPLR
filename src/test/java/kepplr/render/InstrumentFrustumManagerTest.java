@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import com.jme3.math.ColorRGBA;
 import java.lang.reflect.Modifier;
+import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import picante.math.vectorspace.RotationMatrixIJK;
@@ -120,5 +121,18 @@ class InstrumentFrustumManagerTest {
                 new ColorRGBA(0.1f, 0.2f, 0.3f, 0.4f), new ColorRGBA(0.1f, 0.2f, 0.3f, 0.4f)));
         assertFalse(InstrumentFrustumManager.sameColor(
                 new ColorRGBA(0.1f, 0.2f, 0.3f, 0.4f), new ColorRGBA(0.1f, 0.2f, 0.3f, 0.5f)));
+    }
+
+    @Test
+    @DisplayName("retained swath color changes force a new persistent segment")
+    void persistentSegmentStartsWhenColorChanges() {
+        ColorRGBA blue = new ColorRGBA(0f, 0f, 1f, 0.35f);
+        ColorRGBA sameBlue = new ColorRGBA(0f, 0f, 1f, 0.35f);
+        ColorRGBA purple = new ColorRGBA(1f, 0f, 1f, 0.35f);
+
+        assertTrue(InstrumentFrustumManager.startsNewPersistentSegment(false, List.of(), blue));
+        assertFalse(InstrumentFrustumManager.startsNewPersistentSegment(false, List.of(blue), sameBlue));
+        assertTrue(InstrumentFrustumManager.startsNewPersistentSegment(false, List.of(blue), purple));
+        assertTrue(InstrumentFrustumManager.startsNewPersistentSegment(true, List.of(blue), sameBlue));
     }
 }
