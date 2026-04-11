@@ -244,7 +244,10 @@ public final class InstrumentFrustumManager {
         KEPPLREphemeris eph = KEPPLRConfiguration.getInstance().getEphemeris();
 
         for (FrustumEntry entry : entriesByCode.values()) {
-            if (!entry.visible) continue;
+            if (!entry.visible) {
+                entry.persistenceSegmentActive = false;
+                continue;
+            }
 
             // Apex: center body's J2000 heliocentric position, made camera-relative
             VectorIJK centerPosJ2000 = eph.getHeliocentricPositionJ2000(entry.instrument.center(), currentEt);
@@ -283,7 +286,10 @@ public final class InstrumentFrustumManager {
             GeometryMetrics metrics = entry.updateGeometry(
                     apexX, apexY, apexZ, centerPosJ2000, j2000ToInstrument, target, cameraHelioJ2000);
             if (entry.persistenceEnabled && entry.hasLiveFootprint()) {
-                recordPersistentFootprintIfNeeded(entry);
+                recordPersistentFootprintIfNeeded(entry, !entry.persistenceSegmentActive);
+                entry.persistenceSegmentActive = true;
+            } else {
+                entry.persistenceSegmentActive = false;
             }
 
             // One-shot diagnostics: log apex, boresight, and all body positions on first render
@@ -352,6 +358,7 @@ public final class InstrumentFrustumManager {
         }
         entry.visible = visible;
         if (!visible) {
+            entry.persistenceSegmentActive = false;
             entry.geometry.removeFromParent();
             entry.outlineGeometry.removeFromParent();
             entry.nearGeometry.removeFromParent();
@@ -367,6 +374,9 @@ public final class InstrumentFrustumManager {
             return;
         }
         entry.persistenceEnabled = enabled;
+        if (!enabled) {
+            entry.persistenceSegmentActive = false;
+        }
     }
 
     public void setPersistenceEnabled(String instrumentName, boolean enabled) {
@@ -421,7 +431,7 @@ public final class InstrumentFrustumManager {
         }
     }
 
-    private void recordPersistentFootprintIfNeeded(FrustumEntry entry) {
+    private void recordPersistentFootprintIfNeeded(FrustumEntry entry, boolean startsNewSegment) {
         if (entry.liveFootprintBodyId == null || entry.liveFootprintBodyFixed.isEmpty() || !entry.liveFootprintClosed) {
             return;
         }
@@ -429,7 +439,7 @@ public final class InstrumentFrustumManager {
         PersistentCoverageOverlay overlay = persistentCoverageOverlays.computeIfAbsent(
                 key,
                 k -> new PersistentCoverageOverlay(assetManager, entry.instrument.code(), entry.liveFootprintBodyId));
-        overlay.accumulate(entry.liveFootprintBodyFixed);
+        overlay.accumulate(entry.liveFootprintBodyFixed, startsNewSegment);
     }
 
     static VectorIJK instrumentToJ2000(UnwritableVectorIJK instrumentVector, RotationMatrixIJK j2000ToInstrument) {
@@ -727,6 +737,7 @@ public final class InstrumentFrustumManager {
         final Ellipsoid shape;
         final Geometry geometry;
         final List<List<VectorIJK>> recordedPolygons = new ArrayList<>();
+        final List<Boolean> segmentStarts = new ArrayList<>();
         FloatBuffer posBuffer = BufferUtils.createFloatBuffer(3);
         double lastDistanceKm = -1.0;
         boolean dirty = true;
@@ -754,11 +765,12 @@ public final class InstrumentFrustumManager {
             this.geometry.setQueueBucket(RenderQueue.Bucket.Transparent);
         }
 
-        void accumulate(List<VectorIJK> polygonBodyFixed) {
+        void accumulate(List<VectorIJK> polygonBodyFixed, boolean startsNewSegment) {
             if (shape == null || polygonBodyFixed.size() < 3) {
                 return;
             }
             recordedPolygons.add(copyPolygon(polygonBodyFixed));
+            segmentStarts.add(startsNewSegment || recordedPolygons.size() == 1);
             dirty = true;
         }
 
@@ -787,6 +799,9 @@ public final class InstrumentFrustumManager {
                 }
             }
             for (int i = 1; i < recordedPolygons.size(); i++) {
+                if (segmentStarts.get(i)) {
+                    continue;
+                }
                 List<VectorIJK> previous = recordedPolygons.get(i - 1);
                 List<VectorIJK> current = recordedPolygons.get(i);
                 if (previous.size() == current.size() && previous.size() >= 2) {
@@ -806,6 +821,9 @@ public final class InstrumentFrustumManager {
                 appendPolygon(posBuffer, polygon, j2000ToBodyFixed, bodyPosJ2000, cameraHelioJ2000);
             }
             for (int i = 1; i < recordedPolygons.size(); i++) {
+                if (segmentStarts.get(i)) {
+                    continue;
+                }
                 List<VectorIJK> previous = recordedPolygons.get(i - 1);
                 List<VectorIJK> current = recordedPolygons.get(i);
                 if (previous.size() == current.size() && previous.size() >= 2) {
@@ -929,6 +947,7 @@ public final class InstrumentFrustumManager {
         boolean footprintVisible = false;
         boolean nearSegmentVisible = false;
         boolean persistenceEnabled = false;
+        boolean persistenceSegmentActive = false;
         EphemerisID liveFootprintBodyId = null;
         List<VectorIJK> liveFootprintBodyFixed = List.of();
         boolean liveFootprintClosed = false;
