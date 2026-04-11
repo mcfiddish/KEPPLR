@@ -246,6 +246,75 @@ public interface SimulationCommands {
             double lookX, double lookY, double lookZ, double upX, double upY, double upZ, double durationSeconds);
 
     /**
+     * Set the camera position and orientation together, relative to the current focus body in the active camera frame.
+     *
+     * <p>This is the combined form of {@link #setCameraPosition(double, double, double, double)} and
+     * {@link #setCameraOrientation(double, double, double, double, double, double, double)}. Position and orientation
+     * are applied as one queued camera request, so animated transitions move and rotate together instead of cancelling
+     * each other.
+     *
+     * <p>For deterministic per-frame capture loops, callers should compute the desired pose for each frame and use
+     * {@code durationSeconds = 0.0}. Nonzero durations are wall-clock transitions; issuing one every frame continuously
+     * restarts the transition.
+     *
+     * @param x x position component in km
+     * @param y y position component in km
+     * @param z z position component in km
+     * @param lookX x component of look direction
+     * @param lookY y component of look direction
+     * @param lookZ z component of look direction
+     * @param upX x component of up vector
+     * @param upY y component of up vector
+     * @param upZ z component of up vector
+     * @param durationSeconds transition duration in wall-clock seconds
+     */
+    void setCameraPose(
+            double x,
+            double y,
+            double z,
+            double lookX,
+            double lookY,
+            double lookZ,
+            double upX,
+            double upY,
+            double upZ,
+            double durationSeconds);
+
+    /**
+     * Set the camera position and orientation together, relative to an explicit origin body in the active camera frame.
+     *
+     * <p>Does not change the focused body. Position and orientation are applied as one queued camera request.
+     *
+     * <p>For deterministic per-frame capture loops, callers should compute the desired pose for each frame and use
+     * {@code durationSeconds = 0.0}. Nonzero durations are wall-clock transitions; issuing one every frame continuously
+     * restarts the transition.
+     *
+     * @param x x position component in km
+     * @param y y position component in km
+     * @param z z position component in km
+     * @param originNaifId NAIF ID of the origin body
+     * @param lookX x component of look direction
+     * @param lookY y component of look direction
+     * @param lookZ z component of look direction
+     * @param upX x component of up vector
+     * @param upY y component of up vector
+     * @param upZ z component of up vector
+     * @param durationSeconds transition duration in wall-clock seconds
+     */
+    void setCameraPose(
+            double x,
+            double y,
+            double z,
+            int originNaifId,
+            double lookX,
+            double lookY,
+            double lookZ,
+            double upX,
+            double upY,
+            double upZ,
+            double durationSeconds);
+
+    /**
      * Switch to the synodic camera frame defined by explicit focus and selected bodies, without changing focused,
      * targeted, or selected body state.
      *

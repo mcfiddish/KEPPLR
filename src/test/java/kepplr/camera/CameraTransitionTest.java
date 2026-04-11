@@ -384,6 +384,46 @@ class CameraTransitionTest {
     }
 
     @Test
+    @DisplayName("CAMERA_POSE with zero duration moves camera and snaps orientation")
+    void cameraPoseInstantSnap() {
+        state.setFocusedBodyId(EARTH);
+        VectorIJK earthPos = eph.getHeliocentricPositionJ2000(EARTH, testEt);
+
+        controller.requestCameraPose(0, 0, 50000, EARTH, 0, 0, 1, 0, 1, 0, 0);
+        controller.update(0.016f, cam, camPos);
+
+        assertEquals(earthPos.getI(), camPos[0], 1.0, "Camera X should be at Earth X");
+        assertEquals(earthPos.getJ(), camPos[1], 1.0, "Camera Y should be at Earth Y");
+        assertEquals(earthPos.getK() + 50000.0, camPos[2], 1.0, "Camera Z should be 50000 km above Earth");
+
+        Vector3f dir = cam.getDirection();
+        assertTrue(dir.z > 0.99f, "Camera should look along +Z; dir.z=" + dir.z);
+        assertFalse(controller.isActive(), "Instant pose should not leave an active transition");
+    }
+
+    @Test
+    @DisplayName("Animated CAMERA_POSE moves and rotates as one transition")
+    void cameraPoseAnimatedTransition() {
+        state.setFocusedBodyId(EARTH);
+        VectorIJK earthPos = eph.getHeliocentricPositionJ2000(EARTH, testEt);
+        double[] before = camPos.clone();
+
+        controller.requestCameraPose(0, 0, 50000, EARTH, 0, 0, 1, 0, 1, 0, 2.0);
+        controller.update(0.0f, cam, camPos);
+        assertTrue(controller.isActive(), "Pose transition should be active");
+
+        controller.update(1.0f, cam, camPos);
+        assertTrue(controller.isActive(), "Pose transition should still be active halfway");
+        boolean movedHalfway = Math.abs(camPos[2] - before[2]) > 1e-6;
+        assertTrue(movedHalfway, "Camera position should change during pose transition");
+
+        controller.update(1.0f, cam, camPos);
+        assertFalse(controller.isActive(), "Pose transition should complete");
+        assertEquals(earthPos.getK() + 50000.0, camPos[2], 1.0, "Camera Z should reach target");
+        assertTrue(cam.getDirection().z > 0.99f, "Camera should reach target look direction");
+    }
+
+    @Test
     @DisplayName("Animated TILT transition interpolates over duration")
     void tiltAnimatedTransition() {
         Quaternion before = cam.getRotation().clone();

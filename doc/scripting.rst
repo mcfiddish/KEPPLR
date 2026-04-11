@@ -154,6 +154,12 @@ These methods start animated transitions.  Use ``waitTransition()`` to block unt
    * - ``setCameraOrientation(double lookX, double lookY, double lookZ, double upX, double upY, double upZ, double durationSec)``
      - Set the camera look and up directions in the active frame.
      - ``kepplr.setCameraOrientation(1,0,0, 0,0,1, 3.0); kepplr.waitTransition()``
+   * - ``setCameraPose(double x, double y, double z, double lookX, double lookY, double lookZ, double upX, double upY, double upZ, double durationSec)``
+     - Set camera position and orientation together, relative to the focused body.
+     - ``kepplr.setCameraPose(0,0,50000, 0,0,-1, 0,1,0, 3.0); kepplr.waitTransition()``
+   * - ``setCameraPose(double x, double y, double z, int origin, double lookX, double lookY, double lookZ, double upX, double upY, double upZ, double durationSec)``
+     - Set camera position and orientation together, relative to an explicit body.
+     - ``kepplr.setCameraPose(0,0,50000, 301, 0,0,-1, 0,1,0, 3.0); kepplr.waitTransition()``
    * - ``cancelTransition()``
      - Cancel any in-progress camera transition.
      - ``kepplr.cancelTransition()``

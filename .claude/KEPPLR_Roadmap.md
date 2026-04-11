@@ -370,7 +370,7 @@ any body and any `VectorType`; the GUI exposes the common cases only.
 
 ### 19c. Camera Scripting API
 Camera navigation commands (`zoom`, `orbit`, `tilt`, `roll`, `yaw`, `setFov`,
-`setCameraPosition`, `setCameraOrientation`, `setSynodicFrame`) added to
+`setCameraPosition`, `setCameraOrientation`, `setCameraPose`, `setSynodicFrame`) added to
 `SimulationCommands`. `CameraInputHandler` refactored to delegate to these
 commands with `durationSeconds = 0` for all mouse and keyboard navigation.
 `DEFAULT_CAMERA_TRANSITION_DURATION_SECONDS`, `FOV_MIN_DEG`, and `FOV_MAX_DEG`
@@ -378,6 +378,15 @@ added to `KepplrConstants`. Synodic frame override IDs (`synodicFrameFocusId`,
 `synodicFrameTargetId`) added to `DefaultSimulationState` for
 `setSynodicFrame()` without disturbing interaction state. All new methods fully
 Javadoc'd with usage examples per the hard constraint in the step entry.
+
+`setCameraPose(...)` is the compound camera command for scripts that need position
+and orientation to change as one operation. It has focus-relative and explicit-origin
+NAIF overloads. For `durationSeconds > 0`, `TransitionController` runs a single
+`CAMERA_POSE` transition that lerps position and slerps orientation with the same
+eased interpolation parameter. For `durationSeconds <= 0`, the pose snaps on the
+next render frame. This avoids the cancellation behavior that occurs when separate
+animated `setCameraPosition(...)` and `setCameraOrientation(...)` calls are issued
+back-to-back. (See D-072.)
 
 ### 20. Groovy Scripting Layer
 Groovy scripting API implemented via three new classes in `kepplr.scripting`:
@@ -400,9 +409,11 @@ Groovy scripting API implemented via three new classes in `kepplr.scripting`:
   method call and records method name, arguments, and wall timestamp. On stop,
   serializes the log as a runnable Groovy script with `waitWall()` calls
   inserted between commands. Instant camera commands (`durationSeconds == 0`)
-  are coalesced within a 250ms window using a hybrid pose-snapshot / delta
-  strategy rather than recorded verbatim (see D-024). Commands with
-  `durationSeconds > 0` are never coalesced.
+  are coalesced within a 250ms window rather than recorded verbatim: deltas such
+  as orbit/yaw/truck are accumulated, multiplicative zoom is multiplied, and
+  absolute camera state commands such as `setFov`, `setCameraPosition`,
+  `setCameraOrientation`, and `setCameraPose` use last-value-wins semantics
+  (see D-024 and D-072). Commands with `durationSeconds > 0` are never coalesced.
 
 Timing primitives on `KepplrScript`: `waitRenderFrames(int frameCount)`,
 `waitWall(double seconds)`, `waitSim(double seconds)`,
@@ -776,6 +787,14 @@ capture timestamp (dimensions read from the first captured PNG). NOT on
 `SimulationCommands` — called directly from `KepplrScript` and the GUI capture
 dialog.
 
+`captureSequence(...)` intentionally has a fixed camera for the duration of one
+blocking sequence; Groovy commands cannot be inserted inside its internal loop. For
+camera-keyed animations, scripts should own the loop explicitly: set ET for the
+frame, call `setCameraPose(..., 0.0)`, fence with `waitRenderFrames(2)`, and then
+call `saveScreenshot(...)`. This is the supported path for deterministic frame
+sequences with scripted camera motion. `doc/scripting_examples.rst` includes a
+camera-keyed capture example.
+
 **(3) GUI integration.** `File → Capture Sequence…` opens a dialog (Start UTC,
 ET step, frame count) with a `DirectoryChooser`, runs on a dedicated daemon
 thread. Mutual exclusion with the script runner (each checks the other's
@@ -1008,6 +1027,12 @@ No behavioral change — purely a naming improvement.
   Javadoc on all `KepplrScript.setCameraPosition()` and
   `setCameraOrientation()` overloads updated to document that vectors are
   expressed in the current camera frame. (See D-054.)
+
+- **Combined `setCameraPose`.** Position and orientation can now be set in one
+  command through `SimulationCommands`, `KepplrScript`, and `CommandRecorder`.
+  This is the preferred primitive for exact per-frame camera poses and for
+  animated moves where translation and pointing must complete together. (See
+  D-072.)
 
 - **`setWindowSize(int, int)`** added to `SimulationCommands` / `KepplrScript` /
   `CommandRecorder`. Implementation uses a `BiConsumer<Integer, Integer>` callback

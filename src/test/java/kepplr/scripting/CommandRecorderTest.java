@@ -235,6 +235,36 @@ class CommandRecorderTest {
         }
 
         @Test
+        @DisplayName("Multiple instant setCameraPose commands are coalesced by last value")
+        void instantCameraPoseCoalesced() {
+            recorder.startRecording();
+            recorder.setCameraPose(0, 0, 10000, 0, 0, -1, 0, 1, 0, 0);
+            recorder.setCameraPose(0, 0, 20000, 0, 0, 1, 0, 1, 0, 0);
+            recorder.setPaused(true);
+            recorder.stopRecording();
+
+            String script = recorder.getScript();
+            long poseCount = script.lines()
+                    .filter(l -> l.contains("kepplr.setCameraPose("))
+                    .count();
+            assertEquals(1, poseCount, "Should have one coalesced camera pose: " + script);
+            assertTrue(script.contains("20000.0000"), "Coalesced pose should keep the last position: " + script);
+        }
+
+        @Test
+        @DisplayName("Non-instant setCameraPose command is recorded verbatim")
+        void nonInstantCameraPoseVerbatim() {
+            recorder.startRecording();
+            recorder.setCameraPose(0, 0, 10000, 301, 0, 0, -1, 0, 1, 0, 2.0);
+            recorder.stopRecording();
+
+            String script = recorder.getScript();
+            assertTrue(
+                    script.contains("kepplr.setCameraPose(0.0, 0.0, 10000.0, 301, 0.0, 0.0, -1.0, 0.0, 1.0, 0.0, 2.0)"),
+                    "Non-instant pose should be verbatim: " + script);
+        }
+
+        @Test
         @DisplayName("Orbit coalescing sums both degree arguments")
         void orbitCoalesced() {
             recorder.startRecording();
@@ -532,9 +562,7 @@ class CommandRecorderTest {
             recorder.clearFrustumFootprints();
             recorder.stopRecording();
             String script = recorder.getScript();
-            assertTrue(
-                    script.contains("clearFrustumFootprints()"),
-                    "Expected clearFrustumFootprints() in: " + script);
+            assertTrue(script.contains("clearFrustumFootprints()"), "Expected clearFrustumFootprints() in: " + script);
         }
     }
 
@@ -634,6 +662,37 @@ class CommandRecorderTest {
         @Override
         public void setCameraOrientation(double lx, double ly, double lz, double ux, double uy, double uz, double dur) {
             lastMethod = "setCameraOrientation";
+        }
+
+        @Override
+        public void setCameraPose(
+                double x,
+                double y,
+                double z,
+                double lx,
+                double ly,
+                double lz,
+                double ux,
+                double uy,
+                double uz,
+                double dur) {
+            lastMethod = "setCameraPoseFocus";
+        }
+
+        @Override
+        public void setCameraPose(
+                double x,
+                double y,
+                double z,
+                int id,
+                double lx,
+                double ly,
+                double lz,
+                double ux,
+                double uy,
+                double uz,
+                double dur) {
+            lastMethod = "setCameraPoseOrigin";
         }
 
         @Override

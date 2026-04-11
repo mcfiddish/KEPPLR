@@ -31,8 +31,8 @@ import picante.surfaces.Ellipsoid;
  * {@code goTo} exist, the pending {@code goTo} is discarded and the new {@code pointAt} takes over. Queue depth is
  * therefore at most 1: one active + one pending {@code goTo}.
  *
- * <p>All Step 19c camera commands (zoom, orbit, tilt, yaw, roll, fov, setCameraPosition, setCameraOrientation) cancel
- * any active transition when they arrive, same as a new {@code pointAt}.
+ * <p>All Step 19c camera commands (zoom, orbit, tilt, yaw, roll, fov, setCameraPosition, setCameraOrientation,
+ * setCameraPose) cancel any active transition when they arrive, same as a new {@code pointAt}.
  *
  * <h3>Manual navigation cancellation</h3>
  *
@@ -62,6 +62,7 @@ public final class TransitionController {
                     RollRequest,
                     CameraPositionRequest,
                     CameraOrientationRequest,
+                    CameraPoseRequest,
                     TranslateRequest,
                     CancelRequest,
                     FollowRequest {}
@@ -89,6 +90,20 @@ public final class TransitionController {
 
     private record CameraOrientationRequest(
             double lookX, double lookY, double lookZ, double upX, double upY, double upZ, double durationSeconds)
+            implements PendingRequest {}
+
+    private record CameraPoseRequest(
+            double x,
+            double y,
+            double z,
+            int originNaifId,
+            double lookX,
+            double lookY,
+            double lookZ,
+            double upX,
+            double upY,
+            double upZ,
+            double durationSeconds)
             implements PendingRequest {}
 
     /** Identifies which camera axis a translate request uses. */
@@ -230,6 +245,22 @@ public final class TransitionController {
         inbox.add(new CameraOrientationRequest(lookX, lookY, lookZ, upX, upY, upZ, durationSeconds));
     }
 
+    /** Request a combined camera pose transition (Step 19c). Thread-safe. */
+    public void requestCameraPose(
+            double x,
+            double y,
+            double z,
+            int originNaifId,
+            double lookX,
+            double lookY,
+            double lookZ,
+            double upX,
+            double upY,
+            double upZ,
+            double durationSeconds) {
+        inbox.add(new CameraPoseRequest(x, y, z, originNaifId, lookX, lookY, lookZ, upX, upY, upZ, durationSeconds));
+    }
+
     /** Request a truck (screen-right) translation (Step 24). Thread-safe. */
     public void requestTruck(double km, double durationSeconds) {
         inbox.add(new TranslateRequest(TranslateAxis.RIGHT, km, durationSeconds));
@@ -342,6 +373,7 @@ public final class TransitionController {
                     followBodyId = r.naifId();
                     followDistKm = r.distKm();
                 }
+                case CameraPoseRequest r -> handleCameraPoseRequest(r, cam, cameraHelioJ2000);
             }
         }
 
@@ -393,6 +425,7 @@ public final class TransitionController {
             case FOV -> applyFovTransition(active, t, cam);
             case ORBIT -> earlyComplete = !applyOrbitTransition(active, t, cam, cameraHelioJ2000);
             case CAMERA_POSITION -> earlyComplete = !applyCameraPositionTransition(active, t, cameraHelioJ2000);
+            case CAMERA_POSE -> earlyComplete = !applyCameraPoseTransition(active, t, cam, cameraHelioJ2000);
             case TRANSLATE -> applyTranslateTransition(active, t, cameraHelioJ2000);
         }
 
@@ -661,6 +694,46 @@ public final class TransitionController {
                 CameraTransition.Type.CAMERA_LOOK_DIRECTION, startQ, endQ, r.durationSeconds());
     }
 
+    private void handleCameraPoseRequest(CameraPoseRequest r, Camera cam, double[] cameraHelioJ2000) {
+        cancelForNewRequest();
+
+        int originId = r.originNaifId();
+        if (originId == -1) {
+            originId = state.focusedBodyIdProperty().get();
+        }
+        if (originId == -1) return;
+
+        double[] originPos = getBodyPos(originId);
+        if (originPos == null) return;
+
+        double[] startOff = {
+            cameraHelioJ2000[0] - originPos[0], cameraHelioJ2000[1] - originPos[1], cameraHelioJ2000[2] - originPos[2]
+        };
+        VectorIJK endJ2000 = frameToJ2000(new VectorIJK(r.x(), r.y(), r.z()));
+        double[] endOff = {endJ2000.getI(), endJ2000.getJ(), endJ2000.getK()};
+
+        VectorIJK lookJ2000 = frameToJ2000(new VectorIJK(r.lookX(), r.lookY(), r.lookZ()));
+        VectorIJK upJ2000 = frameToJ2000(new VectorIJK(r.upX(), r.upY(), r.upZ()));
+        Vector3f lookDir = new Vector3f((float) lookJ2000.getI(), (float) lookJ2000.getJ(), (float) lookJ2000.getK());
+        Vector3f upDir = new Vector3f((float) upJ2000.getI(), (float) upJ2000.getJ(), (float) upJ2000.getK());
+        if (lookDir.lengthSquared() < 1e-20f) return;
+        lookDir.normalizeLocal();
+
+        Quaternion startQ = cam.getRotation().clone();
+        Quaternion endQ = buildLookAtQuaternion(lookDir, upDir);
+
+        if (r.durationSeconds() <= KepplrConstants.CAMERA_TRANSITION_INSTANT_THRESHOLD_SEC) {
+            cameraHelioJ2000[0] = originPos[0] + endOff[0];
+            cameraHelioJ2000[1] = originPos[1] + endOff[1];
+            cameraHelioJ2000[2] = originPos[2] + endOff[2];
+            cam.setAxes(endQ);
+            state.setCameraPositionJ2000(cameraHelioJ2000);
+            return;
+        }
+
+        active = CameraTransition.cameraPose(originId, startOff, endOff, startQ, endQ, r.durationSeconds());
+    }
+
     private void handleTranslateRequest(TranslateRequest r, Camera cam, double[] cameraHelioJ2000) {
         cancelForNewRequest();
 
@@ -806,6 +879,20 @@ public final class TransitionController {
         cameraHelioJ2000[1] = originPos[1] + lerp(startOff[1], endOff[1], t);
         cameraHelioJ2000[2] = originPos[2] + lerp(startOff[2], endOff[2], t);
         return true;
+    }
+
+    /**
+     * Apply camera pose transition: lerp offset relative to origin body and slerp orientation.
+     *
+     * @return {@code false} if origin body position unavailable (early completion)
+     */
+    private boolean applyCameraPoseTransition(
+            CameraTransition transition, double t, Camera cam, double[] cameraHelioJ2000) {
+        boolean positionAvailable = applyCameraPositionTransition(transition, t, cameraHelioJ2000);
+        if (positionAvailable) {
+            applyOrientationTransition(transition, t, cam);
+        }
+        return positionAvailable;
     }
 
     // ── Private helpers ──────────────────────────────────────────────────────────

@@ -2,10 +2,10 @@ package kepplr.scripting;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-import java.util.Collections;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import kepplr.camera.CameraFrame;
 import kepplr.commands.SimulationCommands;
@@ -169,9 +169,7 @@ class ScriptRunnerTest {
     @DisplayName("Scripts can enable frustum persistence by NAIF code and name")
     void scriptsCanSetFrustumPersistence() throws Exception {
         Path script = tempDir.resolve("frustum-persistence.groovy");
-        Files.writeString(
-                script,
-                """
+        Files.writeString(script, """
                 kepplr.setFrustumPersistenceEnabled(-98300, true)
                 kepplr.setFrustumPersistenceEnabled("NH_LORRI", false)
                 """);
@@ -187,9 +185,7 @@ class ScriptRunnerTest {
     @DisplayName("Scripts can clear frustum footprints by NAIF code, name, and all-clear")
     void scriptsCanClearFrustumFootprints() throws Exception {
         Path script = tempDir.resolve("frustum-clears.groovy");
-        Files.writeString(
-                script,
-                """
+        Files.writeString(script, """
                 kepplr.clearFrustumFootprints(-98300)
                 kepplr.clearFrustumFootprints("NH_LORRI")
                 kepplr.clearFrustumFootprints()
@@ -207,9 +203,7 @@ class ScriptRunnerTest {
     @DisplayName("Scripts can set frustum color by instrument name with RGB and hex overloads")
     void scriptsCanSetFrustumColorByName() throws Exception {
         Path script = tempDir.resolve("frustum-colors.groovy");
-        Files.writeString(
-                script,
-                """
+        Files.writeString(script, """
                 kepplr.setFrustumColor("NH_LORRI", 25, 50, 75)
                 kepplr.setFrustumColor("NH_LORRI", "ff5014")
                 """);
@@ -284,6 +278,33 @@ class ScriptRunnerTest {
         @Override
         public void setCameraOrientation(
                 double lx, double ly, double lz, double ux, double uy, double uz, double dur) {}
+
+        @Override
+        public void setCameraPose(
+                double x,
+                double y,
+                double z,
+                double lx,
+                double ly,
+                double lz,
+                double ux,
+                double uy,
+                double uz,
+                double dur) {}
+
+        @Override
+        public void setCameraPose(
+                double x,
+                double y,
+                double z,
+                int id,
+                double lx,
+                double ly,
+                double lz,
+                double ux,
+                double uy,
+                double uz,
+                double dur) {}
 
         @Override
         public void setSynodicFrame(int fid, int tid) {}
