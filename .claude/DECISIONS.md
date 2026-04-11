@@ -1892,7 +1892,80 @@ the latter is rendered-frame visibility.
 
 ---
 
-*Last updated: D-070 (`waitRenderFrames()` added; `waitTransition()` made frame-fenced), 
+## D-071: Instrument footprints are retained as body-fixed vector swaths with capture-time color
+**Status:** Accepted
+**Roadmap step:** Post-v0.1 footprint capability, phases 1-6
+
+**Context:** Step 22 initially delivered translucent instrument frustum overlays only.
+The footprint capability extends that overlay path in several stages:
+
+- Phase 1: clip visible frustum rays against target-body ellipsoids and draw live
+  surface footprints derived from the same intersection result.
+- Phase 2: retain only live footprints that were actually drawn while persistence is
+  enabled, and allow retained footprints to be cleared.
+- Phase 3: accumulate retained geometry as continuous body-fixed swaths instead of
+  isolated frame-by-frame outlines or a coarse global tile mask.
+- Phase 4: expose the persistence, clear, and color controls through
+  `SimulationCommands`, `KepplrScript`, and `CommandRecorder`.
+- Phase 5: add GLB mesh-model surface intersection later.
+- Phase 6: support per-instrument user-configurable colors while preserving
+  capture-time colors for older retained swaths.
+
+Different colors made a bug visible: repeated color sync was resetting
+`FrustumEntry.persistenceSegmentActive` every frame, which marked every retained
+footprint as the start of a new recording segment and prevented bridge-strip fill
+between consecutive footprints.
+
+**Decision:** Retained footprints are stored as body-fixed vector polygons keyed by
+instrument/body pair. During rendering, each retained closed polygon is triangulated
+and adjacent polygons in the same recording segment are bridged with filled strips.
+The renderer does not rasterize into a global lat/lon mask; this preserves close-up
+edge fidelity and avoids choosing a global tile resolution.
+
+Retained swath geometry carries a JME vertex color buffer. Each retained polygon
+copies the instrument's persistent footprint color at the moment it is recorded, so
+older swath geometry keeps its original color if the instrument color changes later.
+The live footprint line and retained swath color are separate render-manager state,
+with alpha controlled internally by the overlay type.
+
+Frustum color is exposed through `SimulationCommands`/`KepplrScript` as:
+
+- `setFrustumColor(int instrumentNaifCode, int red, int green, int blue)`
+- `setFrustumColor(String instrumentName, int red, int green, int blue)`
+- `setFrustumColor(int instrumentNaifCode, String hexColor)`
+- `setFrustumColor(String instrumentName, String hexColor)`
+
+RGB components are 8-bit integers in `[0,255]`. Hex strings accept `RRGGBB` and
+`#RRGGBB`. Normalized float RGB is not exposed publicly because calls such as
+`setFrustumColor(..., 1, 0, 0)` would be ambiguous: red in normalized form but nearly
+black in 8-bit form. Internally, `FrustumColor` converts to JME `ColorRGBA` floats.
+
+Color application is idempotent. `KepplrApp.syncFrustums()` caches the last applied
+`FrustumColor` per instrument and only calls `InstrumentFrustumManager.setFrustumColor()`
+when state changes. `InstrumentFrustumManager` also treats repeated identical colors as
+a no-op. Reapplying an unchanged color must not reset `persistenceSegmentActive`, because
+that would split continuous retained swaths back into a comb of individual footprints.
+
+**Alternatives considered:** A coarse global coverage mask — rejected because it makes
+close-up views tile-limited and forces a global resolution tradeoff. Retaining only
+outline polylines — rejected because the desired visual result is filled swath
+coverage. Public normalized float RGB — rejected due to ambiguity and script
+readability. Named colors — deferred because names are subjective and can be added
+later as a convenience without changing the canonical RGB/hex API. User-controlled
+alpha — deferred; frustum fill, live footprint, and retained swath require different
+opacities for legibility.
+
+**Consequences:** A visible intersecting frustum can create a live clipped footprint.
+When persistence is enabled, closed live footprints are retained as fixed body-surface
+swaths. Retained swaths bridge across consecutive samples in the same recording
+segment and keep their capture-time color. Scripts can set colors, enable persistence,
+accumulate swaths, disable persistence, and clear retained swaths without using
+UI-only paths. GLB mesh-model intersection and GUI color controls remain future work.
+
+---
+
+*Last updated: D-071 (instrument footprints retained as body-fixed vector swaths with
+capture-time color and RGB/hex API), D-070 (`waitRenderFrames()` added; `waitTransition()` made frame-fenced),
 D-069 (close large bodies stay in NEAR with dynamic far-plane expansion and per-body hysteresis), 
 D-068 (macOS JavaFX startup deferred to simpleInitApp and called exactly once), D-067 
 (BODY_FIXED trail reference always focus body), D-066 (synodic trail uses active frame and 
