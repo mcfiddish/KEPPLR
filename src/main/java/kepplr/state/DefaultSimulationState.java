@@ -85,7 +85,15 @@ public final class DefaultSimulationState implements SimulationState {
     private final ConcurrentHashMap<Integer, SimpleIntegerProperty> trailReferenceBody = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<VectorKey, SimpleBooleanProperty> vectorVisibility = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<Integer, SimpleBooleanProperty> frustumVisibility = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<Integer, SimpleBooleanProperty> frustumPersistenceEnabled =
+            new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<Integer, SimpleObjectProperty<FrustumColor>> frustumColors =
+            new ConcurrentHashMap<>();
     private final ConcurrentHashMap<Integer, SimpleBooleanProperty> bodyVisibility = new ConcurrentHashMap<>();
+    private final java.util.concurrent.ConcurrentLinkedQueue<Integer> pendingFrustumFootprintClears =
+            new java.util.concurrent.ConcurrentLinkedQueue<>();
+
+    public static final int CLEAR_ALL_FRUSTUM_FOOTPRINTS = Integer.MIN_VALUE;
 
     {
         // Barycenters (NAIF 0–9) hidden by default
@@ -488,15 +496,59 @@ public final class DefaultSimulationState implements SimulationState {
         return frustumVisibility.computeIfAbsent(naifCode, id -> new SimpleBooleanProperty(false));
     }
 
+    @Override
+    public ReadOnlyBooleanProperty frustumPersistenceEnabledProperty(int naifCode) {
+        return frustumPersistenceEnabled.computeIfAbsent(naifCode, id -> new SimpleBooleanProperty(false));
+    }
+
+    @Override
+    public ReadOnlyObjectProperty<FrustumColor> frustumColorProperty(int naifCode) {
+        return frustumColors.computeIfAbsent(naifCode, id -> new SimpleObjectProperty<>(null));
+    }
+
     public void setFrustumVisible(int naifCode, boolean visible) {
         frustumVisibility
                 .computeIfAbsent(naifCode, id -> new SimpleBooleanProperty(false))
                 .set(visible);
     }
 
+    public void setFrustumPersistenceEnabled(int naifCode, boolean enabled) {
+        frustumPersistenceEnabled
+                .computeIfAbsent(naifCode, id -> new SimpleBooleanProperty(false))
+                .set(enabled);
+    }
+
+    public void setFrustumColor(int naifCode, FrustumColor color) {
+        frustumColors
+                .computeIfAbsent(naifCode, id -> new SimpleObjectProperty<>(null))
+                .set(Objects.requireNonNull(color, "color"));
+    }
+
     /** Returns the frustum visibility map. Package-private for render-loop and bridge access. */
     public ConcurrentHashMap<Integer, SimpleBooleanProperty> getFrustumVisibilityMap() {
         return frustumVisibility;
+    }
+
+    /** Returns the frustum persistence-enabled map. Package-private for render-loop access. */
+    public ConcurrentHashMap<Integer, SimpleBooleanProperty> getFrustumPersistenceEnabledMap() {
+        return frustumPersistenceEnabled;
+    }
+
+    /** Returns the frustum color map. Package-private for render-loop access. */
+    public ConcurrentHashMap<Integer, SimpleObjectProperty<FrustumColor>> getFrustumColorMap() {
+        return frustumColors;
+    }
+
+    public void requestClearFrustumFootprints(int naifCode) {
+        pendingFrustumFootprintClears.add(naifCode);
+    }
+
+    public void requestClearAllFrustumFootprints() {
+        pendingFrustumFootprintClears.add(CLEAR_ALL_FRUSTUM_FOOTPRINTS);
+    }
+
+    public Integer pollPendingFrustumFootprintClear() {
+        return pendingFrustumFootprintClears.poll();
     }
 
     @Override
@@ -528,6 +580,9 @@ public final class DefaultSimulationState implements SimulationState {
         trailReferenceBody.clear();
         vectorVisibility.clear();
         frustumVisibility.clear();
+        frustumPersistenceEnabled.clear();
+        frustumColors.clear();
+        pendingFrustumFootprintClears.clear();
         bodyVisibility.clear();
         // Restore default: barycenters hidden
         for (int i = 0; i <= 9; i++) {

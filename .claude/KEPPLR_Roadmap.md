@@ -491,16 +491,190 @@ kernels via `KEPPLREphemeris.getInstruments()`.
 - `rebuildBodyScene()` expanded to a full render manager restart: `TrailManager`,
   `SunHaloRenderer`, and `LabelManager` each gained `dispose()` methods; all
   managers are torn down and reconstructed on every config reload (see D-032).
+- Post-v0.1 footprint work now shortens frustum rays against the first intersected
+  target ellipsoid, draws live surface footprints from the same intersection result,
+  and can retain closed live footprints as continuous body-fixed surface swaths.
+- `SimulationCommands`/`KepplrScript` expose frustum visibility, footprint
+  persistence enable/disable, footprint clearing, and per-instrument frustum color
+  control. Color can be specified as 8-bit RGB or `RRGGBB`/`#RRGGBB`; command
+  recording serializes these methods as executable Groovy.
+- Retained swaths are stored as body-fixed vector polygons per instrument/body pair,
+  bridged between adjacent samples within the same recording segment, and rendered
+  with per-vertex colors so previously retained geometry keeps its capture-time
+  color when the live frustum color changes later.
 
-**Out of scope for this step:** boresight line rendering; frustum shortening when the
-boresight intersects a body surface; per-instrument color configuration (hardcoded
-cyan); distance culling of frustums.
+**Still out of scope:** boresight line rendering; mesh-model surface intersection for
+GLB-backed bodies; GUI color controls; distance culling of frustums.
 
 ---
 
 ## v0.1 Complete
 
 Steps 1–22 constitute the v0.1 release. All items below are post-v0.1 work.
+
+---
+
+## Footprint Capability Roadmap and Current Status
+
+### Phase 1
+Ellipsoid-clipped live frustums and live surface footprints.
+
+Status: complete.
+
+**Requirements**
+- Instrument frustum rays stop at the first intersected body ellipsoid instead of
+  always using the fixed default extent.
+- A live surface footprint is drawn only when the frustum is visible and the
+  frustum actually intersects a body surface.
+- The live footprint is derived from the same intersection result used to clip the
+  frustum.
+- If there is no visible frustum or no valid surface hit, no footprint is drawn.
+- The implementation works in body-fixed coordinates for the target body.
+
+**Success criteria**
+- A visible frustum aimed at a body visibly terminates at the surface.
+- The corresponding footprint appears on the body surface in the expected location.
+- A frustum that misses the body remains unclipped and produces no footprint.
+- Existing frustum visibility controls still behave correctly.
+
+### Phase 2
+Persist only what was actually drawn while persistence is enabled.
+
+Status: complete.
+
+**Requirements**
+- Add a per-instrument persistence-enabled state distinct from frustum visibility.
+- While persistence is enabled, a live footprint is retained only when the frustum
+  is visible and a live footprint is successfully drawn.
+- While persistence is disabled, live footprints are never retained.
+- Persisted footprints remain on the surface as static overlays while time
+  advances and the live frustum moves away.
+- Add a way to clear persisted footprints.
+- Recording should accumulate into a continuous surface swath instead of a comb of
+  separate frame-by-frame outlines.
+
+**Success criteria**
+- With persistence enabled, a visible intersecting frustum creates retained
+  footprints over time.
+- With persistence disabled, no retained footprints are created.
+- A hidden frustum creates no retained footprints even if persistence remains
+  enabled.
+- A visible frustum that is not intersecting creates no retained footprints.
+- Persisted footprints stay fixed on the target body surface across later frames.
+- The retained result appears as a continuous filled swath rather than isolated
+  per-frame segments.
+
+### Phase 3
+Continuous retained swaths and future-proof color model.
+
+Status: complete. Continuous retained swaths are implemented. Render-path color
+support exists for live footprints and retained swaths.
+
+**Requirements**
+- Persisted geometry for a given instrument/body pair is accumulated as a continuous
+  body-fixed swath.
+- The swath is rendered from retained vector geometry rather than a coarse global
+  tile mask.
+- Retained geometry preserves close-up edge fidelity without requiring a globally
+  fine raster.
+- Live frustum state is separated from persisted footprint state.
+- Persistence-enabled state is treated as a recording mode, not as a one-shot
+  capture command.
+- The design remains compatible with future per-instrument live color and
+  capture-time retained color.
+
+**Success criteria**
+- A recorded pass over the body appears as one continuous filled swath.
+- Close-up views do not become obviously tile-limited.
+- Changing an instrument's future live color does not require recoloring previously
+  retained geometry.
+
+**Current implementation notes**
+- Retained swaths are stored as body-fixed vector polygons per instrument/body pair.
+- Adjacent retained footprints are bridged into filled surface strips when they are
+  part of the same recording segment.
+- Retained swath rendering uses vertex colors, with each retained polygon copying
+  the instrument's persistent footprint color at capture time.
+- Live footprint color and persistent footprint color are separate internal
+  render-manager state.
+- Frustum color support flows through simulation state, scripting commands, command
+  recording, and the render loop.
+- Color synchronization is idempotent; repeatedly syncing the same color must not
+  reset `persistenceSegmentActive` or split a continuous swath into per-frame
+  segments.
+- A retained swath color change starts a new persistent segment. This prevents the
+  bridge strip between the last old-color polygon and the first new-color polygon
+  from repainting the tail of the older retained swath.
+
+### Phase 4
+Script/API completion and tests.
+
+Status: partially complete. Persistence enable/disable, footprint clearing, and
+frustum color control are exposed through scripting and recording paths. Focused
+unit coverage exists for command delegation, recorder serialization, color parsing,
+pending clear queues, frustum intersection helpers, and the color-change segment
+boundary rule for retained swaths.
+
+**Requirements**
+- Expose scripting/command methods for live frustum clipping display,
+  persistence-enabled state, and footprint clearing.
+- Record these commands through the command recorder.
+- Add unit tests for command delegation, recorder serialization, state behavior, and
+  intersection math.
+- Add render-path tests where practical for layering and retained-swath rules.
+
+**Success criteria**
+- Scripts can enable persistence, accumulate retained footprints over a time
+  interval, disable persistence, and clear footprints without using UI-only paths.
+- Recorded scripts faithfully reproduce the footprint actions.
+- Tests cover the "retain only when actually drawn and persistence is enabled" rule.
+- Tests cover retained-swath continuity and clearing behavior.
+
+**Deferred test scope**
+- Full render-path/layering tests for retained swaths remain deferred until the
+  render test harness can construct JME material-backed frustum entries without
+  relying on the live application context. Current tests cover the non-rendering
+  command, state, parser, and intersection surfaces; the color-sync idempotency
+  requirement is documented in Phase 3 implementation notes.
+
+### Phase 5
+Mesh-model support.
+
+Status: not started.
+
+**Requirements**
+- Add a body-fixed ray-to-mesh intersection path for GLB-backed bodies.
+- Prefer mesh intersection when a usable mesh surface exists, otherwise fall back to
+  ellipsoid intersection.
+- Keep footprint geometry and persistence semantics unchanged from earlier phases.
+- Define which mesh geometry counts as the surface and handle performance with an
+  acceleration structure if needed.
+
+**Success criteria**
+- A GLB-backed body can receive clipped frustums and footprints based on its mesh
+  rather than only its ellipsoid.
+- Results are stable in body-fixed coordinates.
+- Performance remains acceptable for per-frame updates.
+- Ellipsoid fallback still works for bodies without mesh intersection support.
+
+### Phase 6
+User-configurable colors.
+
+Status: partially complete. Script/API support for per-instrument frustum colors is
+in place; UI controls are not.
+
+**Requirements**
+- Add per-instrument live frustum color control.
+- Each retained swath segment copies the current live frustum color at the moment it
+  is recorded.
+- Previously retained swath geometry keeps its captured color even if the instrument
+  color changes later.
+
+**Success criteria**
+- The user can record multiple swaths from the same instrument in different colors.
+- Older retained geometry keeps its original color.
+- Live frustum color and retained swath color behavior are consistent and
+  predictable.
 
 ---
 
@@ -987,8 +1161,8 @@ the latest anchor. The framebuffer capture still runs after the render pass.
 - Gaia star catalog (requires user-downloaded files)
 - Native Wayland support (Linux runs under XWayland)
 - Instrument boresight line rendering (frustum overlays implemented in Step 22; boresight as a separate line is deferred)
-- Frustum shortening when boresight intersects a body surface
-- Per-instrument frustum color configuration (hardcoded cyan for now)
+- GLB mesh-model surface intersection for instrument footprints
+- GUI controls for per-instrument frustum colors
 - `primary` parameter in `KEPPLRConfiguration.bodyBlock()` — needed for asteroid satellites whose NAIF IDs do not follow
   the planet convention (primary = x99, barycenter = x, satellites = x01–x98). Trail period computation (D-041), satellite 
   anchoring, and decluttering all currently infer the primary from NAIF arithmetic; a configured `primary` would override 

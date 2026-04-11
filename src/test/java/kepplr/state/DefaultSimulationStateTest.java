@@ -408,5 +408,76 @@ class DefaultSimulationStateTest {
             assertTrue(map.containsKey(-98300));
             assertTrue(map.get(-98300).get());
         }
+
+        @Test
+        @DisplayName("frustumPersistenceEnabledProperty defaults to false")
+        void frustumPersistenceEnabledDefault() {
+            assertFalse(state.frustumPersistenceEnabledProperty(-98300).get());
+        }
+
+        @Test
+        @DisplayName("setFrustumPersistenceEnabled(true) enables recording")
+        void setFrustumPersistenceEnabledTrue() {
+            state.setFrustumPersistenceEnabled(-98300, true);
+            assertTrue(state.frustumPersistenceEnabledProperty(-98300).get());
+        }
+
+        @Test
+        @DisplayName("requestClearFrustumFootprints queues instrument-specific clear")
+        void requestClearFrustumFootprintsQueuesRequest() {
+            state.requestClearFrustumFootprints(-98300);
+            assertEquals(-98300, state.pollPendingFrustumFootprintClear());
+        }
+
+        @Test
+        @DisplayName("requestClearAllFrustumFootprints queues all-clear sentinel")
+        void requestClearAllFrustumFootprintsQueuesRequest() {
+            state.requestClearAllFrustumFootprints();
+            assertEquals(DefaultSimulationState.CLEAR_ALL_FRUSTUM_FOOTPRINTS, state.pollPendingFrustumFootprintClear());
+        }
+
+        @Test
+        @DisplayName("pending frustum footprint clears are queued in request order")
+        void pendingFrustumFootprintClearsPreserveOrder() {
+            state.requestClearFrustumFootprints(-98300);
+            state.requestClearAllFrustumFootprints();
+            state.requestClearFrustumFootprints(-98301);
+
+            assertEquals(-98300, state.pollPendingFrustumFootprintClear());
+            assertEquals(DefaultSimulationState.CLEAR_ALL_FRUSTUM_FOOTPRINTS, state.pollPendingFrustumFootprintClear());
+            assertEquals(-98301, state.pollPendingFrustumFootprintClear());
+            assertNull(state.pollPendingFrustumFootprintClear());
+        }
+    }
+
+    @Nested
+    @DisplayName("FrustumColor")
+    class FrustumColorTests {
+
+        @Test
+        @DisplayName("hex accepts RRGGBB and #RRGGBB")
+        void hexAcceptsHashAndNoHash() {
+            assertEquals(new FrustumColor(255, 80, 20), FrustumColor.hex("#ff5014"));
+            assertEquals(new FrustumColor(255, 80, 20), FrustumColor.hex("ff5014"));
+        }
+
+        @Test
+        @DisplayName("hex rejects invalid forms")
+        void hexRejectsInvalidForms() {
+            assertAll(
+                    () -> assertThrows(IllegalArgumentException.class, () -> FrustumColor.hex(null)),
+                    () -> assertThrows(IllegalArgumentException.class, () -> FrustumColor.hex("#fff")),
+                    () -> assertThrows(IllegalArgumentException.class, () -> FrustumColor.hex("#xyzxyz")),
+                    () -> assertThrows(IllegalArgumentException.class, () -> FrustumColor.hex("#ff501400")));
+        }
+
+        @Test
+        @DisplayName("rgb rejects out-of-range components")
+        void rgbRejectsOutOfRangeComponents() {
+            assertAll(
+                    () -> assertThrows(IllegalArgumentException.class, () -> FrustumColor.rgb(-1, 0, 0)),
+                    () -> assertThrows(IllegalArgumentException.class, () -> FrustumColor.rgb(0, 256, 0)),
+                    () -> assertThrows(IllegalArgumentException.class, () -> FrustumColor.rgb(0, 0, 300)));
+        }
     }
 }

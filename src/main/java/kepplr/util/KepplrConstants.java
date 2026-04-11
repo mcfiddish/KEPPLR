@@ -746,6 +746,14 @@ public final class KepplrConstants {
      */
     public static final int INSTRUMENT_FRUSTUM_CIRCLE_APPROX_SIDES = 32;
 
+    /**
+     * Number of subdivisions inserted along each polygonal FOV edge when building the frustum boundary ring.
+     *
+     * <p>This improves visual fidelity for large footprints and partial body intersections by reducing the coarse
+     * corner-to-corner straight-edge approximation used by raw RECTANGLE/POLYGON IK bounds.
+     */
+    public static final int INSTRUMENT_FRUSTUM_EDGE_SUBDIVISIONS = 32;
+
     // ── Screenshot and capture (Step 25) ──────────────────────────────────────────────────────
 
     /**

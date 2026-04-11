@@ -223,6 +223,12 @@ Overlays and Visibility
    * - ``setFrustumVisible(String instrument, boolean visible)``
      - Show or hide an instrument frustum by name.
      - ``kepplr.setFrustumVisible("NH_LORRI", true)``
+   * - ``setFrustumColor(int/String instrument, int red, int green, int blue)``
+     - Set an instrument frustum color using 8-bit RGB components in ``[0, 255]``.
+     - ``kepplr.setFrustumColor("NH_LORRI", 255, 80, 20)``
+   * - ``setFrustumColor(int/String instrument, String hexColor)``
+     - Set an instrument frustum color using ``RRGGBB`` or ``#RRGGBB``.
+     - ``kepplr.setFrustumColor("NH_LORRI", "#ff5014")``
    * - ``setBodyVisible(int/String body, boolean visible)``
      - Show or hide a body entirely.
      - ``kepplr.setBodyVisible(9, false)``

@@ -45,6 +45,7 @@ import kepplr.stars.catalogs.yaleBSC.YaleBrightStarCatalog;
 import kepplr.state.BodyInView;
 import kepplr.state.DefaultSimulationState;
 import kepplr.state.DefaultSimulationState.VectorKey;
+import kepplr.state.FrustumColor;
 import kepplr.ui.FxDispatch;
 import kepplr.ui.KepplrStatusWindow;
 import kepplr.ui.SimulationStateFxBridge;
@@ -160,6 +161,8 @@ public class KepplrApp extends SimpleApplication {
     private final Set<Integer> activeTrailIds = new HashSet<>();
     /** Currently enabled vector definitions in VectorManager, keyed by state VectorKey. */
     private final Map<VectorKey, VectorDefinition> activeVectorDefs = new HashMap<>();
+    /** Last frustum colors applied to InstrumentFrustumManager, keyed by instrument NAIF code. */
+    private final Map<Integer, FrustumColor> appliedFrustumColors = new HashMap<>();
 
     // ── JavaFX control window ─────────────────────────────────────────────────────────────────
     private volatile KepplrStatusWindow statusWindow;
@@ -646,6 +649,14 @@ public class KepplrApp extends SimpleApplication {
             requiredFarKm = Math.max(requiredFarKm, visibleFarKm + farMarginKm);
         }
 
+        if (instrumentFrustumManager != null) {
+            double frustumFarKm = instrumentFrustumManager.requiredNearFrustumFarKm(et, cameraPosJ2000);
+            if (frustumFarKm > FrustumLayer.NEAR.farKm) {
+                double farMarginKm = Math.max(100.0, frustumFarKm * 0.05);
+                requiredFarKm = Math.max(requiredFarKm, frustumFarKm + farMarginKm);
+            }
+        }
+
         return new NearFrustumRange(FrustumLayer.NEAR.nearKm, requiredFarKm);
     }
 
@@ -811,6 +822,26 @@ public class KepplrApp extends SimpleApplication {
         for (var entry : simulationState.getFrustumVisibilityMap().entrySet()) {
             instrumentFrustumManager.setVisible(entry.getKey(), entry.getValue().get());
         }
+        for (var entry : simulationState.getFrustumPersistenceEnabledMap().entrySet()) {
+            instrumentFrustumManager.setPersistenceEnabled(
+                    entry.getKey(), entry.getValue().get());
+        }
+        for (var entry : simulationState.getFrustumColorMap().entrySet()) {
+            FrustumColor color = entry.getValue().get();
+            if (color != null && !color.equals(appliedFrustumColors.get(entry.getKey()))) {
+                instrumentFrustumManager.setFrustumColor(
+                        entry.getKey(), new ColorRGBA(color.redFloat(), color.greenFloat(), color.blueFloat(), 1f));
+                appliedFrustumColors.put(entry.getKey(), color);
+            }
+        }
+        Integer clearRequest;
+        while ((clearRequest = simulationState.pollPendingFrustumFootprintClear()) != null) {
+            if (clearRequest == DefaultSimulationState.CLEAR_ALL_FRUSTUM_FOOTPRINTS) {
+                instrumentFrustumManager.clearPersistentFootprints();
+            } else {
+                instrumentFrustumManager.clearPersistentFootprints(clearRequest);
+            }
+        }
     }
 
     /** Returns true if {@code naifId} identifies a natural satellite or Pluto (orbiting its barycenter). */
@@ -879,6 +910,7 @@ public class KepplrApp extends SimpleApplication {
         labelManager.dispose();
         activeTrailIds.clear();
         activeVectorDefs.clear();
+        appliedFrustumColors.clear();
         // Clear overlay visibility state so scripts start with a clean slate
         simulationState.clearOverlayState();
 

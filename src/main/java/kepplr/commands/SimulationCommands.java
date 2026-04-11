@@ -407,6 +407,70 @@ public interface SimulationCommands {
      */
     void setFrustumVisible(String instrumentName, boolean visible);
 
+    /**
+     * Enable or disable retained surface-footprint recording for an instrument by NAIF code.
+     *
+     * @param instrumentNaifCode NAIF code of the instrument
+     * @param enabled {@code true} to retain newly drawn footprints, {@code false} to stop retaining them
+     */
+    void setFrustumPersistenceEnabled(int instrumentNaifCode, boolean enabled);
+
+    /**
+     * Enable or disable retained surface-footprint recording for an instrument by name.
+     *
+     * @param instrumentName instrument name as registered in the kernel pool
+     * @param enabled {@code true} to retain newly drawn footprints, {@code false} to stop retaining them
+     */
+    void setFrustumPersistenceEnabled(String instrumentName, boolean enabled);
+
+    /**
+     * Set the RGB color for an instrument frustum overlay by NAIF code.
+     *
+     * <p>Components are 8-bit values in {@code [0, 255]}. Existing alpha values for translucent frustum fill, live
+     * footprints, and retained footprints are preserved by the renderer.
+     *
+     * @param instrumentNaifCode NAIF code of the instrument
+     * @param red red channel in {@code [0, 255]}
+     * @param green green channel in {@code [0, 255]}
+     * @param blue blue channel in {@code [0, 255]}
+     */
+    void setFrustumColor(int instrumentNaifCode, int red, int green, int blue);
+
+    /**
+     * Set the RGB color for an instrument frustum overlay by instrument name.
+     *
+     * @param instrumentName instrument name as registered in the kernel pool
+     * @param red red channel in {@code [0, 255]}
+     * @param green green channel in {@code [0, 255]}
+     * @param blue blue channel in {@code [0, 255]}
+     */
+    void setFrustumColor(String instrumentName, int red, int green, int blue);
+
+    /**
+     * Set the RGB color for an instrument frustum overlay by NAIF code from {@code RRGGBB} or {@code #RRGGBB}.
+     *
+     * @param instrumentNaifCode NAIF code of the instrument
+     * @param hexColor color string in {@code RRGGBB} or {@code #RRGGBB} form
+     */
+    void setFrustumColor(int instrumentNaifCode, String hexColor);
+
+    /**
+     * Set the RGB color for an instrument frustum overlay by instrument name from {@code RRGGBB} or {@code #RRGGBB}.
+     *
+     * @param instrumentName instrument name as registered in the kernel pool
+     * @param hexColor color string in {@code RRGGBB} or {@code #RRGGBB} form
+     */
+    void setFrustumColor(String instrumentName, String hexColor);
+
+    /** Clear retained frustum footprints for the given instrument NAIF code. */
+    void clearFrustumFootprints(int instrumentNaifCode);
+
+    /** Clear retained frustum footprints for the given instrument name. */
+    void clearFrustumFootprints(String instrumentName);
+
+    /** Clear retained frustum footprints for all instruments. */
+    void clearFrustumFootprints();
+
     // ── Transition control (Step 20) ──
 
     /**

@@ -237,8 +237,87 @@ class KepplrScriptTest {
         void setFrustumVisibleStringDelegatesToResolve() {
             // NH_LORRI is in the test kernel and resolves to -98300.
             // Expect delegation (not throw) — same pattern as setLabelVisible(String).
-            script.setFrustumVisible(-98300, false);
+            script.setFrustumVisible("NH_LORRI", false);
             assertEquals("setFrustumVisible", spy.lastMethod);
+            assertEquals(-98300, spy.lastIntArg);
+            assertFalse(spy.lastBoolArg);
+        }
+
+        @Test
+        @DisplayName("setFrustumPersistenceEnabled(int, boolean) delegates to commands")
+        void setFrustumPersistenceEnabledInt() {
+            script.setFrustumPersistenceEnabled(-98300, true);
+            assertEquals("setFrustumPersistenceEnabled", spy.lastMethod);
+            assertEquals(-98300, spy.lastIntArg);
+            assertTrue(spy.lastBoolArg);
+        }
+
+        @Test
+        @DisplayName("setFrustumPersistenceEnabled(String, boolean) resolves via BodyLookupService")
+        void setFrustumPersistenceEnabledString() {
+            script.setFrustumPersistenceEnabled("NH_LORRI", false);
+            assertEquals("setFrustumPersistenceEnabled", spy.lastMethod);
+            assertEquals(-98300, spy.lastIntArg);
+            assertFalse(spy.lastBoolArg);
+        }
+
+        @Test
+        @DisplayName("setFrustumColor(int, r, g, b) delegates to commands")
+        void setFrustumColorInt() {
+            script.setFrustumColor(-98300, 255, 80, 20);
+            assertEquals("setFrustumColor", spy.lastMethod);
+            assertEquals(-98300, spy.lastIntArg);
+            assertEquals(255, spy.lastColorRed);
+        }
+
+        @Test
+        @DisplayName("setFrustumColor(int, hex) delegates to commands")
+        void setFrustumColorHex() {
+            script.setFrustumColor(-98300, "#ff5014");
+            assertEquals("setFrustumColor", spy.lastMethod);
+            assertEquals(-98300, spy.lastIntArg);
+            assertEquals("#ff5014", spy.lastStringArg);
+        }
+
+        @Test
+        @DisplayName("setFrustumColor(String, r, g, b) resolves via BodyLookupService")
+        void setFrustumColorStringRgb() {
+            script.setFrustumColor("NH_LORRI", 25, 50, 75);
+            assertEquals("setFrustumColor", spy.lastMethod);
+            assertEquals(-98300, spy.lastIntArg);
+            assertEquals(25, spy.lastColorRed);
+        }
+
+        @Test
+        @DisplayName("setFrustumColor(String, hex) resolves via BodyLookupService")
+        void setFrustumColorStringHex() {
+            script.setFrustumColor("NH_LORRI", "ff5014");
+            assertEquals("setFrustumColor", spy.lastMethod);
+            assertEquals(-98300, spy.lastIntArg);
+            assertEquals("ff5014", spy.lastStringArg);
+        }
+
+        @Test
+        @DisplayName("clearFrustumFootprints(int) delegates to commands")
+        void clearFrustumFootprintsInt() {
+            script.clearFrustumFootprints(-98300);
+            assertEquals("clearFrustumFootprints", spy.lastMethod);
+            assertEquals(-98300, spy.lastIntArg);
+        }
+
+        @Test
+        @DisplayName("clearFrustumFootprints(String) resolves via BodyLookupService")
+        void clearFrustumFootprintsString() {
+            script.clearFrustumFootprints("NH_LORRI");
+            assertEquals("clearFrustumFootprints", spy.lastMethod);
+            assertEquals(-98300, spy.lastIntArg);
+        }
+
+        @Test
+        @DisplayName("clearFrustumFootprints() delegates to commands")
+        void clearFrustumFootprintsAll() {
+            script.clearFrustumFootprints();
+            assertEquals("clearFrustumFootprints", spy.lastMethod);
         }
     }
 
@@ -300,8 +379,10 @@ class KepplrScriptTest {
     /** Minimal recording spy for verifying delegation. Records the last method name and selected arguments. */
     static class SpyCommands implements SimulationCommands {
         String lastMethod;
+        String lastStringArg;
         int lastIntArg;
         int lastIntArg2;
+        int lastColorRed;
         double lastDoubleArg;
         boolean lastBoolArg;
 
@@ -470,11 +551,73 @@ class KepplrScriptTest {
         @Override
         public void setFrustumVisible(int code, boolean v) {
             lastMethod = "setFrustumVisible";
+            lastIntArg = code;
+            lastBoolArg = v;
         }
 
         @Override
         public void setFrustumVisible(String name, boolean v) {
             lastMethod = "setFrustumVisible";
+            lastStringArg = name;
+            lastBoolArg = v;
+        }
+
+        @Override
+        public void setFrustumPersistenceEnabled(int code, boolean enabled) {
+            lastMethod = "setFrustumPersistenceEnabled";
+            lastIntArg = code;
+            lastBoolArg = enabled;
+        }
+
+        @Override
+        public void setFrustumPersistenceEnabled(String name, boolean enabled) {
+            lastMethod = "setFrustumPersistenceEnabled";
+            lastStringArg = name;
+            lastBoolArg = enabled;
+        }
+
+        @Override
+        public void setFrustumColor(int instrumentNaifCode, int red, int green, int blue) {
+            lastMethod = "setFrustumColor";
+            lastIntArg = instrumentNaifCode;
+            lastColorRed = red;
+        }
+
+        @Override
+        public void setFrustumColor(String instrumentName, int red, int green, int blue) {
+            lastMethod = "setFrustumColor";
+            lastStringArg = instrumentName;
+            lastColorRed = red;
+        }
+
+        @Override
+        public void setFrustumColor(int instrumentNaifCode, String hexColor) {
+            lastMethod = "setFrustumColor";
+            lastIntArg = instrumentNaifCode;
+            lastStringArg = hexColor;
+        }
+
+        @Override
+        public void setFrustumColor(String instrumentName, String hexColor) {
+            lastMethod = "setFrustumColor";
+            lastStringArg = hexColor;
+        }
+
+        @Override
+        public void clearFrustumFootprints(int instrumentNaifCode) {
+            lastMethod = "clearFrustumFootprints";
+            lastIntArg = instrumentNaifCode;
+        }
+
+        @Override
+        public void clearFrustumFootprints(String instrumentName) {
+            lastMethod = "clearFrustumFootprints";
+            lastStringArg = instrumentName;
+        }
+
+        @Override
+        public void clearFrustumFootprints() {
+            lastMethod = "clearFrustumFootprints";
         }
 
         @Override

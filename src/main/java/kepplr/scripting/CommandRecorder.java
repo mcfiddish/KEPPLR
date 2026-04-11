@@ -530,6 +530,60 @@ public final class CommandRecorder implements SimulationCommands {
         delegate.setFrustumVisible(instrumentName, visible);
     }
 
+    @Override
+    public void setFrustumPersistenceEnabled(int instrumentNaifCode, boolean enabled) {
+        recordCommand("kepplr.setFrustumPersistenceEnabled(" + instrumentNaifCode + ", " + fmtBool(enabled) + ")");
+        delegate.setFrustumPersistenceEnabled(instrumentNaifCode, enabled);
+    }
+
+    @Override
+    public void setFrustumPersistenceEnabled(String instrumentName, boolean enabled) {
+        recordCommand("kepplr.setFrustumPersistenceEnabled(\"" + instrumentName + "\", " + fmtBool(enabled) + ")");
+        delegate.setFrustumPersistenceEnabled(instrumentName, enabled);
+    }
+
+    @Override
+    public void setFrustumColor(int instrumentNaifCode, int red, int green, int blue) {
+        recordCommand("kepplr.setFrustumColor(" + instrumentNaifCode + ", " + red + ", " + green + ", " + blue + ")");
+        delegate.setFrustumColor(instrumentNaifCode, red, green, blue);
+    }
+
+    @Override
+    public void setFrustumColor(String instrumentName, int red, int green, int blue) {
+        recordCommand("kepplr.setFrustumColor(\"" + instrumentName + "\", " + red + ", " + green + ", " + blue + ")");
+        delegate.setFrustumColor(instrumentName, red, green, blue);
+    }
+
+    @Override
+    public void setFrustumColor(int instrumentNaifCode, String hexColor) {
+        recordCommand("kepplr.setFrustumColor(" + instrumentNaifCode + ", \"" + hexColor + "\")");
+        delegate.setFrustumColor(instrumentNaifCode, hexColor);
+    }
+
+    @Override
+    public void setFrustumColor(String instrumentName, String hexColor) {
+        recordCommand("kepplr.setFrustumColor(\"" + instrumentName + "\", \"" + hexColor + "\")");
+        delegate.setFrustumColor(instrumentName, hexColor);
+    }
+
+    @Override
+    public void clearFrustumFootprints(int instrumentNaifCode) {
+        recordCommand("kepplr.clearFrustumFootprints(" + instrumentNaifCode + ")");
+        delegate.clearFrustumFootprints(instrumentNaifCode);
+    }
+
+    @Override
+    public void clearFrustumFootprints(String instrumentName) {
+        recordCommand("kepplr.clearFrustumFootprints(\"" + instrumentName + "\")");
+        delegate.clearFrustumFootprints(instrumentName);
+    }
+
+    @Override
+    public void clearFrustumFootprints() {
+        recordCommand("kepplr.clearFrustumFootprints()");
+        delegate.clearFrustumFootprints();
+    }
+
     // ── State snapshot (Step 26) ──
 
     @Override
