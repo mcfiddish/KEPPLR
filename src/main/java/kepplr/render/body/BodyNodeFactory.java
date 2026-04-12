@@ -188,8 +188,9 @@ public final class BodyNodeFactory {
      *
      * <p>If {@code SpacecraftBlock.shapeModel()} is non-blank, loads the GLB (units: meters) and attaches it as
      * {@code glbModelRoot} under {@code bodyFixedNode} with a uniform scale of {@code 0.001 × SpacecraftBlock.scale()}
-     * to convert to km. GLB-embedded PBR materials are used as-is. Falls back to the point sprite on any load failure
-     * (WARN logged).
+     * to convert to km. Spacecraft GLBs use per-geometry {@code EclipseLighting} materials so illumination remains
+     * consistent with KEPPLR's Sun/body-shadow model (D-074). Falls back to the point sprite on any load failure (WARN
+     * logged).
      *
      * <p><b>Usage example:</b>
      *
@@ -324,8 +325,9 @@ public final class BodyNodeFactory {
      * failure. All failures are logged at WARN; the simulation continues normally.
      *
      * <p>GLB files for spacecraft are authored in <b>meters</b>. A uniform scale of {@code 0.001 ×
-     * SpacecraftBlock.scale()} is applied to convert to km (§14.6.4, D-027). GLB-embedded PBR materials are used as-is
-     * — no KEPPLR body material pipeline (D-028).
+     * SpacecraftBlock.scale()} is applied to convert to km (§14.6.4, D-027). Material handling is accuracy-first:
+     * KEPPLR may replace GLB PBR materials with per-geometry {@code EclipseLighting} materials while preserving base
+     * color/texture where possible (D-074).
      *
      * @param spacecraft spacecraft descriptor
      * @param bodyFixedNode node to attach glbModelRoot to on success

@@ -702,7 +702,7 @@ applies the scale to glbModelRoot at construction time and never updates it per-
 ---
 
 ## D-028: Spacecraft GLB materials are used as-is
-** Status:** Accepted
+** Status:** Superseded by D-074
 ** Roadmap step:** 21
 
 ** Context:** Natural bodies go through KEPPLR's material pipeline (equirectangular texture 
@@ -720,6 +720,11 @@ not a sphere.
 ** Consequences:** BodyNodeFactory (or equivalent) must not apply body material setup to 
 spacecraft nodes. Any future spacecraft material override must be added explicitly and 
 documented here.
+
+**Supersession note:** D-074 reverses this for the current renderer. Physically correct
+illumination and body-shadow response are more important than preserving the full visual
+richness of converted spacecraft materials. Embedded GLB material fidelity remains a future
+renderer improvement, not the active policy.
 
 ---
 
@@ -2032,7 +2037,47 @@ must avoid manual mouse-event action dispatch.
 
 ---
 
-*Last updated: D-073 (plain JavaFX menu actions use standard `MenuItem`; `CustomMenuItem`
+## D-074: Spacecraft GLBs prioritize physically consistent illumination over PBR fidelity
+**Status:** Accepted
+**Roadmap step:** post-Step 28 rendering policy clarification
+
+**Context:** Spacecraft GLBs are often converted from Cosmographia/Celestia `.cmod` models via
+`convert_to_normalized_glb.py`. That conversion preserves as much material data as practical,
+but CMOD/MTL models may rely on diffuse/specular constants, missing DDS texture references, or
+renderer-specific interpretation. Cosmographia can appear more vibrant because it preserves or
+interprets more of those material properties and may use a more presentation-oriented lighting
+model.
+
+KEPPLR currently replaces spacecraft GLB materials with per-geometry `EclipseLighting`
+materials. This keeps each mesh's base color or base-color texture, but drops richer glTF/PBR
+properties such as metallic/roughness response, specular highlights, normal maps, occlusion
+maps, and emissive terms. The result can look less vibrant than Cosmographia, but it lets
+spacecraft respond to KEPPLR's Sun direction and analytic body-shadow/day-night lighting.
+
+**Decision:** Keep the accuracy-first spacecraft rendering policy for now. Spacecraft GLBs may
+use KEPPLR's `EclipseLighting` material path even though that reduces material fidelity, because
+correct illumination and body-shadow behavior are more important than visual vibrancy. The
+renderer must preserve per-geometry base color/texture where possible so multi-part spacecraft
+do not collapse to one color.
+
+Do not treat spacecraft shadow casting onto bodies as part of this decision; it remains out of
+scope. Future lander/surface-asset work should introduce a separate material/lighting design
+that can combine richer glTF material fidelity with physically meaningful sunlight, horizon,
+and body-shadow effects.
+
+**Alternatives considered:** Leaving spacecraft PBR materials as-is — rejected for now because
+spacecraft would not receive KEPPLR's analytic body-shadow lighting. Fully reproducing
+Cosmographia/CMOD material semantics — deferred because it is a larger conversion and renderer
+compatibility project, and the current issue is minor.
+
+**Consequences:** Spacecraft models may look flatter or less saturated than in Cosmographia.
+That is acceptable until a richer spacecraft/lander material path exists. Documentation and
+tests should reflect that D-028 is no longer active renderer policy.
+
+---
+
+*Last updated: D-074 (spacecraft GLBs prioritize physically consistent illumination over PBR
+material fidelity; richer spacecraft/lander material handling deferred), D-073 (plain JavaFX menu actions use standard `MenuItem`; `CustomMenuItem`
 limited to embedded controls; guarded one-shot Quit/close shutdown), D-072 (`setCameraPose()` added for combined camera pose transitions and
 camera-keyed frame capture), D-071 (instrument footprints retained as body-fixed vector
 swaths with capture-time color, RGB/hex API, and color-change segment boundaries),
