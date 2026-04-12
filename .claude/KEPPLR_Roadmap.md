@@ -898,12 +898,11 @@ reload the default. The command is loggable by `CommandRecorder`. Error
 handling matches the interactive path: parse errors are reported via the
 status window and the script continues with the previous configuration.
 
-**Menu item tooltips.** Add descriptive tooltips to all menu items in the
-JavaFX control window. Tooltip text describes the action and shows the
-keyboard shortcut if one exists (e.g., "Point the camera at the selected
-body (T)"). JavaFX `MenuItem` supports tooltips indirectly via a custom
-graphic node or by setting a tooltip on the internal label. This is a polish
-pass with no architectural impact.
+**Menu item help text.** Plain JavaFX menu actions use standard `MenuItem`
+for reliable first-click activation and normal popup lifecycle behavior
+(D-073). Do not wrap ordinary actions in `CustomMenuItem` solely to attach
+tooltips. `CustomMenuItem` remains acceptable for entries that embed actual
+controls or dynamic nodes, such as camera-frame radio buttons.
 
 **Status window layout improvements.** Several usability changes to
 `KepplrStatusWindow`:

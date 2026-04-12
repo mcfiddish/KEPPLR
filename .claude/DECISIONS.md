@@ -1030,9 +1030,10 @@ import were removed.
 rejected because `CheckMenuItem` is the standard JavaFX pattern and tooltips on toggle items 
 are low-value.
 
-**Consequences:** Consistent checkmark-style toggles everywhere. `CustomMenuItem` is still used 
-for non-toggle items that need tooltips (e.g., `tipItem` helper for action items, radio buttons 
-for camera frame).
+**Consequences:** Consistent checkmark-style toggles everywhere. The earlier allowance for
+`CustomMenuItem` on non-toggle action items to support tooltips was superseded by D-073 after
+it proved to make menu activation unreliable. `CustomMenuItem` remains appropriate for menu
+entries that embed real controls, such as camera-frame radio buttons.
 
 ---
 
@@ -2003,7 +2004,36 @@ coalesces instant pose commands with last-value-wins semantics.
 
 ---
 
-*Last updated: D-072 (`setCameraPose()` added for combined camera pose transitions and
+## D-073: Standard MenuItem for plain JavaFX menu actions
+**Status:** Accepted
+**Roadmap step:** post-Step 28 UI reliability fix
+
+**Context:** D-039 allowed `CustomMenuItem` for non-toggle action items so labels could carry
+tooltips. The `tipItem` helper wrapped a `Label` in `CustomMenuItem`; a later bug fix added
+manual mouse press/release filters because `CustomMenuItem.onAction` sometimes did not fire
+after the menu hid. This made File menu commands unreliable on first click and made Quit
+especially fragile, because shutdown could begin while JavaFX was still processing the menu
+gesture.
+
+**Decision:** Plain action menu entries use standard JavaFX `MenuItem`. `CustomMenuItem` is
+reserved for menu entries that must embed controls or dynamic nodes, such as the camera-frame
+radio buttons and the Pause/Resume label. Do not reintroduce a `tipItem`-style helper that
+manually invokes action handlers from mouse events. If a plain action needs help text, prefer
+documentation, status text, or another UI affordance over replacing `MenuItem`.
+
+`File -> Quit` and the status-window close request share one guarded shutdown path so JME stop
+is requested at most once. Programmatic FX cleanup from JME marks shutdown as already requested
+before closing the stage, avoiding reentrant stop requests.
+
+**Consequences:** Plain menu commands use JavaFX's normal action lifecycle and no longer depend
+on popup-hide timing or duplicate mouse/action delivery. Tooltips are no longer a requirement
+for plain menu actions. Menu entries with embedded controls may still use `CustomMenuItem`, but
+must avoid manual mouse-event action dispatch.
+
+---
+
+*Last updated: D-073 (plain JavaFX menu actions use standard `MenuItem`; `CustomMenuItem`
+limited to embedded controls; guarded one-shot Quit/close shutdown), D-072 (`setCameraPose()` added for combined camera pose transitions and
 camera-keyed frame capture), D-071 (instrument footprints retained as body-fixed vector
 swaths with capture-time color, RGB/hex API, and color-change segment boundaries),
 D-070 (`waitRenderFrames()` added; `waitTransition()` made frame-fenced),

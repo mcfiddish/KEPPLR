@@ -182,7 +182,7 @@ Implemented and verified:
 - View / Time / Overlays / Instruments / Window menus
 - config reload menu path
 - screenshot / capture / copy-state / paste-state / log window menu paths
-- tooltips on a substantial set of menu items
+- standard `MenuItem` actions for reliable menu activation; `CustomMenuItem` only where embedded controls are needed
 - bidirectional menu sync with state
 - script output area
 

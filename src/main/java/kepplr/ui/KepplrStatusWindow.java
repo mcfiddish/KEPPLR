@@ -108,11 +108,13 @@ public final class KepplrStatusWindow {
     private TextArea scriptOutputArea;
     private final ConcurrentLinkedQueue<String> scriptOutputQueue = new ConcurrentLinkedQueue<>();
     private int scriptOutputLineCount;
-    private CustomMenuItem captureSeqItem;
-    private CustomMenuItem saveScreenshotItem;
+    private MenuItem captureSeqItem;
+    private MenuItem saveScreenshotItem;
     private volatile Thread captureSequenceThread;
     /** Set by {@link #signalConfigRefresh()} from any thread; drained by the AnimationTimer on the FX thread. */
     private volatile boolean pendingConfigRefresh = false;
+
+    private boolean shutdownRequested;
 
     private volatile boolean pendingWindowPosition = false;
     private volatile double pendingWindowX = 0.0;
@@ -225,9 +227,7 @@ public final class KepplrStatusWindow {
         stage.setScene(scene);
 
         // BUG 2: When the JavaFX window is closed, shut down JME too
-        stage.setOnCloseRequest(e -> {
-            if (jmeShutdown != null) jmeShutdown.run();
-        });
+        stage.setOnCloseRequest(e -> requestJmeShutdown());
 
         // Install the log4j2 appender and create the log window
         LogAppender.install();
@@ -254,12 +254,22 @@ public final class KepplrStatusWindow {
 
     /** Close the window programmatically (called from JME destroy() hook). */
     public void close() {
+        shutdownRequested = true;
         if (logWindow != null) {
             logWindow.close();
         }
         if (stage != null) {
             stage.close();
         }
+    }
+
+    private void requestJmeShutdown() {
+        if (shutdownRequested) return;
+        shutdownRequested = true;
+        if (stage != null) {
+            stage.hide();
+        }
+        if (jmeShutdown != null) jmeShutdown.run();
     }
 
     /**
@@ -957,7 +967,7 @@ public final class KepplrStatusWindow {
     }
 
     private Menu buildFileMenu() {
-        CustomMenuItem loadConfig = tipItem("Load Configuration...", "Load a KEPPLR configuration properties file");
+        MenuItem loadConfig = menuItem("Load Configuration...");
         loadConfig.setOnAction(e -> {
             FileChooser chooser = new FileChooser();
             chooser.setTitle("Load KEPPLR Configuration");
@@ -977,7 +987,7 @@ public final class KepplrStatusWindow {
         });
 
         // ── Run Script... ────────────────────────────────────────────────
-        CustomMenuItem runScript = tipItem("Run Script...", "Execute a Groovy script file");
+        MenuItem runScript = menuItem("Run Script...");
         runScript.setOnAction(e -> {
             if (scriptRunner == null) return;
 
@@ -1052,8 +1062,7 @@ public final class KepplrStatusWindow {
         });
 
         // ── Save Screenshot ──────────────────────────────────────────────
-        CustomMenuItem saveScreenshot =
-                tipItem("Save Screenshot...", "Capture the current JME framebuffer to a PNG file");
+        MenuItem saveScreenshot = menuItem("Save Screenshot...");
         saveScreenshot.setOnAction(e -> {
             FileChooser chooser = new FileChooser();
             chooser.setTitle("Save Screenshot");
@@ -1070,24 +1079,21 @@ public final class KepplrStatusWindow {
         });
 
         // ── Capture Sequence... ─────────────────────────────────────────
-        CustomMenuItem captureSeq = tipItem("Capture Sequence...", "Capture a sequence of frames as PNG files");
+        MenuItem captureSeq = menuItem("Capture Sequence...");
         captureSeq.setOnAction(e -> showCaptureSequenceDialog(captureSeq, saveScreenshot));
 
         // ── Quit ─────────────────────────────────────────────────────────
-        CustomMenuItem quit = tipItem("Quit", "Exit KEPPLR");
-        Runnable doQuit = () -> {
-            if (jmeShutdown != null) jmeShutdown.run();
-        };
-        quit.setOnAction(e -> doQuit.run());
+        MenuItem quit = menuItem("Quit");
+        quit.setOnAction(e -> requestJmeShutdown());
 
         // Store references for mutual exclusion
         this.captureSeqItem = captureSeq;
         this.saveScreenshotItem = saveScreenshot;
 
-        CustomMenuItem showLog = tipItem("Show Log", "Show the application log window");
+        MenuItem showLog = menuItem("Show Log");
         showLog.setOnAction(e -> logWindow.show());
 
-        CustomMenuItem copyState = tipItem("Copy State", "Copy the current simulation state to the clipboard");
+        MenuItem copyState = menuItem("Copy State");
         copyState.setOnAction(e -> {
             String stateString = commands.getStateString();
             ClipboardContent content = new ClipboardContent();
@@ -1096,7 +1102,7 @@ public final class KepplrStatusWindow {
             logger.info("State string copied to clipboard ({} chars)", stateString.length());
         });
 
-        CustomMenuItem pasteState = tipItem("Paste State", "Restore simulation state from the clipboard");
+        MenuItem pasteState = menuItem("Paste State");
         pasteState.setOnAction(e -> {
             String text = Clipboard.getSystemClipboard().getString();
             if (text == null || text.isBlank()) {
@@ -1141,7 +1147,7 @@ public final class KepplrStatusWindow {
      * Show the Capture Sequence dialog. Validates inputs, opens a directory chooser, and launches the capture on a
      * dedicated daemon thread.
      */
-    private void showCaptureSequenceDialog(CustomMenuItem captureItem, CustomMenuItem screenshotItem) {
+    private void showCaptureSequenceDialog(MenuItem captureItem, MenuItem screenshotItem) {
         // Block if a script is running
         if (scriptRunner != null && scriptRunner.isRunning()) {
             Alert warn = new Alert(
@@ -1292,7 +1298,7 @@ public final class KepplrStatusWindow {
 
         Menu frameSubMenu = new Menu("Camera Frame", null, inertialItem, bodyFixedItem, synodicItem);
 
-        CustomMenuItem setFovItem = tipItem("Set FOV…", "Set the camera field of view in degrees");
+        MenuItem setFovItem = menuItem("Set FOV...");
         setFovItem.setOnAction(e -> {
             double currentFov = bridge.fovDegProperty().get();
             new SetFovDialog(commands, currentFov).showAndWait();
@@ -1316,12 +1322,11 @@ public final class KepplrStatusWindow {
         pauseItem.setOnAction(
                 e -> commands.setPaused(bridge.pausedTextProperty().get().equals("Running")));
 
-        CustomMenuItem setTimeItem = tipItem("Set Time...", "Set the simulation time to a specific UTC date/time");
+        MenuItem setTimeItem = menuItem("Set Time...");
         setTimeItem.setOnAction(
                 e -> new SetTimeDialog(commands, bridge.utcTimeTextProperty().get()).showAndWait());
 
-        CustomMenuItem setRateItem =
-                tipItem("Set Time Rate...", "Set the simulation time rate in seconds per wall second");
+        MenuItem setRateItem = menuItem("Set Time Rate...");
         setRateItem.setOnAction(e ->
                 new SetTimeRateDialog(commands, bridge.timeRateTextProperty().get()).showAndWait());
 
@@ -1555,16 +1560,16 @@ public final class KepplrStatusWindow {
     }
 
     private Menu buildWindowMenu() {
-        CustomMenuItem size720 = tipItem("1280 \u00d7 720", "Resize the render window to 1280\u00d7720 (HD)");
+        MenuItem size720 = menuItem("1280 \u00d7 720");
         size720.setOnAction(e -> resizeJmeWindow(1280, 720));
 
-        CustomMenuItem size1024 = tipItem("1280 \u00d7 1024", "Resize the render window to 1280\u00d71024");
+        MenuItem size1024 = menuItem("1280 \u00d7 1024");
         size1024.setOnAction(e -> resizeJmeWindow(1280, 1024));
 
-        CustomMenuItem size1080 = tipItem("1920 \u00d7 1080", "Resize the render window to 1920\u00d71080 (Full HD)");
+        MenuItem size1080 = menuItem("1920 \u00d7 1080");
         size1080.setOnAction(e -> resizeJmeWindow(1920, 1080));
 
-        CustomMenuItem size1440 = tipItem("2560 \u00d7 1440", "Resize the render window to 2560\u00d71440 (QHD)");
+        MenuItem size1440 = menuItem("2560 \u00d7 1440");
         size1440.setOnAction(e -> resizeJmeWindow(2560, 1440));
 
         return new Menu("Window", null, size720, size1024, size1080, size1440);
@@ -1578,43 +1583,9 @@ public final class KepplrStatusWindow {
 
     // ── Helpers ──────────────────────────────────────────────────────────────
 
-    /**
-     * Create a {@link CustomMenuItem} wrapping a {@link Label} with a tooltip.
-     *
-     * <p>Standard {@link MenuItem} has no {@code setTooltip()} — wrapping a {@code Label} inside a
-     * {@code CustomMenuItem} is the JavaFX workaround that enables tooltip support on menu items.
-     */
-    private static CustomMenuItem tipItem(String text, String tooltip) {
-        Label label = new Label(text);
-        label.setMaxWidth(Double.MAX_VALUE);
-        Tooltip.install(label, new Tooltip(tooltip));
-        CustomMenuItem item = new CustomMenuItem(label);
-        item.setHideOnClick(true);
-        // Work around a JavaFX timing issue: CustomMenuItem.onAction sometimes does not fire
-        // because the menu hides before the action event propagates to the item.
-        // Two interaction patterns reach a menu item:
-        //   1. Click (press+release on item): MOUSE_PRESSED fires on the label — handle it there.
-        //   2. Drag-to-select (press on menu title, drag to item, release): only MOUSE_RELEASED
-        //      fires on the label — handle it in the RELEASED filter when PRESSED did not fire.
-        // The normal onAction path may also fire, but all current handlers are idempotent.
-        boolean[] pressedHere = {false};
-        label.addEventFilter(javafx.scene.input.MouseEvent.MOUSE_PRESSED, e -> {
-            pressedHere[0] = true;
-            javafx.event.EventHandler<javafx.event.ActionEvent> handler = item.getOnAction();
-            if (handler != null) {
-                handler.handle(new javafx.event.ActionEvent(item, item));
-            }
-        });
-        label.addEventFilter(javafx.scene.input.MouseEvent.MOUSE_RELEASED, e -> {
-            if (!pressedHere[0]) {
-                javafx.event.EventHandler<javafx.event.ActionEvent> handler = item.getOnAction();
-                if (handler != null) {
-                    handler.handle(new javafx.event.ActionEvent(item, item));
-                }
-            }
-            pressedHere[0] = false;
-        });
-        return item;
+    /** Create a standard menu item. */
+    private static MenuItem menuItem(String text) {
+        return new MenuItem(text);
     }
 
     /** Create a styled {@link RadioButton} suitable for use inside a {@link CustomMenuItem}. */
