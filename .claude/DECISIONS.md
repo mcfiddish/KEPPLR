@@ -702,7 +702,7 @@ applies the scale to glbModelRoot at construction time and never updates it per-
 ---
 
 ## D-028: Spacecraft GLB materials are used as-is
-** Status:** Accepted
+** Status:** Superseded by D-074
 ** Roadmap step:** 21
 
 ** Context:** Natural bodies go through KEPPLR's material pipeline (equirectangular texture 
@@ -720,6 +720,11 @@ not a sphere.
 ** Consequences:** BodyNodeFactory (or equivalent) must not apply body material setup to 
 spacecraft nodes. Any future spacecraft material override must be added explicitly and 
 documented here.
+
+**Supersession note:** D-074 reverses this for the current renderer. Physically correct
+illumination and body-shadow response are more important than preserving the full visual
+richness of converted spacecraft materials. Embedded GLB material fidelity remains a future
+renderer improvement, not the active policy.
 
 ---
 
@@ -1030,9 +1035,10 @@ import were removed.
 rejected because `CheckMenuItem` is the standard JavaFX pattern and tooltips on toggle items 
 are low-value.
 
-**Consequences:** Consistent checkmark-style toggles everywhere. `CustomMenuItem` is still used 
-for non-toggle items that need tooltips (e.g., `tipItem` helper for action items, radio buttons 
-for camera frame).
+**Consequences:** Consistent checkmark-style toggles everywhere. The earlier allowance for
+`CustomMenuItem` on non-toggle action items to support tooltips was superseded by D-073 after
+it proved to make menu activation unreliable. `CustomMenuItem` remains appropriate for menu
+entries that embed real controls, such as camera-frame radio buttons.
 
 ---
 
@@ -2003,7 +2009,76 @@ coalesces instant pose commands with last-value-wins semantics.
 
 ---
 
-*Last updated: D-072 (`setCameraPose()` added for combined camera pose transitions and
+## D-073: Standard MenuItem for plain JavaFX menu actions
+**Status:** Accepted
+**Roadmap step:** post-Step 28 UI reliability fix
+
+**Context:** D-039 allowed `CustomMenuItem` for non-toggle action items so labels could carry
+tooltips. The `tipItem` helper wrapped a `Label` in `CustomMenuItem`; a later bug fix added
+manual mouse press/release filters because `CustomMenuItem.onAction` sometimes did not fire
+after the menu hid. This made File menu commands unreliable on first click and made Quit
+especially fragile, because shutdown could begin while JavaFX was still processing the menu
+gesture.
+
+**Decision:** Plain action menu entries use standard JavaFX `MenuItem`. `CustomMenuItem` is
+reserved for menu entries that must embed controls or dynamic nodes, such as the camera-frame
+radio buttons and the Pause/Resume label. Do not reintroduce a `tipItem`-style helper that
+manually invokes action handlers from mouse events. If a plain action needs help text, prefer
+documentation, status text, or another UI affordance over replacing `MenuItem`.
+
+`File -> Quit` and the status-window close request share one guarded shutdown path so JME stop
+is requested at most once. Programmatic FX cleanup from JME marks shutdown as already requested
+before closing the stage, avoiding reentrant stop requests.
+
+**Consequences:** Plain menu commands use JavaFX's normal action lifecycle and no longer depend
+on popup-hide timing or duplicate mouse/action delivery. Tooltips are no longer a requirement
+for plain menu actions. Menu entries with embedded controls may still use `CustomMenuItem`, but
+must avoid manual mouse-event action dispatch.
+
+---
+
+## D-074: Spacecraft GLBs prioritize physically consistent illumination over PBR fidelity
+**Status:** Accepted
+**Roadmap step:** post-Step 28 rendering policy clarification
+
+**Context:** Spacecraft GLBs are often converted from Cosmographia/Celestia `.cmod` models via
+`convert_to_normalized_glb.py`. That conversion preserves as much material data as practical,
+but CMOD/MTL models may rely on diffuse/specular constants, missing DDS texture references, or
+renderer-specific interpretation. Cosmographia can appear more vibrant because it preserves or
+interprets more of those material properties and may use a more presentation-oriented lighting
+model.
+
+KEPPLR currently replaces spacecraft GLB materials with per-geometry `EclipseLighting`
+materials. This keeps each mesh's base color or base-color texture, but drops richer glTF/PBR
+properties such as metallic/roughness response, specular highlights, normal maps, occlusion
+maps, and emissive terms. The result can look less vibrant than Cosmographia, but it lets
+spacecraft respond to KEPPLR's Sun direction and analytic body-shadow/day-night lighting.
+
+**Decision:** Keep the accuracy-first spacecraft rendering policy for now. Spacecraft GLBs may
+use KEPPLR's `EclipseLighting` material path even though that reduces material fidelity, because
+correct illumination and body-shadow behavior are more important than visual vibrancy. The
+renderer must preserve per-geometry base color/texture where possible so multi-part spacecraft
+do not collapse to one color.
+
+Do not treat spacecraft shadow casting onto bodies as part of this decision; it remains out of
+scope. Future lander/surface-asset work should introduce a separate material/lighting design
+that can combine richer glTF material fidelity with physically meaningful sunlight, horizon,
+and body-shadow effects.
+
+**Alternatives considered:** Leaving spacecraft PBR materials as-is — rejected for now because
+spacecraft would not receive KEPPLR's analytic body-shadow lighting. Fully reproducing
+Cosmographia/CMOD material semantics — deferred because it is a larger conversion and renderer
+compatibility project, and the current issue is minor.
+
+**Consequences:** Spacecraft models may look flatter or less saturated than in Cosmographia.
+That is acceptable until a richer spacecraft/lander material path exists. Documentation and
+tests should reflect that D-028 is no longer active renderer policy.
+
+---
+
+*Last updated: D-074 (spacecraft GLBs prioritize physically consistent illumination over PBR
+material fidelity; richer spacecraft/lander material handling deferred), D-073 (plain JavaFX menu actions use standard `MenuItem`; `CustomMenuItem`
+limited to embedded controls; guarded one-shot Quit/close shutdown), D-072 (`setCameraPose()` added for combined camera pose transitions and
 camera-keyed frame capture), D-071 (instrument footprints retained as body-fixed vector
 swaths with capture-time color, RGB/hex API, and color-change segment boundaries),
 D-070 (`waitRenderFrames()` added; `waitTransition()` made frame-fenced),

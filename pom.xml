@@ -96,7 +96,7 @@
     <picante.version>1.0.0</picante.version>
     <immutables.version>2.12.1</immutables.version>
     <jackfruit.version>1.1.1</jackfruit.version>
-    <javafx.version>25.0.1</javafx.version>
+    <javafx.version>21.0.10</javafx.version>
     <jme.version>3.9.0-stable</jme.version>
     <groovy.version>3.0.25</groovy.version>
     <log4j.version>2.25.3</log4j.version>

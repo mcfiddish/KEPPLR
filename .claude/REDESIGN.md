@@ -709,13 +709,19 @@ non-null path:
 
 #### 16.6.4 SpacecraftBlock Shape Models
 
-Spacecraft (from `getSpacecraft()`) use their GLB-embedded PBR materials
-as-is — colors, textures, and metallic/roughness values are defined in the
-GLB and must not be overridden. Spacecraft are lit by the scene sun light
-exactly as natural bodies are. They do not go through KEPPLR's body material
-pipeline (no equirectangular texture mapping, no `textureAlignNode`, no
-center-longitude adjustment). The standard sampler preset is applied to their
-textures. When `SpacecraftBlock.shapeModel()` returns a non-null path:
+Spacecraft (from `getSpacecraft()`) prioritize physically consistent
+illumination over full GLB/PBR material fidelity [D-074]. Converted
+Cosmographia/Celestia `.cmod` models may lose some vibrancy because KEPPLR
+does not currently reproduce the full CMOD/MTL/PBR material stack. The active
+renderer may replace GLB materials with per-geometry `EclipseLighting`
+materials so spacecraft respond to KEPPLR's Sun direction and analytic
+body-shadow/day-night lighting. This replacement must preserve each geometry's
+base color or base-color texture where possible.
+
+Spacecraft do not use natural-body equirectangular texture mapping,
+`textureAlignNode`, or center-longitude adjustment. The standard sampler preset
+is applied to their textures. When `SpacecraftBlock.shapeModel()` returns a
+non-null path:
 
 * Load and apply the sampler preset identically to §16.6.3.
 * Read and apply `modelToBodyFixedQuat` identically to §16.6.3.
@@ -726,6 +732,9 @@ textures. When `SpacecraftBlock.shapeModel()` returns a non-null path:
 * If the path is null, the file is missing, or loading fails: log a warning at
   WARN level and fall back to the existing point sprite. The simulation must
   continue normally.
+* Richer spacecraft/lander material handling that combines full GLB/PBR
+  fidelity with physically meaningful sunlight, horizon, and body-shadow
+  effects is deferred.
 
 #### 16.6.5 Frame Semantics [D-055]
 
