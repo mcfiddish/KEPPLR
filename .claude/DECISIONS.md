@@ -1,7 +1,7 @@
 # KEPPLR — Architecture Decision Records
 
 Decisions are recorded here to explain *why* the project is shaped the way it is.
-Each entry is short by design. For implementation guidance, see `CLAUDE.md` and `REDESIGN.md`.
+Each entry is short by design. For implementation guidance, see `AGENTS.md` and `REDESIGN.md`.
 For the development sequence, see `KEPPLR_Roadmap.md`.
 
 Cross-references in `REDESIGN.md` use `[D-NNN]` inline backrefs.
@@ -17,7 +17,7 @@ the render and UI layers.
 
 **Decision:** Ephemeris is always acquired at point-of-use via
 `KEPPLRConfiguration.getInstance().getEphemeris()`. It is never stored as a field or
-passed as a parameter. This is Architecture Rule 3 in `CLAUDE.md`.
+passed as a parameter. This is Architecture Rule 3 in `AGENTS.md`.
 
 **Alternatives considered:** Standard dependency injection — rejected because it creates
 too many paths for a stale reference to survive.
@@ -44,7 +44,7 @@ scattered through UI code.
 outright as the source of the prototype's worst bugs.
 
 **Consequences:** UI classes are views only. This constraint is enforced by Architecture
-Rules 1, 2, and 4 in `CLAUDE.md` and is checked at the start of every CC session.
+Rules 1, 2, and 4 in `AGENTS.md` and is checked at the start of every CC session.
 
 ---
 
@@ -168,7 +168,7 @@ prevent.
 **Decision:** CC sessions are instructed to read prototype code critically during the
 pre-implementation review phase — to understand *what* was attempted and *what edge
 cases were encountered* — but not to port it directly. The architecture rules in
-`CLAUDE.md` take precedence over any pattern found in the prototype.
+`AGENTS.md` take precedence over any pattern found in the prototype.
 
 **Consequences:** CC must complete a pre-implementation review phase (read interfaces
 and prototype code, report findings) before writing any code. This is non-negotiable
@@ -804,7 +804,7 @@ layer roots, calls `SaturnRingManager.detach()`, and clears internal maps.
 `resourcesFolder()` as a `FileLocator`, and constructs a fresh `BodySceneManager`. 
 `KepplrStatusWindow` calls a `configReloadCallback` (set by `KepplrApp` in `simpleInitApp()`) 
 after a successful `KEPPLRConfiguration.reload()`. The callback enqueues `rebuildBodyScene()` 
-via `KepplrApp.enqueue()`, ensuring the rebuild runs on the JME thread (CLAUDE.md Rule 4). 
+via `KepplrApp.enqueue()`, ensuring the rebuild runs on the JME thread (AGENTS.md Rule 4). 
 `TrailManager` and `VectorManager` are not rebuilt — they hold no shape-model geometry and 
 update naturally on the next frame.
 
@@ -1178,13 +1178,13 @@ Log lines are buffered in a `ConcurrentLinkedQueue`. `LogWindow` (package-privat
 displays log output in a `TextFlow` inside a `ScrollPane` on a dark background (`#1e1e1e`). An 
 ANSI parser (`Pattern`-based) converts SGR codes to styled `Text` nodes with appropriate 
 foreground colors. The queue is drained on each FX frame pulse from the existing 
-`AnimationTimer` in `KepplrStatusWindow`, avoiding `Platform.runLater()` per CLAUDE.md Rule 2. 
+`AnimationTimer` in `KepplrStatusWindow`, avoiding `Platform.runLater()` per AGENTS.md Rule 2. 
 A "Save Log..." button writes ANSI-stripped plain text via `FileChooser`. Accessible from `File 
 → Show Log`.
 
 **Alternatives considered:** `TextArea` with no color — rejected because the user specifically 
 wanted ANSI colors for level distinction. RichTextFX library — rejected to avoid an external 
-dependency. `Platform.runLater()` per log event — rejected per CLAUDE.md Rule 2.
+dependency. `Platform.runLater()` per log event — rejected per AGENTS.md Rule 2.
 
 **Consequences:** Max 50,000 `Text` nodes retained; oldest are trimmed. The `LogAppender` reads 
 `KEPPLRConfiguration.getInstance().logFormat()` at install time (point-of-use, Rule 3). The 

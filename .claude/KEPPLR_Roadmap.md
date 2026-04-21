@@ -9,10 +9,10 @@ system simulator.
 
 **Always begin every new Claude Code session with:**
 
-> Please read CLAUDE.md, REDESIGN.md, and this roadmap in full before doing
-> anything else. Then run `mvn test` and report any pre-existing failures. Then
-> state which step of the roadmap we are on and which classes you expect to
-> touch.
+> Please read AGENTS.md, REDESIGN.md, this roadmap, and DECISIONS.md in full
+> before doing anything else. Then run `mvn test` and report any pre-existing
+> failures. Then state which step of the roadmap we are on and which classes you
+> expect to touch.
 
 This ensures CC has the full architectural context, knows what has already been
 decided, and does not re-litigate settled choices.
