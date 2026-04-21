@@ -93,12 +93,16 @@ Do not deviate from them without explicit discussion.
 
 ### Rule 1 — UI classes must contain no simulation logic
 
-JavaFX controllers and FXML-backed classes are **views only**. They must:
+JavaFX UI classes are **view / boundary code only**. They must:
 - Bind to `SimulationState` observable properties (read)
 - Forward user input to `SimulationCommands` (write)
-- Contain no physics, no ephemeris calls, no camera math
+- Contain no physics, no ongoing simulation state derivation, and no camera math
 
-If you find yourself writing a calculation inside a JavaFX controller, stop and move it.
+Limited ephemeris reads are currently tolerated in `KepplrStatusWindow` for one-shot
+body / instrument menu population and global overlay toggles. Those reads must remain
+bounded UI support code, not become a second simulation model.
+
+If you find yourself writing a calculation inside a JavaFX class, stop and move it.
 
 ### Rule 2 — State flows in one direction
 
@@ -109,11 +113,14 @@ User Input      → SimulationCommands                     → Simulation Core
 
 - `SimulationState` is the single source of truth for everything the UI displays.
 - `SimulationState` properties are updated on the JME thread; JavaFX bindings must
-  marshal to the FX thread using `Platform.runLater(...)` at the boundary layer
-  (`SimulationStateFxBridge`), not scattered through UI code. The one additional
-  sanctioned use is `KepplrApp.destroy()` for lifecycle shutdown — that call site
-  must have a comment explaining the exception. No other class may call
-  `Platform.runLater(...)`.
+  marshal to the FX thread at the boundary layer (`SimulationStateFxBridge`), not
+  scattered through UI code.
+- `Platform.runLater(...)` remains restricted to `SimulationStateFxBridge` and the
+  sanctioned lifecycle shutdown call in `KepplrApp.destroy()` (with a comment
+  explaining the exception).
+- `FxDispatch` is the additional sanctioned FX-thread queue for startup / window
+  actions that need to run on the JavaFX application thread without expanding
+  `Platform.runLater(...)` usage throughout the codebase.
 - `SimulationCommands` is a plain interface; implementations are free to queue,
   validate, or execute commands immediately — that is the core's concern, not the UI's.
 
@@ -134,8 +141,9 @@ User Input      → SimulationCommands                     → Simulation Core
 | JME render    | Scene graph, physics, ephemeris, camera     |
 | JavaFX thread | UI node updates, bindings, event handlers   |
 
-Cross-thread communication must go through `SimulationState` (JME→FX) or
-`SimulationCommands` (FX→JME). No other crossing is permitted.
+Cross-thread communication should normally go through `SimulationState` (JME→FX) or
+`SimulationCommands` (FX→JME). The only additional sanctioned boundary helper is
+`FxDispatch` for FX-thread lifecycle / window work.
 
 ### Rule 5 — Constants over magic numbers
 
@@ -149,18 +157,27 @@ class or an appropriate enum. No magic numbers in logic code.
 
 ```
 kepplr
+├── apps/           # Standalone tools (CLI / utility apps)
+├── camera/         # Camera modes, frame definitions, transitions, input
+├── commands/       # SimulationCommands interface + implementation
+├── config/         # KEPPLRConfiguration singleton + config records
 ├── core/           # Simulation loop, time, state machine
-├── ephemeris/      # KEPPLREphemeris interface + Picante implementation
-├── config/         # KEPPLRConfiguration singleton
-├── render/         # JME scene, frustums, body renderers, star field
-│   ├── frustum/
+├── ephemeris/      # KEPPLREphemeris facade, lookup, SPICE support
+│   └── spice/
+├── render/         # JME scene, bodies, frustums, labels, trails, vectors, stars
 │   ├── body/
-│   └── trail/
-├── camera/         # Camera modes, frame definitions, synodic frame
+│   ├── frustum/
+│   ├── label/
+│   ├── trail/
+│   ├── util/
+│   └── vector/
+├── scripting/      # Groovy API, recorder, wait helpers, capture/reload hooks
+├── stars/          # Star catalog abstractions + implementations
+│   ├── catalogs/
+│   └── services/
 ├── state/          # SimulationState (observable properties)
-├── commands/       # SimulationCommands interface + implementations
-├── ui/             # JavaFX controllers, FXML — NO logic here
-├── scripting/      # Groovy API, waitSim/waitWall
+├── templates/      # Shared CLI/tool templates
+├── ui/             # JavaFX status/control window, dialogs, FX bridge
 └── util/           # KepplrConstants, math helpers
 ```
 
@@ -169,7 +186,10 @@ If no package clearly fits, ask before creating a new one.
 
 ---
 
-## Key Interfaces (establish these early; do not change signatures without discussion)
+## Key Interfaces
+
+Representative signatures from the current codebase. Treat the source files as the
+authoritative definition and do not change them casually.
 
 ```java
 // Sole authority for all ephemeris and frame data (REDESIGN.md §1.1)
@@ -177,24 +197,28 @@ public interface KEPPLREphemeris { ... }
 
 // Single source of truth for UI-visible state
 public interface SimulationState {
-    ReadOnlyObjectProperty<Body> selectedBodyProperty();
-    ReadOnlyObjectProperty<Body> focusedBodyProperty();
-    ReadOnlyObjectProperty<Body> targetedBodyProperty();
+    ReadOnlyIntegerProperty selectedBodyIdProperty();
+    ReadOnlyIntegerProperty focusedBodyIdProperty();
+    ReadOnlyIntegerProperty targetedBodyIdProperty();
     ReadOnlyDoubleProperty currentEtProperty();
     ReadOnlyDoubleProperty timeRateProperty();
     ReadOnlyBooleanProperty pausedProperty();
+    ReadOnlyObjectProperty<CameraFrame> cameraFrameProperty();
+    ReadOnlyObjectProperty<CameraFrame> activeCameraFrameProperty();
     // ... extend as needed
 }
 
 // All user-initiated actions enter the simulation through this interface
 public interface SimulationCommands {
     void selectBody(int naifId);
-    void focusBody(int naifId);
+    void centerBody(int naifId);
     void targetBody(int naifId);
+    void pointAt(int naifId, double durationSeconds);
+    void goTo(int naifId, double apparentRadiusDeg, double durationSeconds);
     void setCameraFrame(CameraFrame frame);
     void setTimeRate(double simSecondsPerWallSecond);
     void setPaused(boolean paused);
-    void cancelTransition();   // clean up on script interruption — see D-025
+    void loadConfiguration(String path);
     // ... extend as needed
 }
 ```

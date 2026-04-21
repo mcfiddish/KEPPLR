@@ -431,7 +431,7 @@ The JavaFX menu bar must include an **Overlays** menu with:
 * **HUD/Info** — toggles the info display (focused body name and distance)
 * **Show Time** — toggles the time HUD display
 * **Show Trajectories** — global trail toggle (calls `setTrailVisible` on all known bodies)
-* **Current Target** submenu — vector overlays for the focused body:
+* **Current Focus** submenu — vector overlays for the focused body:
 
   * Sun Direction
   * Earth Direction
@@ -600,11 +600,24 @@ All menu items call `SimulationCommands` only — no rendering logic in `ui/`.
   (spacecraft position), using the apex distance — not apex + extent.
   This matches the `VectorRenderer` pattern (§8.3).
 
-### 13.4 Out of Scope for v0.1
+### 13.4 Implemented State Controls
+
+* Per-instrument visibility is controlled by
+  `SimulationCommands.setFrustumVisible(...)`.
+* Per-instrument retained-footprint recording is controlled by
+  `SimulationCommands.setFrustumPersistenceEnabled(...)`.
+* Per-instrument color configuration is supported via
+  `SimulationCommands.setFrustumColor(...)` and stored in `SimulationState`.
+* Retained footprints can be cleared per instrument or globally via
+  `clearFrustumFootprints(...)`.
+* The current JavaFX GUI exposes the visibility toggles in the **Instruments**
+  menu. Color and persistence controls are currently script/API features rather
+  than first-class GUI controls.
+
+### 13.5 Out of Scope for v0.1
 
 * Boresight line rendering (separate from the pyramid faces)
 * Frustum shortening when the boresight intersects a body surface
-* Per-instrument color configuration (hardcoded cyan)
 * Distance culling of frustums
 
 ---
@@ -616,14 +629,17 @@ The following are acknowledged areas not fully specified in v0.1 and may be refi
 * exact UI menu structure and full set of controls (beyond required status and tracking stop)
 * detailed camera control mappings (mouse/keyboard bindings)
 * determinism guarantees and golden-test harness requirements
-* shape model formats and loading pipeline (for irregular bodies)
+* asset-authoring workflow details beyond the current GLB pipeline
 * exact numeric tolerances for comparisons and rendering thresholds beyond those specified
 
 ---
 
-## 16. Optional Requirements (Future)
+## 16. Implemented Extensions And Future Candidates
 
-This section lists commonly needed capabilities (e.g., in Cosmographia/Celestia-class tools) that are not required for v0.1 but are candidates for future requirement revisions.
+This section mixes two kinds of material:
+- implemented extensions that are present in the current codebase but were added
+  after the original v0.1 core requirements
+- future candidates that remain out of scope
 
 ### 16.1 Determinism and Reproducibility
 
@@ -673,11 +689,11 @@ the default ellipsoid / point sprite geometry in the scene graph.
 
 #### 16.6.1 GLTFUtils
 
-`kepplr.visualization.jme.util.GLTFUtils` must be ported from the prototype.
-Its sole initial responsibility is `readModelToBodyFixedQuatFromGlb(Path)`,
+`kepplr.render.util.GLTFUtils` provides low-level GLB parsing support for shape
+models. Its core responsibility is `readModelToBodyFixedQuatFromGlb(Path)`,
 which reads the quaternion stored in the GLB JSON extras at
 `asset.extras.kepplr.modelToBodyFixedQuat.value = [x,y,z,w]` without a
-third-party JSON library. No other code may read this field directly.
+third-party JSON library. No other code should read this field directly.
 
 #### 16.6.2 Asset Manager Registration
 
@@ -760,8 +776,9 @@ non-null path:
 
 `getKnownBodies()` provides the body set for §16.6.3. `getSpacecraft()`
 provides the spacecraft set for §16.6.4. Both sets are processed once at scene
-graph construction time. Dynamic loading of shape models at runtime is out of
-scope for this step.
+graph construction time and again on configuration reload when the scene graph
+is rebuilt. Hot-swapping an individual model into the live scene without a
+configuration reload remains out of scope.
 
 ### 16.7 Performance and Quality Acceptance Criteria
 

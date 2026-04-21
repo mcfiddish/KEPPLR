@@ -1375,19 +1375,284 @@ framebuffer capture still runs after the render pass.
 
 ---
 
-## Backlog (unsequenced, post-v0.2)
+## v0.3 Proposed Milestones
 
-- Camera navigation inertia and damping (§16.2)
-- Full camera control bindings spec (§16.2)
-- Object search and autocomplete UI (§16.3)
-- Determinism and reproducible replay (§16.1)
-- Performance acceptance criteria and LOD rules (§16.7)
-- Gaia star catalog (requires user-downloaded files)
-- Native Wayland support (Linux runs under XWayland)
-- Instrument boresight line rendering (frustum overlays implemented in Step 22;
-  boresight as a separate line is deferred)
-- GLB mesh-model surface intersection for instrument footprints
-- GUI controls for per-instrument frustum colors
+These steps are the recommended next work after the completed v0.2 rendering,
+capture, scripting, and UI polish work. The theme is to make KEPPLR both more
+cinematic and more useful as a SPICE-based mission geometry tool.
+
+### Recommended Implementation Order
+
+The step numbers below are stable roadmap identifiers, not a strict execution
+order. Use this table as the recommended build sequence for v0.3 work and
+selected backlog items.
+
+| Order | Roadmap item | Reason / dependency |
+|---:|---|---|
+| 1 | Backlog: `primary` parameter in `KEPPLRConfiguration.bodyBlock()` | Fixes parent-body metadata before trails, decluttering, search, scene persistence, and timeline/event metadata depend on it. |
+| 2 | Step 38 slice: performance policy and lightweight telemetry | Establishes target budgets and observability before adding heavier render features. Defer full LOD enforcement until more v0.3 layers exist. |
+| 3 | Step 30 slice: `.kepplrscene` format and atomic load/apply validation | Creates the persistence contract for current state before shots, events, reference layers, and richer overlay state expand it. |
+| 4 | Step 37 slice: render manifests and deterministic capture metadata | Gives existing capture paths traceability before shot capture builds on top of them. |
+| 5 | Step 31: Object search, recents, favorites, and bookmarks | High user value with few blockers; benefits from explicit parent-body metadata. |
+| 6 | Step 29 slice: shot/keyframe core | Build fixed-pose/body-look-at shots, playback, preview, and deterministic shot capture after scene files and manifests exist. Defer boresight/surface-intercept constraints until Steps 34 and 35. |
+| 7 | Backlog: camera navigation inertia and damping | Align interactive camera feel with the shot/easing model after the shot core is established. |
+| 8 | Backlog: full camera control bindings spec | Specify mouse, keyboard, trackpad, and possible gamepad mappings once the movement model is settled. |
+| 9 | Step 32: Time slider and event timeline | Depends on scene persistence for marker groups and observation windows; benefits from hardened ET/capture behavior. |
+| 10 | Step 33 slice: geometry computation service and basic readouts | Add SPICE-backed geometry accessors and simple HUD/label readouts before advanced instrument readouts. |
+| 11 | Step 34: Instrument boresight and targeting tools | Builds on existing frustum/footprint work and uses ellipsoid intercepts first; also completes deferred GUI color controls. |
+| 12 | Step 35: Mesh-based surface intersections | Add mesh intersections after telemetry exists and boresight/footprint consumers are factored around an intersection abstraction. |
+| 13 | Step 33 slice: boresight intercept readouts and advanced label priority | Fold instrument intercept values into geometry readouts after Steps 34 and 35 provide reliable targeting data. |
+| 14 | Step 36: Reference geometry layers | Reuse the command/state/render/persistence patterns from earlier v0.3 work. |
+| 15 | Step 38 slice: full LOD and update-cadence enforcement | Finish quality preset enforcement once mesh intersections, reference layers, readouts, and retained swaths have concrete costs. |
+
+### 29. Shot / Keyframe System
+
+Add a first-class cinematic shot abstraction above the existing camera commands.
+The goal is to make authored camera sequences reproducible without forcing every
+user to hand-write interpolation loops in Groovy.
+
+**Requirements**
+- Add a `Shot` model containing name, start/end camera pose, duration, easing,
+  FOV, camera frame, optional UTC/ET, optional time rate, and optional
+  focused/targeted/selected body changes.
+- Support look-at constraints where camera position interpolates while
+  orientation continuously points at a body, fixed point, instrument boresight,
+  or surface intercept.
+- Support shot playback from scripts and the GUI without blocking the JME render
+  thread.
+- Support deterministic frame capture from a shot sequence at a requested FPS.
+- Provide a small set of high-level shot helpers such as arc, push-in, pull-back,
+  reveal, dolly, truck, crane, and orbit.
+- Draw an optional camera path preview with keyframe markers.
+
+**Success criteria**
+- A script can define a list of named shots, preview them interactively, and
+  render a PNG sequence whose camera motion matches playback.
+- Shot capture produces the same camera pose at frame `N` regardless of
+  interactive frame rate.
+- Existing primitive camera commands remain available and unchanged.
+
+### 30. Scene Presets and Full-State Snapshot Files
+
+Extend the compact state string idea into full authored scene files. The compact
+state string remains the fast copy/paste bookmark; scene files become the
+portable, readable representation for tutorials, comparison views, and shot
+setup.
+
+**Requirements**
+- Add a readable `.kepplrscene` format, preferably JSON, with a version field.
+- Capture time state, camera pose/orientation/FOV/frame, selected/focused/
+  targeted bodies, render quality, window size, body visibility, labels, trails,
+  trail durations, trail reference bodies, vectors, frustums, footprint
+  persistence settings, retained swath clear state where applicable, HUD
+  visibility, and optional shot definitions.
+- Load scene files from scripts and the GUI.
+- Keep unknown future fields ignored but preserved where practical.
+- Include validation errors that identify the failing field and do not leave the
+  app in a partially applied scene.
+
+**Success criteria**
+- A scene file can recreate an authored visual setup without manually re-running
+  all setup commands.
+- Scene files are stable across normal configuration reloads when referenced
+  bodies/instruments still exist.
+- Compact state strings continue to work for quick bookmarks.
+
+### 31. Object Search, Recents, Favorites, and Bookmarks
+
+Make large kernel sets easier to navigate. The current filterable body tree is
+useful, but KEPPLR needs a richer discovery layer as body, spacecraft, and
+instrument counts grow.
+
+**Requirements**
+- Add autocomplete by body name, NAIF ID, spacecraft name, and instrument name.
+- Show result metadata: object type, NAIF ID, parent/primary body, distance from
+  camera, distance from Sun, available body-fixed frame, available shape model,
+  and available instruments where applicable.
+- Add recent objects and user-defined favorites/bookmarks.
+- Add filters for visible bodies, bodies with trails, bodies with labels, bodies
+  with shape models, spacecraft, instruments, and hidden barycenters.
+- Make search actions explicit: select, center, go to, point at, show trail, show
+  label, show instruments.
+
+**Success criteria**
+- A user can quickly find a spacecraft or instrument in a dense mission config
+  without knowing its exact NAIF ID.
+- Favorites survive app restart.
+- Search and favorite actions route through `SimulationCommands`; no simulation
+  logic enters JavaFX UI classes.
+
+### 32. Time Slider and Event Timeline
+
+Add a timeline control for interactive exploration. This should complement, not
+replace, exact UTC/ET entry and script-based time control.
+
+**Requirements**
+- Add a time slider that maps a visible interval to ET.
+- Allow the visible interval to be set from explicit start/end UTC strings,
+  current time ± duration, loaded kernel coverage, or an event group.
+- Label the slider with event markers. Initial marker types:
+  closest approach, user-defined UTC markers, script-defined markers, kernel
+  coverage start/end, and observation windows loaded from scene files.
+- Support event marker actions: jump to event, play from event, set range around
+  event, and copy event UTC.
+- Keep drag behavior responsive by updating `SimulationClock` through the same
+  command/state path as existing time controls.
+- Provide a script API for defining markers and marker groups.
+
+**Success criteria**
+- A user can scrub across a flyby or orbit interval and see bodies, trails,
+  frustums, and footprints update consistently.
+- Event labels remain readable and decluttered when many markers are close
+  together.
+- Marker jumps are exact UTC/ET jumps, not approximate slider-position jumps.
+
+### 33. Measurement Labels and Geometry Readouts
+
+Expose SPICE-derived geometry directly in the visualization and HUD. This is a
+major step toward KEPPLR being an analysis tool rather than only a viewer.
+
+**Requirements**
+- Add optional labels/readouts for camera range, target range, light time, phase
+  angle, Sun-target-observer angle, subsolar latitude/longitude, sub-observer
+  latitude/longitude, local solar time, body-relative velocity, spacecraft
+  altitude, and instrument boresight intercept coordinates.
+- Support per-body and selected-body display modes.
+- Add script accessors for common geometry quantities so scripts can wait on or
+  branch by computed conditions.
+- Provide user-configurable label priority rules beyond the current proximity
+  decluttering policy.
+
+**Success criteria**
+- Users can create screenshots and videos that carry explanatory geometry
+  annotations without external post-processing.
+- Geometry values are computed from the same SPICE-backed ephemeris/frame path
+  used by rendering.
+- Labels remain optional and do not clutter the default visual mode.
+
+### 34. Instrument Boresight and Targeting Tools
+
+Build on the existing instrument frustum and footprint work with operationally
+useful targeting aids.
+
+**Requirements**
+- Render instrument boresight lines independently from frustum visibility.
+- Show boresight intercept markers and intercept body names when a body surface
+  is hit.
+- Show angular separation between boresight and selected/targeted body center.
+- Add commands to point the camera along an instrument boresight, follow a live
+  footprint, or center the view on the current boresight intercept.
+- Add GUI controls for per-instrument frustum, live footprint, and retained
+  swath colors.
+- Add instrument filters in the Instruments menu for selected spacecraft/current
+  focus/all instruments.
+
+**Success criteria**
+- A user can inspect where an instrument is looking without enabling the full
+  frustum volume.
+- A script can follow an instrument footprint across a flyby.
+- Color changes are reflected in command recording and scene files.
+
+### 35. Mesh-Based Surface Intersections
+
+Implement GLB mesh intersection for clipped frustums, live footprints, retained
+swaths, altitude calculations, and near-surface camera aids.
+
+**Requirements**
+- Build a body-fixed ray-to-mesh intersection path for GLB-backed bodies.
+- Prefer mesh intersection when a usable surface mesh exists; fall back to
+  ellipsoid intersection otherwise.
+- Define which GLB geometry counts as the physical surface.
+- Add an acceleration structure suitable for per-frame instrument footprint
+  updates.
+- Preserve existing footprint persistence semantics: only retain what was
+  actually drawn while persistence is enabled.
+- Expose whether a live result is mesh-derived or ellipsoid-derived.
+
+**Success criteria**
+- Irregular GLB-backed bodies receive clipped frustums and footprints based on
+  their actual mesh geometry.
+- Mesh-derived footprints remain stable in body-fixed coordinates.
+- Performance remains acceptable with common mission shape models.
+
+### 36. Reference Geometry Layers
+
+Add explanatory geometry layers that can be toggled and recorded like existing
+labels, trails, vectors, and frustums.
+
+**Requirements**
+- Add body-fixed latitude/longitude grids, equator, prime meridian, terminator,
+  local horizon plane, orbital plane, ecliptic plane, ring plane, Sun/anti-Sun
+  line, velocity/anti-velocity line, and spacecraft nadir/zenith indicators.
+- Support per-body visibility and script control.
+- Make layer styling readable at multiple distances and compatible with render
+  quality presets.
+- Include reference geometry state in full scene snapshots.
+
+**Success criteria**
+- A user can explain body orientation, lighting, orbital geometry, and viewing
+  geometry directly in KEPPLR.
+- Reference layers do not require special-case UI logic; they follow the same
+  command/state/render architecture as other overlays.
+
+### 37. Deterministic Replay and Render Manifests
+
+Formalize reproducibility for script playback and image sequence capture.
+
+**Requirements**
+- Define deterministic replay expectations and numeric tolerances for camera
+  state, ET progression, rendered frame timing, and capture output metadata.
+- Write a render manifest for captures containing app version, OS/platform,
+  config path/hash, loaded kernel list and hashes, scene file hash, script hash,
+  starting state, output resolution, FPS, frame count, render quality, and ET per
+  frame.
+- Add an option to replay a manifest where local paths and kernel hashes match.
+- Add golden tests for state evolution and capture timing where practical.
+
+**Success criteria**
+- A rendered sequence can be traced back to the exact config, kernels, scene,
+  script, and frame times that produced it.
+- Re-running a manifest on the same platform reproduces camera/time state within
+  documented tolerances.
+
+### 38. Performance, LOD, and Quality Policy
+
+Define measurable behavior before adding more heavy visual features.
+
+**Requirements**
+- Define target FPS and memory budgets for common 1080p and 4K scenarios.
+- Define quality preset semantics for texture filtering, star density, trail
+  sample density, shadow/penumbra quality, frustum/footprint update cadence,
+  label budget, and mesh intersection budget.
+- Add LOD rules for GLB models, point sprites, trails, labels, reference layers,
+  star catalogs, and retained swaths.
+- Add lightweight performance telemetry in the HUD/log output for frame time,
+  visible body count, trail sample count, label count, and mesh intersection
+  time.
+
+**Success criteria**
+- Render quality presets have testable meaning.
+- Large scenes degrade predictably rather than becoming unusable.
+- Future visual features have explicit budgets to design against.
+
+---
+
+## Backlog (unsequenced, post-v0.3)
+
+- Camera navigation inertia and damping (§16.2), after the shot/keyframe system
+  establishes the desired camera feel.
+- Full camera control bindings spec (§16.2), including mouse, keyboard,
+  trackpad, and possible gamepad mappings.
+- Optional collision/ground avoidance for near-surface viewing (§16.2), likely
+  dependent on mesh intersection from Step 35.
+- Gaia star catalog support and UI controls for star density/magnitude cutoff
+  (requires user-downloaded files).
+- Native Wayland support; Linux currently runs under XWayland.
+- Motion blur, exposure, depth-of-field, and other capture-only cinematic
+  post-processing effects.
+- Richer spacecraft/lander material handling that better preserves
+  Cosmographia/Celestia CMOD material semantics while retaining KEPPLR's
+  physically meaningful Sun/body-shadow lighting.
 - `primary` parameter in `KEPPLRConfiguration.bodyBlock()` — needed for asteroid
   satellites whose NAIF IDs do not follow the planet convention (primary = x99,
   barycenter = x, satellites = x01–x98). Trail period computation (D-041),
