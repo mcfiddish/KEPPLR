@@ -45,7 +45,8 @@ public interface BodyBlock {
 
     @Comment("""
     NAIF ID of this body's primary. If blank, infer primary from the body's NAIF ID.
-    """)
+    The kernel pool variable BODY{primaryID}_GM is used to calculate the orbital
+    period.  If it is missing the heliocentric orbital period is used.""")
     @DefaultValue("")
     String primaryID();
 

@@ -1093,10 +1093,10 @@ GM is still correct for the relative orbit: T = 2π√(a_rel³ / G(M₁+M₂)) i
 (`barycenterId × 100 + 1`, i.e. Charon 901) is used instead. Falls back to the barycenter if 
 neither primary nor companion can be resolved.
 
-**Future work:** The NAIF naming convention (primary = x99, satellites = x01–x98, barycenter = 
-x) does not hold for asteroids with satellites. A `primary` parameter in 
-`KEPPLRConfiguration.bodyBlock()` will be needed to support those systems. See roadmap future 
-items.
+**Follow-up implemented:** The NAIF naming convention (primary = x99, satellites =
+x01–x98, barycenter = x) does not hold for asteroids with satellites. `BodyBlock.primaryID()`
+is now used as the authoritative configured primary for trail period and anchoring when
+nonblank; otherwise the existing NAIF arithmetic fallback remains. See D-076.
 
 **Alternatives considered:** Correcting the barycentric period with an effective
 GM = G·M₂³/(M₁+M₂)² — rejected because it requires individual body masses that
@@ -1104,9 +1104,9 @@ may not be in the kernel pool. Using the barycentric state unchanged — rejecte
 because the 30× error for Pluto makes the trail invisible.
 
 **Consequences:** `TrailSampler.computeTrailDurationSec` now resolves the primary body for all 
-satellites. Existing behaviour for standard satellites is unchanged (relative orbit ≈ 
-barycentric orbit when mass ratio is extreme). Pluto's trail correctly shows the full 
-~6.387-day orbit around the Pluto Barycenter.
+satellites and for bodies with a configured `BodyBlock.primaryID()`. Existing behaviour for
+standard satellites is unchanged (relative orbit ≈ barycentric orbit when mass ratio is
+extreme). Pluto's trail correctly shows the full ~6.387-day orbit around the Pluto Barycenter.
 
 ---
 
@@ -1726,12 +1726,11 @@ should
 always agree).
 
 **Consequences:** Scripting: `kepplr.setTrailReferenceBody("Artemis II", "Moon")` makes both the
-trail and velocity arrow for Artemis II Moon-relative. The NAIF heuristic remains the default;
-existing scripts are unaffected. The `TrailState.barycenterId` field now stores the effective 
-reference
-body (not just the satellite-barycenter special case), enabling the reference-body-change 
-staleness
-trigger.
+trail and velocity arrow for Artemis II Moon-relative. With no explicit trail reference body,
+`BodyBlock.primaryID()` is the first default for bodies that define it; the NAIF heuristic remains
+the fallback. Existing scripts are unaffected. The `TrailState.barycenterId` field now stores the
+effective reference body (not just the satellite-barycenter special case), enabling the
+reference-body-change staleness trigger.
 
 ---
 
@@ -2101,7 +2100,39 @@ scaled to their bounds.
 
 ---
 
-*Last updated: D-075 (`GlbModelViewer` camera, zoom, and clipping planes scale to loaded model
+## D-076: BodyBlock.primaryID is the default primary for trail sampling
+**Status:** Accepted
+**Roadmap step:** v0.3 backlog item: primary metadata before richer body search/persistence
+
+**Context:** Some small-body systems do not follow the planet/satellite NAIF convention used
+by the original trail heuristic. In those systems, integer arithmetic on the NAIF ID can infer
+the wrong parent body, which affects trail anchoring and orbital-period calculation.
+`BodyBlock.primaryID()` already exists as explicit parent-body metadata in configuration.
+
+**Decision:** When `BodyBlock.primaryID()` is nonblank, `TrailSampler` treats it as the
+authoritative primary for default trail behavior. `usesPrimaryRelativeTrail()` returns true for
+configured-primary bodies, `getPrimaryID()` resolves the configured primary, and `TrailManager`
+uses that primary as the effective reference body unless `setTrailReferenceBody(...)` supplies
+an explicit per-body override. If `primaryID()` is blank, the existing NAIF heuristic remains
+the fallback.
+
+Trail duration follows the same resolution. The primary-relative path uses
+`BODY{primaryID}_GM`; if that GM is unavailable, `computeTrailDurationSec()` tries the
+heliocentric Sun-GM path, then falls back to the 30-day default if no defined period can be
+computed.
+
+GUI trail decluttering follows the same configured-primary rule: `BodyBlock.primaryID()` is used
+when present, otherwise the legacy planet/satellite NAIF fallback is used.
+
+**Consequences:** Asteroid satellites and other non-planetary systems can draw primary-relative
+trails without a script-level `setTrailReferenceBody(...)` call when configuration provides
+`primaryID()`. Trail visibility suppression is also evaluated against the configured primary.
+Existing standard satellite behavior is unchanged.
+
+---
+
+*Last updated: D-076 (`BodyBlock.primaryID()` is the default primary for trail sampling and
+period calculation), D-075 (`GlbModelViewer` camera, zoom, and clipping planes scale to loaded model
 bounds), D-074 (spacecraft GLBs prioritize physically consistent illumination over PBR
 material fidelity; richer spacecraft/lander material handling deferred), D-073 (plain JavaFX menu actions use standard `MenuItem`; `CustomMenuItem`
 limited to embedded controls; guarded one-shot Quit/close shutdown), D-072 (`setCameraPose()` added for combined camera pose transitions and

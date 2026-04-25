@@ -1286,6 +1286,12 @@ entry point `TrailSampler.sampleWithExplicitRef()` was added that bypasses the
 heuristic entirely. `TrailManager` computes the barycenter anchor *before*
 calling the sampler so that both the samples and the live anchor are consistent.
 
+**Follow-up:** `BodyBlock.primaryID()` is now part of the default trail reference
+resolution (D-076). If a body has a nonblank configured primary, `TrailSampler`
+and `TrailManager` use that primary before falling back to NAIF arithmetic. This
+covers asteroid satellites and other small-body systems whose parent cannot be
+derived from the planet/satellite ID convention.
+
 **Files changed:**
 - `TrailSampler.java` — added `sampleWithExplicitRef()` and extracted
   `doSample()`
@@ -1387,23 +1393,26 @@ The step numbers below are stable roadmap identifiers, not a strict execution
 order. Use this table as the recommended build sequence for v0.3 work and
 selected backlog items.
 
+Completed before this sequence: `BodyBlock.primaryID()` is now used as the
+authoritative configured primary for trail period calculation, trail anchoring,
+and GUI trail decluttering (D-076).
+
 | Order | Roadmap item | Reason / dependency |
 |---:|---|---|
-| 1 | Backlog: `primary` parameter in `KEPPLRConfiguration.bodyBlock()` | Fixes parent-body metadata before trails, decluttering, search, scene persistence, and timeline/event metadata depend on it. |
-| 2 | Step 38 slice: performance policy and lightweight telemetry | Establishes target budgets and observability before adding heavier render features. Defer full LOD enforcement until more v0.3 layers exist. |
-| 3 | Step 30 slice: `.kepplrscene` format and atomic load/apply validation | Creates the persistence contract for current state before shots, events, reference layers, and richer overlay state expand it. |
-| 4 | Step 37 slice: render manifests and deterministic capture metadata | Gives existing capture paths traceability before shot capture builds on top of them. |
-| 5 | Step 31: Object search, recents, favorites, and bookmarks | High user value with few blockers; benefits from explicit parent-body metadata. |
-| 6 | Step 29 slice: shot/keyframe core | Build fixed-pose/body-look-at shots, playback, preview, and deterministic shot capture after scene files and manifests exist. Defer boresight/surface-intercept constraints until Steps 34 and 35. |
-| 7 | Backlog: camera navigation inertia and damping | Align interactive camera feel with the shot/easing model after the shot core is established. |
-| 8 | Backlog: full camera control bindings spec | Specify mouse, keyboard, trackpad, and possible gamepad mappings once the movement model is settled. |
-| 9 | Step 32: Time slider and event timeline | Depends on scene persistence for marker groups and observation windows; benefits from hardened ET/capture behavior. |
-| 10 | Step 33 slice: geometry computation service and basic readouts | Add SPICE-backed geometry accessors and simple HUD/label readouts before advanced instrument readouts. |
-| 11 | Step 34: Instrument boresight and targeting tools | Builds on existing frustum/footprint work and uses ellipsoid intercepts first; also completes deferred GUI color controls. |
-| 12 | Step 35: Mesh-based surface intersections | Add mesh intersections after telemetry exists and boresight/footprint consumers are factored around an intersection abstraction. |
-| 13 | Step 33 slice: boresight intercept readouts and advanced label priority | Fold instrument intercept values into geometry readouts after Steps 34 and 35 provide reliable targeting data. |
-| 14 | Step 36: Reference geometry layers | Reuse the command/state/render/persistence patterns from earlier v0.3 work. |
-| 15 | Step 38 slice: full LOD and update-cadence enforcement | Finish quality preset enforcement once mesh intersections, reference layers, readouts, and retained swaths have concrete costs. |
+| 1 | Step 38 slice: performance policy and lightweight telemetry | Establishes target budgets and observability before adding heavier render features. Defer full LOD enforcement until more v0.3 layers exist. |
+| 2 | Step 30 slice: `.kepplrscene` format and atomic load/apply validation | Creates the persistence contract for current state before shots, events, reference layers, and richer overlay state expand it. |
+| 3 | Step 37 slice: render manifests and deterministic capture metadata | Gives existing capture paths traceability before shot capture builds on top of them. |
+| 4 | Step 31: Object search, recents, favorites, and bookmarks | High user value with few blockers; benefits from explicit parent-body metadata. |
+| 5 | Step 29 slice: shot/keyframe core | Build fixed-pose/body-look-at shots, playback, preview, and deterministic shot capture after scene files and manifests exist. Defer boresight/surface-intercept constraints until Steps 34 and 35. |
+| 6 | Backlog: camera navigation inertia and damping | Align interactive camera feel with the shot/easing model after the shot core is established. |
+| 7 | Backlog: full camera control bindings spec | Specify mouse, keyboard, trackpad, and possible gamepad mappings once the movement model is settled. |
+| 8 | Step 32: Time slider and event timeline | Depends on scene persistence for marker groups and observation windows; benefits from hardened ET/capture behavior. |
+| 9 | Step 33 slice: geometry computation service and basic readouts | Add SPICE-backed geometry accessors and simple HUD/label readouts before advanced instrument readouts. |
+| 10 | Step 34: Instrument boresight and targeting tools | Builds on existing frustum/footprint work and uses ellipsoid intercepts first; also completes deferred GUI color controls. |
+| 11 | Step 35: Mesh-based surface intersections | Add mesh intersections after telemetry exists and boresight/footprint consumers are factored around an intersection abstraction. |
+| 12 | Step 33 slice: boresight intercept readouts and advanced label priority | Fold instrument intercept values into geometry readouts after Steps 34 and 35 provide reliable targeting data. |
+| 13 | Step 36: Reference geometry layers | Reuse the command/state/render/persistence patterns from earlier v0.3 work. |
+| 14 | Step 38 slice: full LOD and update-cadence enforcement | Finish quality preset enforcement once mesh intersections, reference layers, readouts, and retained swaths have concrete costs. |
 
 ### 29. Shot / Keyframe System
 
@@ -1653,8 +1662,3 @@ Define measurable behavior before adding more heavy visual features.
 - Richer spacecraft/lander material handling that better preserves
   Cosmographia/Celestia CMOD material semantics while retaining KEPPLR's
   physically meaningful Sun/body-shadow lighting.
-- `primary` parameter in `KEPPLRConfiguration.bodyBlock()` — needed for asteroid
-  satellites whose NAIF IDs do not follow the planet convention (primary = x99,
-  barycenter = x, satellites = x01–x98). Trail period computation (D-041),
-  satellite anchoring, and decluttering all currently infer the primary from
-  NAIF arithmetic; a configured `primary` would override that inference.

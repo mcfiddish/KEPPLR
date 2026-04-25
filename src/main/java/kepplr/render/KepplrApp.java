@@ -26,6 +26,7 @@ import kepplr.camera.CameraInputHandler;
 import kepplr.camera.SynodicFrameApplier;
 import kepplr.camera.TransitionController;
 import kepplr.commands.DefaultSimulationCommands;
+import kepplr.config.BodyBlock;
 import kepplr.config.KEPPLRConfiguration;
 import kepplr.core.SimulationClock;
 import kepplr.ephemeris.BodyLookupService;
@@ -725,7 +726,8 @@ public class KepplrApp extends SimpleApplication {
         for (var entry : simulationState.getTrailVisibilityMap().entrySet()) {
             if (entry.getValue().get()) {
                 int naifId = entry.getKey();
-                if (isSatellite(naifId) && isSatelliteTooCloseToParent(naifId, et)) {
+                int primaryId = resolveTrailDeclutterPrimaryId(naifId);
+                if (primaryId != -1 && isBodyTooCloseToTrailPrimary(naifId, primaryId, et)) {
                     continue;
                 }
                 wantEnabled.add(naifId);
@@ -749,17 +751,38 @@ public class KepplrApp extends SimpleApplication {
     }
 
     /**
-     * Check if a satellite's screen position is too close to its primary body for trail decluttering. Projects both the
-     * satellite and its primary (planet with id = hundreds*100 + 99) to screen coords.
+     * Resolve the primary body used for GUI trail decluttering.
+     *
+     * <p>Configured {@link BodyBlock#primaryID()} metadata is authoritative. If absent, retain the legacy
+     * planet/satellite NAIF convention for natural satellites.
      */
-    private boolean isSatelliteTooCloseToParent(int naifId, double et) {
+    static int resolveTrailDeclutterPrimaryId(int naifId) {
+        try {
+            BodyBlock block = KEPPLRConfiguration.getInstance().bodyBlock(naifId);
+            if (block != null && block.primaryID() != null && !block.primaryID().isBlank()) {
+                int primaryId = block.primaryIDasInt();
+                return primaryId == naifId ? -1 : primaryId;
+            }
+        } catch (Exception ignored) {
+        }
+
+        if (!isSatellite(naifId)) {
+            return -1;
+        }
+
+        int primaryId = (naifId / 100) * 100 + 99;
+        return primaryId == naifId ? -1 : primaryId;
+    }
+
+    /**
+     * Check if a body's screen position is too close to its trail primary for decluttering. Projects both the body and
+     * primary to screen coords.
+     */
+    private boolean isBodyTooCloseToTrailPrimary(int naifId, int primaryId, double et) {
         try {
             KEPPLREphemeris eph = KEPPLRConfiguration.getInstance().getEphemeris();
             VectorIJK satPos = eph.getHeliocentricPositionJ2000(naifId, et);
             if (satPos == null) return false;
-            // Primary planet: e.g. for Moon (301) → Earth (399), Pluto (999) → 999 (self, skip)
-            int primaryId = (naifId / 100) * 100 + 99;
-            if (primaryId == naifId) return false;
             VectorIJK primaryPos = eph.getHeliocentricPositionJ2000(primaryId, et);
             if (primaryPos == null) return false;
 
