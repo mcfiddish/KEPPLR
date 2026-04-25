@@ -2076,7 +2076,33 @@ tests should reflect that D-028 is no longer active renderer policy.
 
 ---
 
-*Last updated: D-074 (spacecraft GLBs prioritize physically consistent illumination over PBR
+## D-075: GLB model viewer camera scales to loaded model bounds
+**Status:** Accepted
+**Roadmap step:** post-Step 28 standalone tool refinement
+
+**Context:** `GlbModelViewer` is used to inspect standalone GLB assets produced by tools such
+as `convert_to_normalized_glb.py`. Asteroid and small-body DSK conversions, such as Dimorphos,
+can produce physically small meshes. The previous viewer camera used fixed kilometer-scale
+minimum distances and fixed zoom increments, so small models opened tiny in the view and could
+hit near-plane clipping when zooming in.
+
+**Decision:** The viewer derives its initial orbit distance, minimum zoom distance, zoom step,
+and near/far clipping planes from the loaded model's bounding radius. Zoom is proportional
+rather than an absolute distance delta. The near plane is kept small enough for close inspection
+while the far plane remains large enough to contain the model and camera orbit.
+
+**Alternatives considered:** Rescaling imported GLBs for viewer convenience — rejected because
+the viewer should preserve physical model scale. Adding a special case for DSK-derived assets —
+rejected because the issue is any small GLB, not DSK specifically.
+
+**Consequences:** Small GLBs open framed at an inspectable size and can be zoomed without
+near-plane clipping. Large models continue to use the same viewer controls, with camera limits
+scaled to their bounds.
+
+---
+
+*Last updated: D-075 (`GlbModelViewer` camera, zoom, and clipping planes scale to loaded model
+bounds), D-074 (spacecraft GLBs prioritize physically consistent illumination over PBR
 material fidelity; richer spacecraft/lander material handling deferred), D-073 (plain JavaFX menu actions use standard `MenuItem`; `CustomMenuItem`
 limited to embedded controls; guarded one-shot Quit/close shutdown), D-072 (`setCameraPose()` added for combined camera pose transitions and
 camera-keyed frame capture), D-071 (instrument footprints retained as body-fixed vector

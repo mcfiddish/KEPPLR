@@ -39,6 +39,7 @@ import java.nio.file.Paths;
 import java.util.*;
 import javax.imageio.ImageIO;
 import kepplr.templates.KEPPLRTool;
+import kepplr.util.KepplrConstants;
 import kepplr.util.Log4j2Configurator;
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.Option;
@@ -200,7 +201,16 @@ public class GlbModelViewer implements KEPPLRTool {
         private static final String DUMP_ISOLATED = "DumpIsolated";
         private static final String TOGGLE_TILE_TINT = "ToggleTileTint";
         private static final float ROTATE_SPEED = 1.25f;
-        private static final float ZOOM_SPEED = 12f;
+        private static final float DEFAULT_MODEL_RADIUS = 1f;
+        private static final float INITIAL_ORBIT_RADIUS_MULTIPLE = 3f;
+        private static final float MIN_ORBIT_RADIUS_MULTIPLE = 1.05f;
+        private static final float MIN_ORBIT_DISTANCE = 1e-6f;
+        private static final float ZOOM_FACTOR_PER_SECOND = 0.25f;
+        private static final float VIEWER_NEAR_RADIUS_MULTIPLE = 0.001f;
+        private static final float VIEWER_NEAR_DISTANCE_MULTIPLE = 0.1f;
+        private static final float VIEWER_MIN_NEAR = 1e-6f;
+        private static final float VIEWER_FAR_RADIUS_MULTIPLE = 20f;
+        private static final float VIEWER_FAR_NEAR_MULTIPLE = 1000f;
         private static final float UV_EPSILON = 1e-5f;
         private static final double UV_OFFSET_EPSILON = 0.02;
         private static final double UV_OFFSET_THRESHOLD = 0.95;
@@ -223,7 +233,7 @@ public class GlbModelViewer implements KEPPLRTool {
         private BitmapText sizeText;
         private BitmapText debugHudText;
         private boolean axesVisible = false;
-        private float modelRadius = 1f;
+        private float modelRadius = DEFAULT_MODEL_RADIUS;
 
         /**
          * Constant quaternion read from GLB metadata: asset.extras.kepplr.modelToBodyFixedQuat.value = [x,y,z,w]
@@ -2888,18 +2898,21 @@ public class GlbModelViewer implements KEPPLRTool {
             modelRoot.updateGeometricState();
             BoundingVolume bound = modelRoot.getWorldBound();
 
-            float radius = 1f;
+            float radius = DEFAULT_MODEL_RADIUS;
             if (bound instanceof BoundingSphere sphere) {
                 radius = sphere.getRadius();
             } else if (bound instanceof BoundingBox box) {
                 radius = Math.max(box.getXExtent(), Math.max(box.getYExtent(), box.getZExtent()));
             } else if (bound != null) {
-                radius = Math.max(bound.getVolume(), 1f);
+                radius = Math.max(bound.getVolume(), DEFAULT_MODEL_RADIUS);
+            }
+            if (!(radius > 0f) || !Float.isFinite(radius)) {
+                radius = DEFAULT_MODEL_RADIUS;
             }
 
             modelRadius = radius;
 
-            orbitDistance = Math.max(modelRadius * 3f, 2f);
+            orbitDistance = modelRadius * INITIAL_ORBIT_RADIUS_MULTIPLE;
 
             // Start from an asymmetric view: rotate a bit around Y then around X
             orbitRot = new Quaternion()
@@ -2919,6 +2932,17 @@ public class GlbModelViewer implements KEPPLRTool {
                 up = Vector3f.UNIT_Y;
             }
             cam.lookAt(Vector3f.ZERO, up);
+            updateCameraFrustum();
+        }
+
+        private void updateCameraFrustum() {
+            float near = Math.max(VIEWER_MIN_NEAR, modelRadius * VIEWER_NEAR_RADIUS_MULTIPLE);
+            near = Math.min(near, Math.max(VIEWER_MIN_NEAR, orbitDistance * VIEWER_NEAR_DISTANCE_MULTIPLE));
+            float far = Math.max(
+                    Math.max(orbitDistance + modelRadius * VIEWER_FAR_RADIUS_MULTIPLE, near * VIEWER_FAR_NEAR_MULTIPLE),
+                    1f);
+            float aspect = cam.getHeight() > 0 ? (float) cam.getWidth() / (float) cam.getHeight() : 4f / 3f;
+            cam.setFrustumPerspective(KepplrConstants.CAMERA_FOV_Y_DEG, aspect, near, far);
         }
 
         /**
@@ -3086,14 +3110,22 @@ public class GlbModelViewer implements KEPPLRTool {
                 case ROTATE_UP -> orbitRot = orbitRot.mult(new Quaternion().fromAngleAxis(+a, Vector3f.UNIT_X));
                 case ROTATE_DOWN -> orbitRot = orbitRot.mult(new Quaternion().fromAngleAxis(-a, Vector3f.UNIT_X));
 
-                case ZOOM_IN -> orbitDistance = Math.max(0.1f, orbitDistance - ZOOM_SPEED * value);
-                case ZOOM_OUT -> orbitDistance += ZOOM_SPEED * value;
+                case ZOOM_IN -> orbitDistance = Math.max(minOrbitDistance(), orbitDistance * zoomFactor(value));
+                case ZOOM_OUT -> orbitDistance /= zoomFactor(value);
 
                 default -> {}
             }
 
             orbitRot.normalizeLocal();
             updateOrbitCamera();
+        }
+
+        private float zoomFactor(float seconds) {
+            return (float) Math.pow(ZOOM_FACTOR_PER_SECOND, Math.max(0f, seconds));
+        }
+
+        private float minOrbitDistance() {
+            return Math.max(MIN_ORBIT_DISTANCE, modelRadius * MIN_ORBIT_RADIUS_MULTIPLE);
         }
 
         @Override
