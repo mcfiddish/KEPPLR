@@ -74,6 +74,10 @@ Supported input formats
     file is referenced and textures are available, Blender will load them and this script will
     normalize any loaded images to PNG on export.
 
+- `.dsk` / `.bds` (NAIF SPICE Digital Shape Kernel)
+    Converted via NAIF **dskexp** to temporary OBJ/vertex-facet text, then imported.
+    This supports DSK type 2 triangular plate model segments, matching DSKEXP's scope.
+    DSK vertex coordinates are already in kilometers in the segment's body-fixed frame.
 
 External dependencies
 ---------------------
@@ -98,6 +102,10 @@ formats you are converting.
    - If `magick` is not on PATH, pass `--magick /path/to/magick`.
      Some distros expose the command as `convert`; this script tries both.
 
+5) dskexp (required for `.dsk` / `.bds` inputs)
+   - Included with the NAIF SPICE Toolkit.
+   - Provide its path using `--dskexp /path/to/dskexp`, or put `dskexp` on PATH.
+
 No other external tools are required.
 
 Command-line options
@@ -113,6 +121,8 @@ Optional:
   --scale <float>               Uniform scale factor applied to the imported model before export
   --assimp <path>               Path to assimp executable (default: 'assimp' on PATH)
   --cmodconvert <path>          Path to cmodconvert executable (required for .cmod inputs)
+  --dskexp <path>               Path to NAIF dskexp executable (default: 'dskexp' on PATH)
+  --dsk-prec <1..17>            Vertex mantissa precision passed to dskexp (default: 17)
   --magick <path>               Path to ImageMagick binary (default: try 'magick' then 'convert')
   --texture-dir <dir>           (Repeatable) Add search roots for CMOD-referenced textures
   --texture-recursive           If set, search each --texture-dir recursively
@@ -179,6 +189,12 @@ Behavior notes
        --missing-texture-mode swatch \
        --scale 1.0
 
+  6) Convert a NAIF SPICE DSK/BDS triangular plate model:
+     blender -b -P convert_to_normalized_glb.py -- \
+       --input phobos.bds \
+       --output phobos.glb \
+       --dskexp ~/naif/toolkit/exe/dskexp
+
   Troubleshooting
   ---------------
   - If CMOD textures are reported missing, that usually means the model package does not
@@ -186,6 +202,8 @@ Behavior notes
     rely on material colors, or add `--texture-dir ...` to point at a texture library.
   - If DDS->PNG conversion fails, try installing ImageMagick or passing `--magick`.
   - If 3DS conversion fails, verify `assimp` is installed and on PATH, or pass `--assimp`.
+  - If DSK conversion fails, verify the file contains type 2 plate-model segments and
+    `dskexp` is installed and on PATH, or pass `--dskexp`.
 
 """
 import bpy
@@ -214,6 +232,8 @@ def parse_args(argv):
     recursive = False
     cmodconvert_path = None
     assimp_path = None
+    dskexp_path = None
+    dsk_precision = 17
     magick_path = None
     texture_dirs = []
     texture_recursive = False
@@ -239,6 +259,17 @@ def parse_args(argv):
         elif a == "--assimp":
             i += 1
             assimp_path = Path(user_args[i])
+        elif a == "--dskexp":
+            i += 1
+            dskexp_path = Path(user_args[i])
+        elif a == "--dsk-prec":
+            i += 1
+            try:
+                dsk_precision = int(user_args[i])
+            except ValueError:
+                raise SystemExit("--dsk-prec must be an integer in the range 1..17")
+            if dsk_precision < 1 or dsk_precision > 17:
+                raise SystemExit("--dsk-prec must be in the range 1..17")
         elif a == "--magick":
             i += 1
             magick_path = Path(user_args[i])
@@ -286,6 +317,7 @@ def parse_args(argv):
         raise SystemExit(
             "Usage: --input <file|dir> --output <file|dir> [--recursive] "
             "[--cmodconvert <path>] [--assimp <path>] [--magick <path>] "
+            "[--dskexp <path>] [--dsk-prec <1..17>] "
             "[--texture-dir <dir>]... [--texture-recursive] "
             "[--missing-texture-mode strip|swatch] [--scale <float>] "
             "[--apply-rotation x,y,z,angle_deg] [--apply-quaternion w,x,y,z]"
@@ -300,6 +332,8 @@ def parse_args(argv):
         recursive,
         cmodconvert_path,
         assimp_path,
+        dskexp_path,
+        dsk_precision,
         magick_path,
         texture_dirs,
         texture_recursive,
@@ -359,6 +393,66 @@ def convert_3ds_with_assimp(
         raise RuntimeError(f"assimp output not found: {out_glb}")
 
     return out_glb
+
+
+def convert_dsk_with_dskexp(
+    src_dsk: Path, tmp_dir: Path, dskexp_path: Path | None, dsk_precision: int
+) -> list[Path]:
+    """Convert DSK/BDS -> OBJ using NAIF dskexp, returning one OBJ per segment."""
+    ensure_dir(tmp_dir)
+    base_obj = tmp_dir / (src_dsk.stem + ".obj")
+    dskexp = str(dskexp_path) if dskexp_path else "dskexp"
+
+    for old in tmp_dir.glob(base_obj.name + "*"):
+        if old.is_file():
+            old.unlink()
+
+    log(f"DSK: exporting via {dskexp} -> {base_obj.name}")
+
+    try:
+        subprocess.run(
+            [
+                dskexp,
+                "-dsk",
+                str(src_dsk),
+                "-text",
+                str(base_obj),
+                "-format",
+                "obj",
+                "-prec",
+                str(dsk_precision),
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except FileNotFoundError:
+        raise RuntimeError(
+            "dskexp not found. Install the NAIF SPICE Toolkit, or pass --dskexp <path>"
+        )
+    except subprocess.CalledProcessError as e:
+        raise RuntimeError(
+            "dskexp export failed.\n"
+            f"Command: {e.cmd}\n"
+            f"Exit code: {e.returncode}\n"
+            f"STDOUT:\n{e.stdout}\n"
+            f"STDERR:\n{e.stderr}\n"
+        )
+
+    exported = [p for p in tmp_dir.glob(base_obj.name + "*") if p.is_file()]
+    exported.sort(key=lambda p: (len(p.name), p.name))
+    if not exported:
+        raise RuntimeError(f"dskexp output not found: {base_obj}")
+
+    obj_paths = []
+    for index, exported_obj in enumerate(exported):
+        normalized = tmp_dir / f"{src_dsk.stem}_segment_{index + 1}.obj"
+        if exported_obj != normalized:
+            exported_obj.rename(normalized)
+        obj_paths.append(normalized)
+
+    log(f"DSK: exported {len(obj_paths)} OBJ segment file(s)")
+    return obj_paths
 
 
 _MTL_MAP_RE = re.compile(
@@ -919,6 +1013,8 @@ def import_model(
     tmp_work_dir: Path,
     cmodconvert_path: Path | None,
     assimp_path: Path | None,
+    dskexp_path: Path | None,
+    dsk_precision: int,
     magick_path: Path | None,
     texture_index: dict[str, Path],
     missing_texture_mode: str,
@@ -961,6 +1057,22 @@ def import_model(
         bpy.ops.wm.obj_import(filepath=str(out_obj))
         return
 
+    if ext in (".dsk", ".bds"):
+        obj_paths = convert_dsk_with_dskexp(
+            path, tmp_work_dir / "dsk_obj", dskexp_path, dsk_precision
+        )
+        for obj_path in obj_paths:
+            try:
+                bpy.ops.wm.obj_import(filepath=str(obj_path))
+            except Exception as e:
+                raise RuntimeError(
+                    "DSK OBJ import failed after dskexp conversion. Your Blender build may not include "
+                    "'bpy.ops.wm.obj_import'. Try upgrading Blender (5.0+ recommended). Under some "
+                    "Blender versions, the operator may be 'bpy.ops.import_scene.obj'. "
+                    f"Original error: {e}"
+                )
+        return
+
     raise ValueError(f"Unsupported input extension: {ext}")
 
 
@@ -980,7 +1092,7 @@ def apply_model_scale(scale_factor: float):
 
 
 def collect_models(input_dir: Path, recursive: bool):
-    exts = {".glb", ".gltf", ".obj", ".3ds", ".cmod"}
+    exts = {".glb", ".gltf", ".obj", ".3ds", ".cmod", ".dsk", ".bds"}
     if recursive:
         return [
             p for p in input_dir.rglob("*") if p.is_file() and p.suffix.lower() in exts
@@ -994,6 +1106,8 @@ def convert_one(
     tmp_root: Path,
     cmodconvert_path: Path | None,
     assimp_path: Path | None,
+    dskexp_path: Path | None,
+    dsk_precision: int,
     magick_path: Path | None,
     texture_index: dict[str, Path],
     missing_texture_mode: str,
@@ -1013,6 +1127,8 @@ def convert_one(
         tmp_root,
         cmodconvert_path,
         assimp_path,
+        dskexp_path,
+        dsk_precision,
         magick_path,
         texture_index,
         missing_texture_mode,
@@ -1042,6 +1158,8 @@ def main():
         recursive,
         cmodconvert_path,
         assimp_path,
+        dskexp_path,
+        dsk_precision,
         magick_path,
         texture_dirs,
         texture_recursive,
@@ -1057,6 +1175,8 @@ def main():
         cmodconvert_path = cmodconvert_path.expanduser().resolve()
     if assimp_path:
         assimp_path = assimp_path.expanduser().resolve()
+    if dskexp_path:
+        dskexp_path = dskexp_path.expanduser().resolve()
     if magick_path:
         magick_path = magick_path.expanduser().resolve()
 
@@ -1086,6 +1206,8 @@ def main():
             tmp_root,
             cmodconvert_path,
             assimp_path,
+            dskexp_path,
+            dsk_precision,
             magick_path,
             texture_index,
             missing_texture_mode,
@@ -1112,6 +1234,8 @@ def main():
                 tmp_root,
                 cmodconvert_path,
                 assimp_path,
+                dskexp_path,
+                dsk_precision,
                 magick_path,
                 texture_index,
                 missing_texture_mode,
