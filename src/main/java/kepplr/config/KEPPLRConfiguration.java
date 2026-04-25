@@ -62,6 +62,7 @@ public class KEPPLRConfiguration implements KEPPLRConfigBlock {
     private KEPPLRConfigBlock config = null;
     private ThreadLocal<KEPPLREphemeris> ephemeris;
     private final Map<String, BodyBlock> bodyBlocks = new LinkedHashMap<>();
+    private final Map<Integer, BodyBlock> bodyBlocksKeyInt = new LinkedHashMap<>();
     private final Map<Integer, SpacecraftBlock> spacecraftBlocks = new LinkedHashMap<>();
 
     /** @return True if configuration has been loaded */
@@ -142,15 +143,20 @@ public class KEPPLRConfiguration implements KEPPLRConfigBlock {
                 String key = s.toLowerCase().replaceAll("\\s+", "");
                 String prefix = String.format("body.%s.", key);
                 pc = new PropertiesConfiguration();
-                pc.setProperty(prefix + "naifID", nameBindings.get(s.toUpperCase()));
+                int naifID = nameBindings.get(s.toUpperCase());
+                pc.setProperty(prefix + "naifID", naifID);
                 pc.setProperty(prefix + "name", s.toUpperCase());
+                pc.setProperty(prefix + "primaryID", "");
                 pc.setProperty(prefix + "hexColor", colors.get(s));
                 pc.setProperty(prefix + "nightShade", s.equals("sun") ? "1" : "0.05");
                 pc.setProperty(prefix + "textureMap", String.format("maps/%s.jpg", s.toLowerCase()));
                 pc.setProperty(prefix + "centerLonDeg", "0");
                 pc.setProperty(prefix + "shapeModel", "");
                 BodyBlockFactory bbf = new BodyBlockFactory(prefix);
-                instance.bodyBlocks.put(key, bbf.fromConfig(pc));
+
+                BodyBlock bb = bbf.fromConfig(pc);
+                instance.bodyBlocks.put(key, bb);
+                instance.bodyBlocksKeyInt.put(naifID, bb);
             }
         }
 
@@ -188,9 +194,11 @@ public class KEPPLRConfiguration implements KEPPLRConfigBlock {
         pc.setProperty("spice.metakernel", "src/test/resources/spice/kepplr_test.tm");
 
         Map<String, BodyBlock> bodyBlocks = new HashMap<>();
+        Map<Integer, BodyBlock> bodyBlocksKeyInt = new HashMap<>();
         for (String s : config.bodies()) {
             BodyBlock b = config.bodyBlock(s);
             bodyBlocks.put(s.toLowerCase(), b);
+            bodyBlocksKeyInt.put(b.naifID(), b);
         }
 
         Map<Integer, SpacecraftBlock> spacecraftBlocks = new HashMap<>();
@@ -203,6 +211,7 @@ public class KEPPLRConfiguration implements KEPPLRConfigBlock {
         instance.config = factory.fromConfig(pc);
         instance.ephemeris = new ThreadLocal<>();
         instance.bodyBlocks.putAll(bodyBlocks);
+        instance.bodyBlocksKeyInt.putAll(bodyBlocksKeyInt);
         instance.spacecraftBlocks.putAll(spacecraftBlocks);
 
         Log4j2Configurator lc = Log4j2Configurator.getInstance();
@@ -298,7 +307,9 @@ public class KEPPLRConfiguration implements KEPPLRConfigBlock {
             String prefix = String.format("body.%s.", s.toLowerCase());
             if (pc.containsKey(prefix + "naifID")) {
                 BodyBlockFactory bbf = new BodyBlockFactory(prefix);
-                localInstance.bodyBlocks.put(s.toLowerCase(), bbf.fromConfig(pc));
+                BodyBlock bb = bbf.fromConfig(pc);
+                localInstance.bodyBlocks.put(s.toLowerCase(), bb);
+                localInstance.bodyBlocksKeyInt.put(bb.naifID(), bb);
             }
         }
 
@@ -347,6 +358,10 @@ public class KEPPLRConfiguration implements KEPPLRConfigBlock {
         return bodyBlocks.keySet().stream().map(String::toUpperCase).toList();
     }
 
+    public List<Integer> naifIds() {
+        return bodyBlocksKeyInt.keySet().stream().toList();
+    }
+
     public List<Integer> spacecraft() {
         return spacecraftBlocks.keySet().stream().toList();
     }
@@ -379,7 +394,38 @@ public class KEPPLRConfiguration implements KEPPLRConfigBlock {
                 PropertiesConfiguration pc = bbf.toConfig(bodyBlock);
                 bbf.withNaifID(pc, code.get());
                 bbf.withName(pc, name.get());
+                bbf.withPrimaryID(pc, "");
                 String mapPath = String.format("maps%s%s.jpg", File.separator, body.toLowerCase());
+                File map = new File(config.resourcesFolder(), mapPath);
+                if (map.exists()) bbf.withTextureMap(pc, mapPath);
+                bodyBlock = bbf.fromConfig(pc);
+            }
+        }
+
+        return bodyBlock;
+    }
+
+    /**
+     * @param body body id
+     * @return body block from configuration file
+     */
+    public BodyBlock bodyBlock(int body) {
+
+        BodyBlock bodyBlock = instance.bodyBlocksKeyInt.get(body);
+
+        if (bodyBlock == null) {
+            SpiceBundle bundle = getEphemeris().getSpiceBundle();
+            EphemerisID id = bundle.getObject(body);
+            Optional<Integer> code = bundle.getObjectCode(id);
+            Optional<String> name = bundle.getObjectName(id);
+            if (code.isPresent() && name.isPresent()) {
+                String prefix = String.format("body.NAIF%d.", body);
+                BodyBlockFactory bbf = new BodyBlockFactory(prefix);
+                bodyBlock = bbf.getTemplate();
+                PropertiesConfiguration pc = bbf.toConfig(bodyBlock);
+                bbf.withNaifID(pc, code.get());
+                bbf.withName(pc, name.get());
+                String mapPath = String.format("maps%sNAIF%d.jpg", File.separator, body);
                 File map = new File(config.resourcesFolder(), mapPath);
                 if (map.exists()) bbf.withTextureMap(pc, mapPath);
                 bodyBlock = bbf.fromConfig(pc);

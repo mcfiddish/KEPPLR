@@ -173,7 +173,9 @@ public class TrailManager {
 
             // Resolve configured reference body (may be overridden below for BODY_FIXED).
             int configuredRef = this.state.trailReferenceBodyProperty(naifId).get();
-            int effectiveRef = (configuredRef != -1) ? configuredRef : (isSatellite(naifId) ? naifId / 100 : -1);
+            int effectiveRef = configuredRef != -1
+                    ? configuredRef
+                    : (TrailSampler.usesPrimaryRelativeTrail(naifId) ? TrailSampler.getPrimaryID(naifId) : -1);
 
             // In BODY_FIXED mode the trail is always centred on the focus body; any per-body
             // setTrailReferenceBody setting is ignored because the frame defines the origin.
@@ -549,11 +551,6 @@ public class TrailManager {
     }
 
     // ── Utilities ─────────────────────────────────────────────────────────────────────────────
-
-    /** Returns true if {@code naifId} identifies a natural satellite or Pluto (orbiting its barycenter). */
-    private static boolean isSatellite(int naifId) {
-        return (naifId >= 100 && naifId <= 999 && naifId % 100 != 99) || naifId == KepplrConstants.PLUTO_NAIF_ID;
-    }
 
     /** Disable all trails and release all scene-graph resources. Call before discarding this manager. */
     public void dispose() {

@@ -1,7 +1,7 @@
 # KEPPLR — Architecture Decision Records
 
 Decisions are recorded here to explain *why* the project is shaped the way it is.
-Each entry is short by design. For implementation guidance, see `CLAUDE.md` and `REDESIGN.md`.
+Each entry is short by design. For implementation guidance, see `AGENTS.md` and `REDESIGN.md`.
 For the development sequence, see `KEPPLR_Roadmap.md`.
 
 Cross-references in `REDESIGN.md` use `[D-NNN]` inline backrefs.
@@ -17,7 +17,7 @@ the render and UI layers.
 
 **Decision:** Ephemeris is always acquired at point-of-use via
 `KEPPLRConfiguration.getInstance().getEphemeris()`. It is never stored as a field or
-passed as a parameter. This is Architecture Rule 3 in `CLAUDE.md`.
+passed as a parameter. This is Architecture Rule 3 in `AGENTS.md`.
 
 **Alternatives considered:** Standard dependency injection — rejected because it creates
 too many paths for a stale reference to survive.
@@ -44,7 +44,7 @@ scattered through UI code.
 outright as the source of the prototype's worst bugs.
 
 **Consequences:** UI classes are views only. This constraint is enforced by Architecture
-Rules 1, 2, and 4 in `CLAUDE.md` and is checked at the start of every CC session.
+Rules 1, 2, and 4 in `AGENTS.md` and is checked at the start of every CC session.
 
 ---
 
@@ -168,7 +168,7 @@ prevent.
 **Decision:** CC sessions are instructed to read prototype code critically during the
 pre-implementation review phase — to understand *what* was attempted and *what edge
 cases were encountered* — but not to port it directly. The architecture rules in
-`CLAUDE.md` take precedence over any pattern found in the prototype.
+`AGENTS.md` take precedence over any pattern found in the prototype.
 
 **Consequences:** CC must complete a pre-implementation review phase (read interfaces
 and prototype code, report findings) before writing any code. This is non-negotiable
@@ -804,7 +804,7 @@ layer roots, calls `SaturnRingManager.detach()`, and clears internal maps.
 `resourcesFolder()` as a `FileLocator`, and constructs a fresh `BodySceneManager`. 
 `KepplrStatusWindow` calls a `configReloadCallback` (set by `KepplrApp` in `simpleInitApp()`) 
 after a successful `KEPPLRConfiguration.reload()`. The callback enqueues `rebuildBodyScene()` 
-via `KepplrApp.enqueue()`, ensuring the rebuild runs on the JME thread (CLAUDE.md Rule 4). 
+via `KepplrApp.enqueue()`, ensuring the rebuild runs on the JME thread (AGENTS.md Rule 4). 
 `TrailManager` and `VectorManager` are not rebuilt — they hold no shape-model geometry and 
 update naturally on the next frame.
 
@@ -1093,10 +1093,10 @@ GM is still correct for the relative orbit: T = 2π√(a_rel³ / G(M₁+M₂)) i
 (`barycenterId × 100 + 1`, i.e. Charon 901) is used instead. Falls back to the barycenter if 
 neither primary nor companion can be resolved.
 
-**Future work:** The NAIF naming convention (primary = x99, satellites = x01–x98, barycenter = 
-x) does not hold for asteroids with satellites. A `primary` parameter in 
-`KEPPLRConfiguration.bodyBlock()` will be needed to support those systems. See roadmap future 
-items.
+**Follow-up implemented:** The NAIF naming convention (primary = x99, satellites =
+x01–x98, barycenter = x) does not hold for asteroids with satellites. `BodyBlock.primaryID()`
+is now used as the authoritative configured primary for trail period and anchoring when
+nonblank; otherwise the existing NAIF arithmetic fallback remains. See D-076.
 
 **Alternatives considered:** Correcting the barycentric period with an effective
 GM = G·M₂³/(M₁+M₂)² — rejected because it requires individual body masses that
@@ -1104,9 +1104,9 @@ may not be in the kernel pool. Using the barycentric state unchanged — rejecte
 because the 30× error for Pluto makes the trail invisible.
 
 **Consequences:** `TrailSampler.computeTrailDurationSec` now resolves the primary body for all 
-satellites. Existing behaviour for standard satellites is unchanged (relative orbit ≈ 
-barycentric orbit when mass ratio is extreme). Pluto's trail correctly shows the full 
-~6.387-day orbit around the Pluto Barycenter.
+satellites and for bodies with a configured `BodyBlock.primaryID()`. Existing behaviour for
+standard satellites is unchanged (relative orbit ≈ barycentric orbit when mass ratio is
+extreme). Pluto's trail correctly shows the full ~6.387-day orbit around the Pluto Barycenter.
 
 ---
 
@@ -1178,13 +1178,13 @@ Log lines are buffered in a `ConcurrentLinkedQueue`. `LogWindow` (package-privat
 displays log output in a `TextFlow` inside a `ScrollPane` on a dark background (`#1e1e1e`). An 
 ANSI parser (`Pattern`-based) converts SGR codes to styled `Text` nodes with appropriate 
 foreground colors. The queue is drained on each FX frame pulse from the existing 
-`AnimationTimer` in `KepplrStatusWindow`, avoiding `Platform.runLater()` per CLAUDE.md Rule 2. 
+`AnimationTimer` in `KepplrStatusWindow`, avoiding `Platform.runLater()` per AGENTS.md Rule 2. 
 A "Save Log..." button writes ANSI-stripped plain text via `FileChooser`. Accessible from `File 
 → Show Log`.
 
 **Alternatives considered:** `TextArea` with no color — rejected because the user specifically 
 wanted ANSI colors for level distinction. RichTextFX library — rejected to avoid an external 
-dependency. `Platform.runLater()` per log event — rejected per CLAUDE.md Rule 2.
+dependency. `Platform.runLater()` per log event — rejected per AGENTS.md Rule 2.
 
 **Consequences:** Max 50,000 `Text` nodes retained; oldest are trimmed. The `LogAppender` reads 
 `KEPPLRConfiguration.getInstance().logFormat()` at install time (point-of-use, Rule 3). The 
@@ -1726,12 +1726,11 @@ should
 always agree).
 
 **Consequences:** Scripting: `kepplr.setTrailReferenceBody("Artemis II", "Moon")` makes both the
-trail and velocity arrow for Artemis II Moon-relative. The NAIF heuristic remains the default;
-existing scripts are unaffected. The `TrailState.barycenterId` field now stores the effective 
-reference
-body (not just the satellite-barycenter special case), enabling the reference-body-change 
-staleness
-trigger.
+trail and velocity arrow for Artemis II Moon-relative. With no explicit trail reference body,
+`BodyBlock.primaryID()` is the first default for bodies that define it; the NAIF heuristic remains
+the fallback. Existing scripts are unaffected. The `TrailState.barycenterId` field now stores the
+effective reference body (not just the satellite-barycenter special case), enabling the
+reference-body-change staleness trigger.
 
 ---
 
@@ -2076,7 +2075,65 @@ tests should reflect that D-028 is no longer active renderer policy.
 
 ---
 
-*Last updated: D-074 (spacecraft GLBs prioritize physically consistent illumination over PBR
+## D-075: GLB model viewer camera scales to loaded model bounds
+**Status:** Accepted
+**Roadmap step:** post-Step 28 standalone tool refinement
+
+**Context:** `GlbModelViewer` is used to inspect standalone GLB assets produced by tools such
+as `convert_to_normalized_glb.py`. Asteroid and small-body DSK conversions, such as Dimorphos,
+can produce physically small meshes. The previous viewer camera used fixed kilometer-scale
+minimum distances and fixed zoom increments, so small models opened tiny in the view and could
+hit near-plane clipping when zooming in.
+
+**Decision:** The viewer derives its initial orbit distance, minimum zoom distance, zoom step,
+and near/far clipping planes from the loaded model's bounding radius. Zoom is proportional
+rather than an absolute distance delta. The near plane is kept small enough for close inspection
+while the far plane remains large enough to contain the model and camera orbit.
+
+**Alternatives considered:** Rescaling imported GLBs for viewer convenience — rejected because
+the viewer should preserve physical model scale. Adding a special case for DSK-derived assets —
+rejected because the issue is any small GLB, not DSK specifically.
+
+**Consequences:** Small GLBs open framed at an inspectable size and can be zoomed without
+near-plane clipping. Large models continue to use the same viewer controls, with camera limits
+scaled to their bounds.
+
+---
+
+## D-076: BodyBlock.primaryID is the default primary for trail sampling
+**Status:** Accepted
+**Roadmap step:** v0.3 backlog item: primary metadata before richer body search/persistence
+
+**Context:** Some small-body systems do not follow the planet/satellite NAIF convention used
+by the original trail heuristic. In those systems, integer arithmetic on the NAIF ID can infer
+the wrong parent body, which affects trail anchoring and orbital-period calculation.
+`BodyBlock.primaryID()` already exists as explicit parent-body metadata in configuration.
+
+**Decision:** When `BodyBlock.primaryID()` is nonblank, `TrailSampler` treats it as the
+authoritative primary for default trail behavior. `usesPrimaryRelativeTrail()` returns true for
+configured-primary bodies, `getPrimaryID()` resolves the configured primary, and `TrailManager`
+uses that primary as the effective reference body unless `setTrailReferenceBody(...)` supplies
+an explicit per-body override. If `primaryID()` is blank, the existing NAIF heuristic remains
+the fallback.
+
+Trail duration follows the same resolution. The primary-relative path uses
+`BODY{primaryID}_GM`; if that GM is unavailable, `computeTrailDurationSec()` tries the
+heliocentric Sun-GM path, then falls back to the 30-day default if no defined period can be
+computed.
+
+GUI trail decluttering follows the same configured-primary rule: `BodyBlock.primaryID()` is used
+when present, otherwise the legacy planet/satellite NAIF fallback is used.
+
+**Consequences:** Asteroid satellites and other non-planetary systems can draw primary-relative
+trails without a script-level `setTrailReferenceBody(...)` call when configuration provides
+`primaryID()`. Trail visibility suppression is also evaluated against the configured primary.
+Existing standard satellite behavior is unchanged.
+
+---
+
+*Last updated: D-076 (`BodyBlock.primaryID()` is the default primary for trail sampling and
+period calculation), D-075 (`GlbModelViewer` camera, zoom, and clipping planes scale to loaded model
+bounds), D-074 (spacecraft GLBs prioritize physically consistent illumination over PBR
 material fidelity; richer spacecraft/lander material handling deferred), D-073 (plain JavaFX menu actions use standard `MenuItem`; `CustomMenuItem`
 limited to embedded controls; guarded one-shot Quit/close shutdown), D-072 (`setCameraPose()` added for combined camera pose transitions and
 camera-keyed frame capture), D-071 (instrument footprints retained as body-fixed vector

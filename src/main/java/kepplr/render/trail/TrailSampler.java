@@ -3,6 +3,7 @@ package kepplr.render.trail;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import kepplr.config.BodyBlock;
 import kepplr.config.KEPPLRConfiguration;
 import kepplr.ephemeris.KEPPLREphemeris;
 import kepplr.ephemeris.OsculatingElements;
@@ -40,6 +41,25 @@ public final class TrailSampler {
 
     private TrailSampler() {}
 
+    static int getPrimaryID(int naifId) {
+        BodyBlock bb = KEPPLRConfiguration.getInstance().bodyBlock(naifId);
+        return bb == null ? BodyBlock.inferPrimaryId(naifId) : bb.primaryIDasInt();
+    }
+
+    /**
+     * @param naifId NAIF ID
+     * @return true when trail samples should be computed relative to the body's primary
+     */
+    static boolean usesPrimaryRelativeTrail(int naifId) {
+        BodyBlock bb = KEPPLRConfiguration.getInstance().bodyBlock(naifId);
+        return (bb != null && !bb.primaryID().isBlank()) || isSatellite(naifId);
+    }
+
+    /** Returns true if {@code naifId} identifies a natural satellite or Pluto (orbiting its barycenter). */
+    static boolean isSatellite(int naifId) {
+        return (naifId >= 100 && naifId <= 999 && naifId % 100 != 99) || naifId == KepplrConstants.PLUTO_NAIF_ID;
+    }
+
     /**
      * Compute the trail duration in seconds for the given body at the given ET.
      *
@@ -55,33 +75,13 @@ public final class TrailSampler {
         KEPPLREphemeris eph = KEPPLRConfiguration.getInstance().getEphemeris();
         SpiceBundle spiceBundle = eph.getSpiceBundle();
 
-        // Satellite path: IDs 100–999 not ending in 99, plus Pluto (999) orbiting barycenter 9
-        boolean isSatellite =
-                (naifId >= 100 && naifId <= 999 && naifId % 100 != 99) || naifId == KepplrConstants.PLUTO_NAIF_ID;
-
-        if (isSatellite) {
+        if (usesPrimaryRelativeTrail(naifId)) {
             try {
-                int barycenterId = naifId / 100;
+                int barycenterId = getPrimaryID(naifId);
                 EphemerisID satellite = spiceBundle.getObject(naifId);
                 Double gm = lookupGm(spiceBundle, barycenterId);
                 if (satellite != null && gm != null) {
-                    // Use the relative orbit (satellite vs. primary body) rather than the barycentric
-                    // orbit.  For comparable-mass systems like Pluto-Charon the barycenter lies far from
-                    // either body, so oscltx(state_relative_to_barycenter, system_GM) underestimates the
-                    // period by (a_bary / a_rel)^1.5 — a factor of ~30 for Pluto.  The relative orbit
-                    // gives the correct two-body period: T = 2π√(a_rel³ / GM_system).
-                    int primaryId = barycenterId * 100 + 99;
-                    EphemerisID center;
-                    if (primaryId != naifId) {
-                        // Standard satellite: compute relative orbit to primary (e.g. Moon→Earth)
-                        center = spiceBundle.getObject(primaryId);
-                    } else {
-                        // Pluto case: satellite IS the primary. Use the largest companion (Charon = x01).
-                        center = spiceBundle.getObject(barycenterId * 100 + 1);
-                    }
-                    if (center == null) {
-                        center = spiceBundle.getObject(barycenterId);
-                    }
+                    EphemerisID center = spiceBundle.getObject(barycenterId);
                     if (center != null) {
                         StateVectorFunction svf = spiceBundle
                                 .getAbProvider()
@@ -153,12 +153,6 @@ public final class TrailSampler {
      *     first; never null
      * @see #sample(int, double, double, String, int)
      */
-    /**
-     * Convenience overload using the default HIGH-quality sample cap
-     * ({@link KepplrConstants#TRAIL_SAMPLES_PER_PERIOD}).
-     *
-     * @see #sample(int, double, double, String, int)
-     */
     public static List<double[]> sample(int naifId, double centerEt, double durationSec, String frame) {
         return sample(naifId, centerEt, durationSec, frame, KepplrConstants.TRAIL_SAMPLES_PER_PERIOD);
     }
@@ -177,16 +171,12 @@ public final class TrailSampler {
     public static List<double[]> sample(int naifId, double centerEt, double durationSec, String frame, int maxSamples) {
         KEPPLREphemeris eph = KEPPLRConfiguration.getInstance().getEphemeris();
 
-        // Satellite path: IDs 100–999 not ending in 99, plus Pluto (999) orbiting barycenter 9
-        boolean isSatellite =
-                (naifId >= 100 && naifId <= 999 && naifId % 100 != 99) || naifId == KepplrConstants.PLUTO_NAIF_ID;
-
         // For satellites, anchor the orbital arc to the barycenter's position at centerEt.
         // baryAnchor[3] holds the barycenter's heliocentric J2000 position at centerEt.
         double[] baryAnchor = null;
         int barycenterId = -1;
-        if (isSatellite) {
-            barycenterId = naifId / 100;
+        if (usesPrimaryRelativeTrail(naifId)) {
+            barycenterId = getPrimaryID(naifId);
             VectorIJK anchorPos = eph.getHeliocentricPositionJ2000(barycenterId, centerEt);
             if (anchorPos != null) {
                 baryAnchor = new double[] {anchorPos.getI(), anchorPos.getJ(), anchorPos.getK()};
