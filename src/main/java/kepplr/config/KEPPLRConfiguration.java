@@ -117,8 +117,16 @@ public class KEPPLRConfiguration implements KEPPLRConfigBlock {
             logger.warn("KEPPLRConfiguration has already been loaded.  Replacing with default values.");
         }
 
-        // write resources to temporary folder
-        File tmpDir = new File(System.getProperty("java.io.tmpdir"));
+        // write resources to temporary folder with instance-specific UUID subdirectory
+        String instanceId = UUID.randomUUID().toString();
+        Path instanceDir;
+        try {
+            instanceDir = Files.createTempDirectory("kepplr-" + instanceId);
+        } catch (IOException e) {
+            throw new RuntimeException("Cannot create temp directory for resources", e);
+        }
+        instanceDir.toFile().deleteOnExit();
+        File tmpDir = instanceDir.toFile();
         List<Path> resources = ResourceUtils.getResourcePaths("/resources");
         for (Path p : resources) {
             ResourceUtils.writeResourceToFile(
@@ -332,9 +340,7 @@ public class KEPPLRConfiguration implements KEPPLRConfigBlock {
      */
     public static KEPPLRConfiguration load(Path filename) {
         if (!Files.exists(filename)) {
-            System.err.println("Cannot load configuration file " + filename);
-            Thread.dumpStack();
-            System.exit(1);
+            throw new IllegalArgumentException("Cannot load configuration file: " + filename + " does not exist");
         }
         if (isLoaded()) {
             throw new RuntimeException(String.format(
