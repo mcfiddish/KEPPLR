@@ -1,5 +1,6 @@
 package kepplr.commands;
 
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.concurrent.CountDownLatch;
@@ -15,6 +16,9 @@ import kepplr.render.RenderQuality;
 import kepplr.render.vector.VectorType;
 import kepplr.state.DefaultSimulationState;
 import kepplr.state.FrustumColor;
+import kepplr.state.ScenePreset;
+import kepplr.state.ScenePresetCodec;
+import kepplr.state.ScenePresetValidator;
 import kepplr.state.StateSnapshot;
 import kepplr.state.StateSnapshotCodec;
 import kepplr.util.KepplrConstants;
@@ -762,5 +766,246 @@ public final class DefaultSimulationCommands implements SimulationCommands {
     @Override
     public void setBodyVisible(int naifId, boolean visible) {
         state.setBodyVisible(naifId, visible);
+    }
+
+    // ── Scene preset persistence (SCENE-01, SCENE-02, SCENE-03) ───────────────
+
+    /** Callback to get current window size. Set by KepplrApp; null in unit tests. */
+    private IntArrayConsumer windowSizeGetter;
+
+    /** Simple functional interface for getting two int values. */
+    @FunctionalInterface
+    public interface IntArrayConsumer {
+        void accept(int[] values);
+    }
+
+    /**
+     * Set the callback that provides the current window size.
+     *
+     * @param callback accepts int[2] = {width, height}; called by {@link #getScenePreset}
+     */
+    public void setWindowSizeGetter(IntArrayConsumer callback) {
+        this.windowSizeGetter = callback;
+    }
+
+    @Override
+    public void saveScenePreset(String path) throws IOException {
+        // Get current window size
+        int windowWidth = 1280;
+        int windowHeight = 720;
+        if (windowSizeGetter != null) {
+            int[] dims = new int[2];
+            windowSizeGetter.accept(dims);
+            windowWidth = dims[0];
+            windowHeight = dims[1];
+        }
+
+        ScenePreset preset = ScenePreset.capture(state, windowWidth, windowHeight);
+
+        // Validate before saving
+        var errors = ScenePresetValidator.validate(preset);
+        if (!errors.isEmpty()) {
+            // Log warnings but still save
+            for (var error : errors) {
+                if (error.severity() == ScenePresetValidator.Severity.ERROR) {
+                    logger.error("Scene preset validation error: {}.{}", error.field(), error.message());
+                } else {
+                    logger.warn("Scene preset validation warning: {}.{}", error.field(), error.message());
+                }
+            }
+        }
+
+        // Save to file
+        Path filePath = Path.of(path);
+        ScenePresetCodec.saveToFile(preset, filePath);
+        logger.info("Saved scene preset to: {}", path);
+    }
+
+    @Override
+    public void loadScenePreset(String path) throws IOException, IllegalArgumentException {
+        // Load and decode the scene preset
+        Path filePath = Path.of(path);
+        ScenePreset preset = ScenePresetCodec.loadFromFile(filePath);
+
+        // Validate all fields before applying ANY state (SCENE-02 - atomic load)
+        var errors = ScenePresetValidator.validate(preset);
+
+        // Filter for ERRORs only (warnings don't block loading)
+        boolean hasErrors = errors.stream().anyMatch(e -> e.severity() == ScenePresetValidator.Severity.ERROR);
+
+        if (hasErrors) {
+            // Log all errors
+            for (var error : errors) {
+                if (error.severity() == ScenePresetValidator.Severity.ERROR) {
+                    logger.error("Scene preset validation error: {}.{} - {}", error.field(), error.message(), path);
+                }
+            }
+            throw new IllegalArgumentException("Scene preset validation failed: "
+                    + errors.stream()
+                            .filter(e -> e.severity() == ScenePresetValidator.Severity.ERROR)
+                            .map(e -> e.field() + ": " + e.message())
+                            .reduce((a, b) -> a + "; " + b)
+                            .orElse("Unknown error"));
+        }
+
+        // Log warnings but proceed
+        for (var error : errors) {
+            if (error.severity() == ScenePresetValidator.Severity.WARNING) {
+                logger.warn("Scene preset validation warning: {}.{} - {}", error.field(), error.message(), path);
+            }
+        }
+
+        // Apply all state atomically
+        applyScenePreset(preset);
+        logger.info("Loaded scene preset from: {}", path);
+    }
+
+    /**
+     * Apply a scene preset to the simulation state.
+     *
+     * <p>This applies all state atomically. For camera restore, we use the same pattern as setStateString.
+     */
+    private void applyScenePreset(ScenePreset preset) {
+        // Apply time state
+        clock.setET(preset.et());
+        clock.setTimeRate(preset.timeRate());
+        clock.setPaused(preset.paused());
+
+        // Apply body selections
+        state.setFocusedBodyId(preset.focusedBodyId());
+        state.setTargetedBodyId(preset.targetedBodyId());
+        state.setSelectedBodyId(preset.selectedBodyId());
+
+        // Apply camera frame
+        state.setCameraFrame(preset.cameraFrame());
+
+        // Apply camera position and orientation via pending restore (like setStateString)
+        float[] orient = preset.camOrientJ2000();
+        if (orient != null && orient.length == 4) {
+            double[] pos = preset.camPosJ2000();
+            CountDownLatch latch = restoreSyncEnabled ? new CountDownLatch(1) : null;
+            state.setPendingCameraRestore(new DefaultSimulationState.PendingCameraRestore(
+                    pos != null ? pos : new double[] {0, 0, 0}, orient, preset.fovDeg(), latch));
+
+            // Wait for restore if sync is enabled
+            if (latch != null) {
+                try {
+                    boolean done = latch.await(5, TimeUnit.SECONDS);
+                    if (!done) {
+                        logger.warn("loadScenePreset: camera restore did not complete within 5s");
+                    }
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    logger.warn("loadScenePreset: interrupted while waiting for camera restore");
+                }
+            }
+        }
+
+        // Apply render quality
+        state.setRenderQuality(preset.renderQuality());
+
+        // Apply window size
+        if (windowResizeCallback != null) {
+            windowResizeCallback.accept(preset.windowWidth(), preset.windowHeight());
+        }
+
+        // Apply body visibility
+        if (preset.bodyVisibility() != null) {
+            for (var entry : preset.bodyVisibility().entrySet()) {
+                state.setBodyVisible(entry.getKey(), entry.getValue());
+            }
+        }
+
+        // Apply label visibility
+        if (preset.labelVisibility() != null) {
+            for (var entry : preset.labelVisibility().entrySet()) {
+                state.setLabelVisible(entry.getKey(), entry.getValue());
+            }
+        }
+
+        // Apply trail visibility
+        if (preset.trailVisibility() != null) {
+            for (var entry : preset.trailVisibility().entrySet()) {
+                state.setTrailVisible(entry.getKey(), entry.getValue());
+            }
+        }
+
+        // Apply trail durations
+        if (preset.trailDurations() != null) {
+            for (var entry : preset.trailDurations().entrySet()) {
+                state.setTrailDuration(entry.getKey(), entry.getValue());
+            }
+        }
+
+        // Apply trail references
+        if (preset.trailReferences() != null) {
+            for (var entry : preset.trailReferences().entrySet()) {
+                state.setTrailReferenceBody(entry.getKey(), entry.getValue());
+            }
+        }
+
+        // Apply vector visibility
+        if (preset.vectorVisibility() != null) {
+            for (var entry : preset.vectorVisibility().entrySet()) {
+                String key = entry.getKey();
+                boolean visible = entry.getValue();
+                // Parse "naifId:type" format
+                int colonIdx = key.lastIndexOf(':');
+                if (colonIdx > 0) {
+                    try {
+                        int naifId = Integer.parseInt(key.substring(0, colonIdx));
+                        String typeStr = key.substring(colonIdx + 1);
+                        VectorType type = vectorTypeFromString(typeStr);
+                        if (type != null) {
+                            state.setVectorVisible(naifId, type, visible);
+                        }
+                    } catch (NumberFormatException e) {
+                        logger.warn("Invalid vector visibility key: {}", key);
+                    }
+                }
+            }
+        }
+
+        // Apply frustum visibility
+        if (preset.frustumVisibility() != null) {
+            for (var entry : preset.frustumVisibility().entrySet()) {
+                try {
+                    // Try parsing as NAIF code first
+                    int naifCode = Integer.parseInt(entry.getKey());
+                    state.setFrustumVisible(naifCode, entry.getValue());
+                } catch (NumberFormatException e) {
+                    // Try as instrument name - would need lookup service
+                    logger.debug("Frustum visibility for instrument name not yet supported: {}", entry.getKey());
+                }
+            }
+        }
+
+        // Apply HUD visibility
+        state.setHudTimeVisible(preset.hudTimeVisible());
+        state.setHudInfoVisible(preset.hudInfoVisible());
+    }
+
+    /** Convert a string representation to VectorType. */
+    private VectorType vectorTypeFromString(String typeStr) {
+        return switch (typeStr) {
+            case "velocity" -> kepplr.render.vector.VectorTypes.velocity();
+            case "bodyAxisX" -> kepplr.render.vector.VectorTypes.bodyAxisX();
+            case "bodyAxisY" -> kepplr.render.vector.VectorTypes.bodyAxisY();
+            case "bodyAxisZ" -> kepplr.render.vector.VectorTypes.bodyAxisZ();
+            default -> null;
+        };
+    }
+
+    @Override
+    public ScenePreset getScenePreset() {
+        int windowWidth = 1280;
+        int windowHeight = 720;
+        if (windowSizeGetter != null) {
+            int[] dims = new int[2];
+            windowSizeGetter.accept(dims);
+            windowWidth = dims[0];
+            windowHeight = dims[1];
+        }
+        return ScenePreset.capture(state, windowWidth, windowHeight);
     }
 }
