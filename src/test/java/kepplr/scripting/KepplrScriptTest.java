@@ -728,5 +728,21 @@ class KepplrScriptTest {
         public void setStateString(String s) {
             lastMethod = "setStateString";
         }
+
+        @Override
+        public void saveScenePreset(String path) {
+            lastMethod = "saveScenePreset";
+        }
+
+        @Override
+        public void loadScenePreset(String path) {
+            lastMethod = "loadScenePreset";
+        }
+
+        @Override
+        public kepplr.state.ScenePreset getScenePreset() {
+            lastMethod = "getScenePreset";
+            return null;
+        }
     }
 }

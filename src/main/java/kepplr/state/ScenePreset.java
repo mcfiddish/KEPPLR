@@ -154,7 +154,8 @@ public record ScenePreset(
         if (state instanceof DefaultSimulationState dss) {
             for (var entry : dss.getTrailDurationMap().entrySet()) {
                 int naifId = entry.getKey();
-                trailRefFinal.put(naifId, state.trailReferenceBodyProperty(naifId).get());
+                trailRefFinal.put(
+                        naifId, state.trailReferenceBodyProperty(naifId).get());
             }
         }
 

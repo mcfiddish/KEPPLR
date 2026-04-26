@@ -549,5 +549,16 @@ class ScriptRunnerTest {
 
         @Override
         public void setStateString(String s) {}
+
+        @Override
+        public void saveScenePreset(String path) {}
+
+        @Override
+        public void loadScenePreset(String path) {}
+
+        @Override
+        public kepplr.state.ScenePreset getScenePreset() {
+            return null;
+        }
     }
 }

@@ -168,8 +168,8 @@ public interface SimulationState {
     /**
      * Frame render time in milliseconds for the most recent frame (REPRO-03).
      *
-     * <p>Updated each frame by {@link kepplr.render.KepplrApp#simpleUpdate(float)} on the JME render thread.
-     * Represents wall-clock time spent in the render/update loop.
+     * <p>Updated each frame by {@link kepplr.render.KepplrApp#simpleUpdate(float)} on the JME render thread. Represents
+     * wall-clock time spent in the render/update loop.
      */
     ReadOnlyDoubleProperty frameTimeMsProperty();
 

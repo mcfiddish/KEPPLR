@@ -7,11 +7,11 @@ import java.util.List;
 import java.util.Map;
 import kepplr.camera.CameraFrame;
 import kepplr.render.RenderQuality;
+import kepplr.state.ScenePresetValidator.Severity;
+import kepplr.state.ScenePresetValidator.ValidationError;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
-import kepplr.state.ScenePresetValidator.Severity;
-import kepplr.state.ScenePresetValidator.ValidationError;
 
 /** Unit tests for {@link ScenePresetValidator} (SCENE-02). */
 @DisplayName("ScenePresetValidator")
@@ -78,17 +78,33 @@ class ScenePresetValidatorTest {
             Map<String, Object> emptyUnknown = new HashMap<>();
 
             ScenePreset preset = new ScenePreset(
-                    1, -100.0, 1.0, false,
-                    new double[] {0, 0, 0}, new float[] {0, 0, 0, 1},
-                    CameraFrame.INERTIAL, 45.0, -1, -1, -1,
-                    emptyIntBool, emptyIntBool, emptyIntBool,
-                    emptyIntDouble, emptyIntInt, emptyStringBool,
-                    emptyStringBool, true, true, RenderQuality.HIGH,
-                    1280, 720, emptyUnknown);
+                    1,
+                    -100.0,
+                    1.0,
+                    false,
+                    new double[] {0, 0, 0},
+                    new float[] {0, 0, 0, 1},
+                    CameraFrame.INERTIAL,
+                    45.0,
+                    -1,
+                    -1,
+                    -1,
+                    emptyIntBool,
+                    emptyIntBool,
+                    emptyIntBool,
+                    emptyIntDouble,
+                    emptyIntInt,
+                    emptyStringBool,
+                    emptyStringBool,
+                    true,
+                    true,
+                    RenderQuality.HIGH,
+                    1280,
+                    720,
+                    emptyUnknown);
 
             List<ValidationError> errors = ScenePresetValidator.validate(preset);
-            assertTrue(errors.stream().anyMatch(e ->
-                    e.field().equals("time.et") && e.severity() == Severity.ERROR));
+            assertTrue(errors.stream().anyMatch(e -> e.field().equals("time.et") && e.severity() == Severity.ERROR));
         }
 
         @Test
@@ -101,17 +117,33 @@ class ScenePresetValidatorTest {
             Map<String, Object> emptyUnknown = new HashMap<>();
 
             ScenePreset preset = new ScenePreset(
-                    1, 1e15, 1.0, false,
-                    new double[] {0, 0, 0}, new float[] {0, 0, 0, 1},
-                    CameraFrame.INERTIAL, 45.0, -1, -1, -1,
-                    emptyIntBool, emptyIntBool, emptyIntBool,
-                    emptyIntDouble, emptyIntInt, emptyStringBool,
-                    emptyStringBool, true, true, RenderQuality.HIGH,
-                    1280, 720, emptyUnknown);
+                    1,
+                    1e15,
+                    1.0,
+                    false,
+                    new double[] {0, 0, 0},
+                    new float[] {0, 0, 0, 1},
+                    CameraFrame.INERTIAL,
+                    45.0,
+                    -1,
+                    -1,
+                    -1,
+                    emptyIntBool,
+                    emptyIntBool,
+                    emptyIntBool,
+                    emptyIntDouble,
+                    emptyIntInt,
+                    emptyStringBool,
+                    emptyStringBool,
+                    true,
+                    true,
+                    RenderQuality.HIGH,
+                    1280,
+                    720,
+                    emptyUnknown);
 
             List<ValidationError> errors = ScenePresetValidator.validate(preset);
-            assertTrue(errors.stream().anyMatch(e ->
-                    e.field().equals("time.et") && e.severity() == Severity.ERROR));
+            assertTrue(errors.stream().anyMatch(e -> e.field().equals("time.et") && e.severity() == Severity.ERROR));
         }
     }
 
@@ -129,17 +161,34 @@ class ScenePresetValidatorTest {
             Map<String, Object> emptyUnknown = new HashMap<>();
 
             ScenePreset preset = new ScenePreset(
-                    1, 0.0, -5.0, false,
-                    new double[] {0, 0, 0}, new float[] {0, 0, 0, 1},
-                    CameraFrame.INERTIAL, 45.0, -1, -1, -1,
-                    emptyIntBool, emptyIntBool, emptyIntBool,
-                    emptyIntDouble, emptyIntInt, emptyStringBool,
-                    emptyStringBool, true, true, RenderQuality.HIGH,
-                    1280, 720, emptyUnknown);
+                    1,
+                    0.0,
+                    -5.0,
+                    false,
+                    new double[] {0, 0, 0},
+                    new float[] {0, 0, 0, 1},
+                    CameraFrame.INERTIAL,
+                    45.0,
+                    -1,
+                    -1,
+                    -1,
+                    emptyIntBool,
+                    emptyIntBool,
+                    emptyIntBool,
+                    emptyIntDouble,
+                    emptyIntInt,
+                    emptyStringBool,
+                    emptyStringBool,
+                    true,
+                    true,
+                    RenderQuality.HIGH,
+                    1280,
+                    720,
+                    emptyUnknown);
 
             List<ValidationError> errors = ScenePresetValidator.validate(preset);
-            assertTrue(errors.stream().anyMatch(e ->
-                    e.field().equals("time.timeRate") && e.severity() == Severity.ERROR));
+            assertTrue(
+                    errors.stream().anyMatch(e -> e.field().equals("time.timeRate") && e.severity() == Severity.ERROR));
         }
     }
 
@@ -157,17 +206,34 @@ class ScenePresetValidatorTest {
             Map<String, Object> emptyUnknown = new HashMap<>();
 
             ScenePreset preset = new ScenePreset(
-                    1, 0.0, 1.0, false,
-                    new double[] {0, 0, 0}, new float[] {0, 0, 0, 1},
-                    CameraFrame.INERTIAL, 45.0, -1, -1, -1,
-                    emptyIntBool, emptyIntBool, emptyIntBool,
-                    emptyIntDouble, emptyIntInt, emptyStringBool,
-                    emptyStringBool, true, true, RenderQuality.HIGH,
-                    0, 720, emptyUnknown);
+                    1,
+                    0.0,
+                    1.0,
+                    false,
+                    new double[] {0, 0, 0},
+                    new float[] {0, 0, 0, 1},
+                    CameraFrame.INERTIAL,
+                    45.0,
+                    -1,
+                    -1,
+                    -1,
+                    emptyIntBool,
+                    emptyIntBool,
+                    emptyIntBool,
+                    emptyIntDouble,
+                    emptyIntInt,
+                    emptyStringBool,
+                    emptyStringBool,
+                    true,
+                    true,
+                    RenderQuality.HIGH,
+                    0,
+                    720,
+                    emptyUnknown);
 
             List<ValidationError> errors = ScenePresetValidator.validate(preset);
-            assertTrue(errors.stream().anyMatch(e ->
-                    e.field().equals("window.width") && e.severity() == Severity.ERROR));
+            assertTrue(
+                    errors.stream().anyMatch(e -> e.field().equals("window.width") && e.severity() == Severity.ERROR));
         }
 
         @Test
@@ -180,17 +246,34 @@ class ScenePresetValidatorTest {
             Map<String, Object> emptyUnknown = new HashMap<>();
 
             ScenePreset preset = new ScenePreset(
-                    1, 0.0, 1.0, false,
-                    new double[] {0, 0, 0}, new float[] {0, 0, 0, 1},
-                    CameraFrame.INERTIAL, 45.0, -1, -1, -1,
-                    emptyIntBool, emptyIntBool, emptyIntBool,
-                    emptyIntDouble, emptyIntInt, emptyStringBool,
-                    emptyStringBool, true, true, RenderQuality.HIGH,
-                    1280, -100, emptyUnknown);
+                    1,
+                    0.0,
+                    1.0,
+                    false,
+                    new double[] {0, 0, 0},
+                    new float[] {0, 0, 0, 1},
+                    CameraFrame.INERTIAL,
+                    45.0,
+                    -1,
+                    -1,
+                    -1,
+                    emptyIntBool,
+                    emptyIntBool,
+                    emptyIntBool,
+                    emptyIntDouble,
+                    emptyIntInt,
+                    emptyStringBool,
+                    emptyStringBool,
+                    true,
+                    true,
+                    RenderQuality.HIGH,
+                    1280,
+                    -100,
+                    emptyUnknown);
 
             List<ValidationError> errors = ScenePresetValidator.validate(preset);
-            assertTrue(errors.stream().anyMatch(e ->
-                    e.field().equals("window.height") && e.severity() == Severity.ERROR));
+            assertTrue(
+                    errors.stream().anyMatch(e -> e.field().equals("window.height") && e.severity() == Severity.ERROR));
         }
     }
 
@@ -208,17 +291,34 @@ class ScenePresetValidatorTest {
             Map<String, Object> emptyUnknown = new HashMap<>();
 
             ScenePreset preset = new ScenePreset(
-                    1, 0.0, 1.0, false,
-                    new double[] {Double.NaN, 0, 0}, new float[] {0, 0, 0, 1},
-                    CameraFrame.INERTIAL, 45.0, -1, -1, -1,
-                    emptyIntBool, emptyIntBool, emptyIntBool,
-                    emptyIntDouble, emptyIntInt, emptyStringBool,
-                    emptyStringBool, true, true, RenderQuality.HIGH,
-                    1280, 720, emptyUnknown);
+                    1,
+                    0.0,
+                    1.0,
+                    false,
+                    new double[] {Double.NaN, 0, 0},
+                    new float[] {0, 0, 0, 1},
+                    CameraFrame.INERTIAL,
+                    45.0,
+                    -1,
+                    -1,
+                    -1,
+                    emptyIntBool,
+                    emptyIntBool,
+                    emptyIntBool,
+                    emptyIntDouble,
+                    emptyIntInt,
+                    emptyStringBool,
+                    emptyStringBool,
+                    true,
+                    true,
+                    RenderQuality.HIGH,
+                    1280,
+                    720,
+                    emptyUnknown);
 
             List<ValidationError> errors = ScenePresetValidator.validate(preset);
-            assertTrue(errors.stream().anyMatch(e ->
-                    e.field().equals("camera.position") && e.severity() == Severity.ERROR));
+            assertTrue(errors.stream()
+                    .anyMatch(e -> e.field().equals("camera.position") && e.severity() == Severity.ERROR));
         }
 
         @Test
@@ -231,17 +331,34 @@ class ScenePresetValidatorTest {
             Map<String, Object> emptyUnknown = new HashMap<>();
 
             ScenePreset preset = new ScenePreset(
-                    1, 0.0, 1.0, false,
-                    new double[] {Double.POSITIVE_INFINITY, 0, 0}, new float[] {0, 0, 0, 1},
-                    CameraFrame.INERTIAL, 45.0, -1, -1, -1,
-                    emptyIntBool, emptyIntBool, emptyIntBool,
-                    emptyIntDouble, emptyIntInt, emptyStringBool,
-                    emptyStringBool, true, true, RenderQuality.HIGH,
-                    1280, 720, emptyUnknown);
+                    1,
+                    0.0,
+                    1.0,
+                    false,
+                    new double[] {Double.POSITIVE_INFINITY, 0, 0},
+                    new float[] {0, 0, 0, 1},
+                    CameraFrame.INERTIAL,
+                    45.0,
+                    -1,
+                    -1,
+                    -1,
+                    emptyIntBool,
+                    emptyIntBool,
+                    emptyIntBool,
+                    emptyIntDouble,
+                    emptyIntInt,
+                    emptyStringBool,
+                    emptyStringBool,
+                    true,
+                    true,
+                    RenderQuality.HIGH,
+                    1280,
+                    720,
+                    emptyUnknown);
 
             List<ValidationError> errors = ScenePresetValidator.validate(preset);
-            assertTrue(errors.stream().anyMatch(e ->
-                    e.field().equals("camera.position") && e.severity() == Severity.ERROR));
+            assertTrue(errors.stream()
+                    .anyMatch(e -> e.field().equals("camera.position") && e.severity() == Severity.ERROR));
         }
     }
 
@@ -259,17 +376,33 @@ class ScenePresetValidatorTest {
             Map<String, Object> emptyUnknown = new HashMap<>();
 
             ScenePreset preset = new ScenePreset(
-                    99, 0.0, 1.0, false,
-                    new double[] {0, 0, 0}, new float[] {0, 0, 0, 1},
-                    CameraFrame.INERTIAL, 45.0, -1, -1, -1,
-                    emptyIntBool, emptyIntBool, emptyIntBool,
-                    emptyIntDouble, emptyIntInt, emptyStringBool,
-                    emptyStringBool, true, true, RenderQuality.HIGH,
-                    1280, 720, emptyUnknown);
+                    99,
+                    0.0,
+                    1.0,
+                    false,
+                    new double[] {0, 0, 0},
+                    new float[] {0, 0, 0, 1},
+                    CameraFrame.INERTIAL,
+                    45.0,
+                    -1,
+                    -1,
+                    -1,
+                    emptyIntBool,
+                    emptyIntBool,
+                    emptyIntBool,
+                    emptyIntDouble,
+                    emptyIntInt,
+                    emptyStringBool,
+                    emptyStringBool,
+                    true,
+                    true,
+                    RenderQuality.HIGH,
+                    1280,
+                    720,
+                    emptyUnknown);
 
             List<ValidationError> errors = ScenePresetValidator.validate(preset);
-            assertTrue(errors.stream().anyMatch(e ->
-                    e.field().equals("version") && e.severity() == Severity.ERROR));
+            assertTrue(errors.stream().anyMatch(e -> e.field().equals("version") && e.severity() == Severity.ERROR));
         }
     }
 
@@ -288,17 +421,34 @@ class ScenePresetValidatorTest {
             Map<String, Object> emptyUnknown = new HashMap<>();
 
             ScenePreset preset = new ScenePreset(
-                    1, 0.0, 1.0, false,
-                    new double[] {0, 0, 0}, new float[] {0, 0, 0, 1},
-                    CameraFrame.INERTIAL, 45.0, -1, -1, -1,
-                    emptyIntBool, emptyIntBool, emptyIntBool,
-                    trailDur, emptyIntInt, emptyStringBool,
-                    emptyStringBool, true, true, RenderQuality.HIGH,
-                    1280, 720, emptyUnknown);
+                    1,
+                    0.0,
+                    1.0,
+                    false,
+                    new double[] {0, 0, 0},
+                    new float[] {0, 0, 0, 1},
+                    CameraFrame.INERTIAL,
+                    45.0,
+                    -1,
+                    -1,
+                    -1,
+                    emptyIntBool,
+                    emptyIntBool,
+                    emptyIntBool,
+                    trailDur,
+                    emptyIntInt,
+                    emptyStringBool,
+                    emptyStringBool,
+                    true,
+                    true,
+                    RenderQuality.HIGH,
+                    1280,
+                    720,
+                    emptyUnknown);
 
             List<ValidationError> errors = ScenePresetValidator.validate(preset);
-            assertTrue(errors.stream().anyMatch(e ->
-                    e.field().startsWith("overlays.trailDurations") && e.severity() == Severity.ERROR));
+            assertTrue(errors.stream()
+                    .anyMatch(e -> e.field().startsWith("overlays.trailDurations") && e.severity() == Severity.ERROR));
         }
 
         @Test
@@ -312,13 +462,30 @@ class ScenePresetValidatorTest {
             Map<String, Object> emptyUnknown = new HashMap<>();
 
             ScenePreset preset = new ScenePreset(
-                    1, 0.0, 1.0, false,
-                    new double[] {0, 0, 0}, new float[] {0, 0, 0, 1},
-                    CameraFrame.INERTIAL, 45.0, -1, -1, -1,
-                    emptyIntBool, emptyIntBool, emptyIntBool,
-                    trailDur, emptyIntInt, emptyStringBool,
-                    emptyStringBool, true, true, RenderQuality.HIGH,
-                    1280, 720, emptyUnknown);
+                    1,
+                    0.0,
+                    1.0,
+                    false,
+                    new double[] {0, 0, 0},
+                    new float[] {0, 0, 0, 1},
+                    CameraFrame.INERTIAL,
+                    45.0,
+                    -1,
+                    -1,
+                    -1,
+                    emptyIntBool,
+                    emptyIntBool,
+                    emptyIntBool,
+                    trailDur,
+                    emptyIntInt,
+                    emptyStringBool,
+                    emptyStringBool,
+                    true,
+                    true,
+                    RenderQuality.HIGH,
+                    1280,
+                    720,
+                    emptyUnknown);
 
             List<ValidationError> errors = ScenePresetValidator.validate(preset);
             assertTrue(errors.stream().noneMatch(e -> e.field().startsWith("overlays.trailDurations")));

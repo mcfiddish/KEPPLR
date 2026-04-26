@@ -5,7 +5,6 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
-import java.util.StringJoiner;
 import kepplr.commands.SimulationCommands;
 import kepplr.config.KEPPLRConfiguration;
 import kepplr.state.SimulationState;
@@ -207,7 +206,8 @@ public final class CaptureService {
                     var cfg = KEPPLRConfiguration.getInstance();
                     // Use resourcesFolder as identifer since config is internal
                     configIdentity = cfg.resourcesFolder();
-                    if (cfg.spiceBlock() != null && cfg.spiceBlock().metakernel() != null
+                    if (cfg.spiceBlock() != null
+                            && cfg.spiceBlock().metakernel() != null
                             && !cfg.spiceBlock().metakernel().isEmpty()) {
                         kernelIdentity = cfg.spiceBlock().metakernel().get(0);
                     }
