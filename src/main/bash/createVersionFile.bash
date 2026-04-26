@@ -51,11 +51,3 @@ public class AppVersion {
     }
 }
 EOF
-
-conf="../../../doc/conf.py"
-if [ -e $conf ]; then
-
-   sed "s/version =.*/version = \"${lastCommit}-${rev}\"/" $conf > tmp
-   mv tmp $conf
-
-fi
