@@ -5,8 +5,11 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
+import java.util.StringJoiner;
 import kepplr.commands.SimulationCommands;
+import kepplr.config.KEPPLRConfiguration;
 import kepplr.state.SimulationState;
+import kepplr.util.AppVersion;
 import kepplr.util.KepplrConstants;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -194,6 +197,28 @@ public final class CaptureService {
                 }
             }
 
+            // Collect extended manifest fields
+            String appVersion = AppVersion.getVersionString();
+            String platform = AppVersion.getPlatform();
+            String configIdentity = "unknown";
+            String kernelIdentity = "unknown";
+            if (KEPPLRConfiguration.isLoaded()) {
+                try {
+                    var cfg = KEPPLRConfiguration.getInstance();
+                    // Use resourcesFolder as identifer since config is internal
+                    configIdentity = cfg.resourcesFolder();
+                    if (cfg.spiceBlock() != null && cfg.spiceBlock().metakernel() != null
+                            && !cfg.spiceBlock().metakernel().isEmpty()) {
+                        kernelIdentity = cfg.spiceBlock().metakernel().get(0);
+                    }
+                } catch (Exception e) {
+                    logger.warn("Could not get config/kernel identity: {}", e.getMessage());
+                }
+            }
+            String renderQuality = state.renderQualityProperty().get() != null
+                    ? state.renderQualityProperty().get().name()
+                    : "HIGH";
+
             String json = String.format(
                     """
                     {
@@ -203,7 +228,12 @@ public final class CaptureService {
                       "startFrameIndex": %d,
                       "width": %d,
                       "height": %d,
-                      "captureTimestamp": "%s"
+                      "captureTimestamp": "%s",
+                      "appVersion": "%s",
+                      "platform": "%s",
+                      "configIdentity": "%s",
+                      "kernelIdentity": "%s",
+                      "renderQuality": "%s"
                     }
                     """,
                     Double.toString(startET),
@@ -212,7 +242,12 @@ public final class CaptureService {
                     startFrameIndex,
                     width,
                     height,
-                    Instant.now().toString());
+                    Instant.now().toString(),
+                    appVersion,
+                    platform,
+                    configIdentity,
+                    kernelIdentity,
+                    renderQuality);
 
             Path infoPath = outPath.resolve(KepplrConstants.CAPTURE_INFO_FILENAME);
             Files.writeString(infoPath, json, StandardCharsets.UTF_8);
