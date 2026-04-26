@@ -32,9 +32,9 @@
 
 ### Data
 
-- [ ] **DATA-01**: Gaia catalog lookup failure modes produce clear validation or error messages when optional source indexes are missing.
-- [ ] **DATA-02**: Gaia tile cache behavior is bounded or measured by memory-oriented criteria rather than only tile count, or a follow-up is documented with evidence.
-- [ ] **DATA-03**: Model conversion tooling has focused fixture tests for pure parsing/metadata behavior that can run without Blender.
+- [x] **DATA-01**: Gaia catalog lookup failure modes produce clear validation or error messages when optional source indexes are missing.
+- [x] **DATA-02**: Gaia tile cache behavior is bounded or measured by memory-oriented criteria rather than only tile count, or a follow-up is documented with evidence.
+- [x] **DATA-03**: Model conversion tooling has focused fixture tests for pure parsing/metadata behavior that can run without Blender.
 
 ### Reproducibility
 
@@ -88,9 +88,9 @@
 | REND-02 | Phase 3 | Complete |
 | REND-03 | Phase 3 | Complete |
 | REND-04 | Phase 3 | Complete |
-| DATA-01 | Phase 4 | Pending |
-| DATA-02 | Phase 4 | Pending |
-| DATA-03 | Phase 4 | Pending |
+| DATA-01 | Phase 4 | Complete |
+| DATA-02 | Phase 4 | Complete |
+| DATA-03 | Phase 4 | Complete |
 | REPRO-01 | Phase 5 | Pending |
 | REPRO-02 | Phase 5 | Pending |
 | REPRO-03 | Phase 5 | Pending |

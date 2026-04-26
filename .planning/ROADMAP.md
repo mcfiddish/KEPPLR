@@ -80,6 +80,13 @@ This roadmap prioritizes the concerns surfaced by codebase mapping, then lays th
 
 **Requirements:** DATA-01, DATA-02, DATA-03
 
+**Status:** Complete (2026-04-26)
+
+**Verified:** 3/3 requirements implemented:
+- DATA-01: Clear error messages with actionable guidance added to GaiaCatalog.getStar()
+- DATA-02: CacheStats added for memory auditing with getCacheStats()
+- DATA-03: Python pure parsing tests added in test_convert_pure.py
+
 **Success criteria:**
 1. Gaia lookup paths report missing optional source indexes clearly and tests cover the behavior.
 2. Gaia tile cache cost is measured or bounded with memory-aware criteria, with evidence captured in docs or tests.
