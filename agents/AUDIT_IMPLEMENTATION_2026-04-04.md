@@ -3,9 +3,9 @@
 Date: 2026-04-04
 
 Scope:
-- `.claude/KEPPLR_Roadmap.md`
-- `.claude/DECISIONS.md`
-- `.claude/REDESIGN.md`
+- `agents/KEPPLR_Roadmap.md`
+- `agents/DECISIONS.md`
+- `agents/REDESIGN.md`
 - Current code and tests in this repository
 
 Method:

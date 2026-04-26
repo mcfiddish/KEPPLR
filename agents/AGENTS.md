@@ -45,7 +45,7 @@ KEPPLR is a deterministic, interactive 3D solar system simulator written in pure
 - **Ephemeris:** Picante (SPICE-compatible)
 - **Build:** Maven
 - **Scripting:** Groovy
-- **Requirements authority:** `REDESIGN.md` in the `.claude` directory
+- **Requirements authority:** `REDESIGN.md` in the `agents` directory
 
 When in doubt about intended behavior, consult `REDESIGN.md` before asking or guessing.
 

@@ -3,7 +3,7 @@
 
 **KEPPLR Stabilization and v0.3 Foundations**
 
-KEPPLR is a Java desktop 3D solar-system and mission-geometry simulator powered by NASA NAIF SPICE kernels, Picante ephemeris/frame calculations, JMonkeyEngine rendering, JavaFX controls, and Groovy scripting. The current project effort is a brownfield stabilization and continuation cycle: address the risks surfaced by the codebase map, preserve the existing architecture decisions in `.claude/KEPPLR_Roadmap.md`, and prepare the codebase for the proposed v0.3 feature work.
+KEPPLR is a Java desktop 3D solar-system and mission-geometry simulator powered by NASA NAIF SPICE kernels, Picante ephemeris/frame calculations, JMonkeyEngine rendering, JavaFX controls, and Groovy scripting. The current project effort is a brownfield stabilization and continuation cycle: address the risks surfaced by the codebase map, preserve the existing architecture decisions in `agents/KEPPLR_Roadmap.md`, and prepare the codebase for the proposed v0.3 feature work.
 
 **Core Value:** KEPPLR must remain a scientifically credible, scriptable, reproducible SPICE visualization tool while new rendering, scene, and mission-geometry features are added.
 
@@ -312,7 +312,7 @@ KEPPLR is a Java desktop 3D solar-system and mission-geometry simulator powered 
 <!-- GSD:skills-start source:skills/ -->
 ## Project Skills
 
-No project skills found. Add skills to any of: `.claude/skills/`, `.agents/skills/`, `.cursor/skills/`, `.github/skills/`, or `.codex/skills/` with a `SKILL.md` index file.
+No project skills found. Add skills to any of: `.claude/skills/`, `.agents/skills/`, `.cursor/skills/`, `.github/skills/`, `.opencode/skills`, or `.codex/skills/` with a `SKILL.md` index file.
 <!-- GSD:skills-end -->
 
 <!-- GSD:workflow-start source:GSD defaults -->
