@@ -75,6 +75,10 @@ public final class DefaultSimulationState implements SimulationState {
     private final SimpleObjectProperty<float[]> cameraOrientationJ2000 =
             new SimpleObjectProperty<>(new float[] {0f, 0f, 0f, 1f});
 
+    // ── Telemetry state (REPRO-03) ──
+
+    private final SimpleDoubleProperty frameTimeMs = new SimpleDoubleProperty(0.0);
+
     // ── Overlay state (Step 19b) ──
 
     private final ConcurrentHashMap<Integer, SimpleBooleanProperty> labelVisibility = new ConcurrentHashMap<>();
@@ -258,6 +262,11 @@ public final class DefaultSimulationState implements SimulationState {
         return cameraOrientationJ2000;
     }
 
+    @Override
+    public ReadOnlyDoubleProperty frameTimeMsProperty() {
+        return frameTimeMs;
+    }
+
     // ── Setters (used by DefaultSimulationCommands and the simulation core) ──
 
     /** Set the selected body NAIF ID, or -1 for none. */
@@ -392,6 +401,11 @@ public final class DefaultSimulationState implements SimulationState {
      */
     public void setCameraOrientationJ2000(float[] orientation) {
         cameraOrientationJ2000.set(orientation);
+    }
+
+    /** Set the frame render time in milliseconds. Called each frame by KepplrApp on the JME render thread. */
+    public void setFrameTimeMs(double ms) {
+        frameTimeMs.set(ms);
     }
 
     // ── Overlay property accessors (Step 19b) ──

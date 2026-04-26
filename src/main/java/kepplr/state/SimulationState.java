@@ -163,6 +163,16 @@ public interface SimulationState {
      */
     ReadOnlyObjectProperty<float[]> cameraOrientationJ2000Property();
 
+    // ── Telemetry (REPRO-03) ──
+
+    /**
+     * Frame render time in milliseconds for the most recent frame (REPRO-03).
+     *
+     * <p>Updated each frame by {@link kepplr.render.KepplrApp#simpleUpdate(float)} on the JME render thread.
+     * Represents wall-clock time spent in the render/update loop.
+     */
+    ReadOnlyDoubleProperty frameTimeMsProperty();
+
     // ── Overlay state (REDESIGN.md §7.8, §7.9, §7.5, §7.6, Step 19b) ──
 
     /**
