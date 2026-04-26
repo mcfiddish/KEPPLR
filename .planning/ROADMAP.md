@@ -25,6 +25,8 @@ This roadmap prioritizes the concerns surfaced by codebase mapping, then lays th
 
 **Requirements:** BASE-01, BASE-02, BASE-03
 
+**Status:** Complete (2026-04-26)
+
 **Success criteria:**
 1. `mvn test` result is captured with any pre-existing failures distinguished from new failures.
 2. `mvn spotless:check` result is captured or formatting gaps are documented.

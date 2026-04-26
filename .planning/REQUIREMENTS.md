@@ -7,9 +7,9 @@
 
 ### Baseline
 
-- [ ] **BASE-01**: Developer can run the current test baseline and see pre-existing failures documented before phase work begins.
-- [ ] **BASE-02**: Developer can run `mvn test` and `mvn spotless:check` as explicit gates for changes made during this milestone.
-- [ ] **BASE-03**: Developer can identify which mapped concern each stabilization change addresses.
+- [x] **BASE-01**: Developer can run the current test baseline and see pre-existing failures documented before phase work begins.
+- [x] **BASE-02**: Developer can run `mvn test` and `mvn spotless:check` as explicit gates for changes made during this milestone.
+- [x] **BASE-03**: Developer can identify which mapped concern each stabilization change addresses.
 
 ### Configuration
 
@@ -75,9 +75,9 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| BASE-01 | Phase 1 | Pending |
-| BASE-02 | Phase 1 | Pending |
-| BASE-03 | Phase 1 | Pending |
+| BASE-01 | Phase 1 | Complete |
+| BASE-02 | Phase 1 | Complete |
+| BASE-03 | Phase 1 | Complete |
 | CONF-01 | Phase 2 | Pending |
 | CONF-02 | Phase 2 | Pending |
 | CONF-03 | Phase 2 | Pending |
@@ -105,4 +105,4 @@
 
 ---
 *Requirements defined: 2026-04-26*
-*Last updated: 2026-04-26 after initialization*
+*Last updated: 2026-04-26 after Phase 1 completion*
