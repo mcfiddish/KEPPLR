@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v0.3
 milestone_name: milestone
 status: planning
-last_updated: "2026-04-26T01:00:25.789Z"
+last_updated: "2026-04-26T21:42:53.190Z"
 progress:
   total_phases: 6
-  completed_phases: 1
-  total_plans: 3
-  completed_plans: 3
+  completed_phases: 2
+  total_plans: 5
+  completed_plans: 5
   percent: 100
 ---
 
@@ -16,21 +16,21 @@ progress:
 
 **Project:** KEPPLR Stabilization and v0.3 Foundations
 **Initialized:** 2026-04-26
-**Status:** Ready to plan
+**Status:** Planning Phase 3
 
 ## Project Reference
 
 See: `.planning/PROJECT.md` (updated 2026-04-26)
 
 **Core value:** KEPPLR must remain a scientifically credible, scriptable, reproducible SPICE visualization tool while new rendering, scene, and mission-geometry features are added.
-**Current focus:** Phase 2 - Configuration and Script Lifecycle Hardening
+**Current focus:** Phase 3 - Render Reliability and Visual Regression Foundations
 
 ## Current Phase
 
-**Phase:** 2
-**Name:** Configuration and Script Lifecycle Hardening
-**Goal:** Reduce reload, temp-resource, singleton, ephemeris, and trusted-script risks.
-**Status:** Ready to plan
+**Phase:** 3
+**Name:** Render Reliability and Visual Regression Foundations
+**Goal:** Strengthen render-path coverage and measurable quality policy for shadows, GLB rendering, and star lookup.
+**Status:** Ready to execute
 
 ## Planning Context
 
@@ -45,22 +45,18 @@ See: `.planning/PROJECT.md` (updated 2026-04-26)
 Run:
 
 ```sh
-$gsd-discuss-phase 2
+$gsd-execute-phase 3
 ```
 
-Alternative:
-
-```sh
-$gsd-plan-phase 2
-```
+This will execute Plan 03-01 (render test infrastructure + shadow quality policy) and Plan 03-02 (GLB coverage + star tile boundary tests).
 
 ## Phase Status
 
 | Phase | Name | Status |
 |-------|------|--------|
 | 1 | Baseline and Risk Inventory | Complete |
-| 2 | Configuration and Script Lifecycle Hardening | Pending |
-| 3 | Render Reliability and Visual Regression Foundations | Pending |
+| 2 | Configuration and Script Lifecycle Hardening | Complete |
+| 3 | Render Reliability and Visual Regression Foundations | Ready to plan |
 | 4 | Data Tooling and Catalog Robustness | Pending |
 | 5 | Replay, Manifest, and Performance Foundations | Pending |
 | 6 | Scene Preset Persistence Contract | Pending |

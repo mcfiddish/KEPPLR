@@ -41,26 +41,17 @@ This roadmap prioritizes the concerns surfaced by codebase mapping, then lays th
 
 **Requirements:** CONF-01, CONF-02, CONF-03, SCR-01, SCR-02, SCR-03
 
-**Success criteria:**
-1. Missing or invalid config paths return structured errors through the existing UI/command path instead of terminating the process.
-2. Default bundled resource extraction uses an instance-specific path and avoids shared temp collisions.
-3. Tests cover singleton replacement and thread-local ephemeris behavior across reload-sensitive paths.
-4. Scripting documentation clearly states trusted-code semantics and warns against untrusted script execution.
-5. Script stop/replacement tests cover cooperative interruption and KEPPLR wait primitives.
+**Status:** Complete (2026-04-26)
 
-**Likely files:** `src/main/java/kepplr/config/KEPPLRConfiguration.java`, `src/main/java/kepplr/util/ResourceUtils.java`, `src/main/java/kepplr/scripting/ScriptRunner.java`, `src/main/java/kepplr/scripting/KepplrScript.java`, `doc/scripting.rst`, `src/test/java/kepplr/config`, `src/test/java/kepplr/scripting`
-
-**Plans:**
-- [ ] 02-01-PLAN.md — Configuration lifecycle: error handling, UUID-based resource paths, reload tests
-- [ ] 02-02-PLAN.md — Scripting lifecycle: security docs, interrupt tests, recording coverage
-
-**UI hint:** no
+**Verified:** 6/6 requirements verified via 02-VERIFICATION.md
 
 ### Phase 3: Render Reliability and Visual Regression Foundations
 
 **Goal:** Reduce visual-regression risk before expanding GLB, shadow, star, and mesh rendering behavior.
 
 **Requirements:** REND-01, REND-02, REND-03, REND-04
+
+**Status:** Ready to execute
 
 **Success criteria:**
 1. Render-tagged Maven flow has at least one meaningful render smoke/focused test, or a documented technical blocker with a narrower replacement test.
@@ -70,6 +61,10 @@ This roadmap prioritizes the concerns surfaced by codebase mapping, then lays th
 5. `mvn test` passes with no new failures after changes.
 
 **Likely files:** `pom.xml`, `src/main/java/kepplr/render/body/EclipseShadowManager.java`, `src/main/resources/kepplr/shaders/Bodies/EclipseLighting.frag`, `src/main/java/kepplr/render/body/BodyNodeFactory.java`, `src/main/java/kepplr/render/util/GLTFUtils.java`, `src/main/java/kepplr/stars/catalogs/tiled/uniform/UniformTileLocator.java`, `src/test/java/kepplr/render`, `src/test/java/kepplr/stars`
+
+**Plans:**
+- [x] 03-01-PLAN.md — Render test infrastructure and shadow quality policy
+- [x] 03-02-PLAN.md — GLB rendering coverage and star tile boundary tests
 
 **UI hint:** no
 
