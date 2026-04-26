@@ -120,6 +120,13 @@ This roadmap prioritizes the concerns surfaced by codebase mapping, then lays th
 
 **Requirements:** SCENE-01, SCENE-02, SCENE-03
 
+**Status:** Complete (2026-04-26)
+
+**Verified:** 3/3 requirements verified:
+- SCENE-01: Versioned JSON format with documentation in usersguide.rst
+- SCENE-02: Atomic load/apply - validation before any state mutation
+- SCENE-03: Full visual setup preservation (time, camera, bodies, overlays, render quality, window)
+
 **Success criteria:**
 1. `.kepplrscene` JSON format is versioned, readable, and documented.
 2. Scene validation reports field-specific errors and preserves existing app state when validation fails.
@@ -130,6 +137,9 @@ This roadmap prioritizes the concerns surfaced by codebase mapping, then lays th
 **Likely files:** `src/main/java/kepplr/state/StateSnapshot.java`, `src/main/java/kepplr/state/StateSnapshotCodec.java`, `src/main/java/kepplr/commands/SimulationCommands.java`, `src/main/java/kepplr/commands/DefaultSimulationCommands.java`, `src/main/java/kepplr/scripting/KepplrScript.java`, `src/main/java/kepplr/ui/KepplrStatusWindow.java`, `src/test/java/kepplr/state`, `doc/usersguide.rst`
 
 **UI hint:** yes
+
+**Plans:**
+- [x] 06-PLAN.md — Scene preset persistence implementation
 
 ## Requirement Coverage
 

@@ -38,15 +38,15 @@
 
 ### Reproducibility
 
-- [ ] **REPRO-01**: Capture outputs can include a render manifest with app version, platform, config identity, kernel identity, script or scene identity, render quality, resolution, frame count, and ET per frame.
-- [ ] **REPRO-02**: Deterministic replay expectations and numeric tolerances are documented for camera state, ET progression, and capture timing.
-- [ ] **REPRO-03**: Lightweight performance telemetry reports frame time and key scene counts needed to set quality budgets.
+- [x] **REPRO-01**: Capture outputs can include a render manifest with app version, platform, config identity, kernel identity, script or scene identity, render quality, resolution, frame count, and ET per frame.
+- [x] **REPRO-02**: Deterministic replay expectations and numeric tolerances are documented for camera state, ET progression, and capture timing.
+- [x] **REPRO-03**: Lightweight performance telemetry reports frame time and key scene counts needed to set quality budgets.
 
 ### Scene
 
-- [ ] **SCENE-01**: `.kepplrscene` format is specified with versioning, readable JSON structure, validation errors, and unknown-field handling.
-- [ ] **SCENE-02**: Scene load/apply is atomic: invalid scenes do not leave the app in a partially applied state.
-- [ ] **SCENE-03**: Scene files can preserve the current authored visual setup, including state string fields plus overlay visibility and trail/frustum/body visibility state.
+- [x] **SCENE-01**: `.kepplrscene` format is specified with versioning, readable JSON structure, validation errors, and unknown-field handling.
+- [x] **SCENE-02**: Scene load/apply is atomic: invalid scenes do not leave the app in a partially applied state.
+- [x] **SCENE-03**: Scene files can preserve the current authored visual setup, including state string fields plus overlay visibility and trail/frustum/body visibility state.
 
 ## v2 Requirements
 
@@ -91,12 +91,12 @@
 | DATA-01 | Phase 4 | Complete |
 | DATA-02 | Phase 4 | Complete |
 | DATA-03 | Phase 4 | Complete |
-| REPRO-01 | Phase 5 | Pending |
-| REPRO-02 | Phase 5 | Pending |
-| REPRO-03 | Phase 5 | Pending |
-| SCENE-01 | Phase 6 | Pending |
-| SCENE-02 | Phase 6 | Pending |
-| SCENE-03 | Phase 6 | Pending |
+| REPRO-01 | Phase 5 | Complete |
+| REPRO-02 | Phase 5 | Complete |
+| REPRO-03 | Phase 5 | Complete |
+| SCENE-01 | Phase 6 | Complete |
+| SCENE-02 | Phase 6 | Complete |
+| SCENE-03 | Phase 6 | Complete |
 
 **Coverage:**
 - v1 requirements: 22 total
