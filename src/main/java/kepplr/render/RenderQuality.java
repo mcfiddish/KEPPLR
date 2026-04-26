@@ -6,6 +6,25 @@ import kepplr.util.KepplrConstants;
  * Render quality presets that jointly configure shadow fidelity, trail density, and star magnitude cutoff (REDESIGN.md
  * §9.4).
  *
+ * <h2>Shadow Quality Policy</h2>
+ *
+ * <p>Each preset controls shadow rendering as follows:
+ *
+ * <table>
+ *   <caption>Shadow behavior per RenderQuality tier</caption>
+ *   <tr><th>Tier</th><th>Shadow Model</th><th>Max Occluders</th><th>Occluder Sort</th></tr>
+ *   <tr><td>LOW</td><td>Point-source (binary umbra, no penumbra)</td><td>2</td><td>Angular size²</td></tr>
+ *   <tr><td>MEDIUM</td><td>Extended-source (analytic penumbra)</td><td>4</td><td>Angular size²</td></tr>
+ *   <tr><td>HIGH</td><td>Extended-source (analytic penumbra)</td><td>8</td><td>Angular size²</td></tr>
+ * </table>
+ *
+ * <p><b>Occluder sorting:</b> Casters are sorted by angular radius squared ({@code radius²/distance²}) in descending
+ * order. The largest angular radius (most shadow-significant) caster is always kept when the occluder limit is reached.
+ * This ensures Titan (largest Saturn moon) is never evicted by smaller, closer inner moons.
+ *
+ * <p><b>Penumbra computation:</b> Extended-source shadows use the analytic penumbra model in
+ * {@link kepplr.render.body.ShadowGeometry}. See {@code ShadowGeometry.computeLitFraction} for the mathematical model.
+ *
  * <p>Each preset controls:
  *
  * <ul>

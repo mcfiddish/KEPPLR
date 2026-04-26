@@ -169,6 +169,53 @@ class GLTFUtilsTest {
         assertEquals(0.0f, q.getW(), 1e-5f);
     }
 
+    // ── fallback behavior tests ──────────────────────────────────────────────────────────────────
+
+    @Test
+    void returnsIdentityWhenAssetExtrasAbsent() throws IOException {
+        // Valid GLB but no asset.extras at all
+        String json = "{\"asset\":{\"version\":\"2.0\"},\"scenes\":[],\"scene\":0}";
+        Path glb = writeGlb(json);
+        Quaternion q = GLTFUtils.readModelToBodyFixedQuatFromGlb(glb);
+        assertIdentity(q);
+    }
+
+    @Test
+    void returnsIdentityWhenKepplrKeyAbsent() throws IOException {
+        // Has asset.extras but no kepplr key
+        String json = "{\"asset\":{\"version\":\"2.0\",\"extras\":{\"custom\":\"data\"}}}";
+        Path glb = writeGlb(json);
+        Quaternion q = GLTFUtils.readModelToBodyFixedQuatFromGlb(glb);
+        assertIdentity(q);
+    }
+
+    @Test
+    void returnsIdentityWhenQuatValueMissing() throws IOException {
+        // Has kepplr key but modelToBodyFixedQuat is empty/present but no value field
+        String json = "{\"asset\":{\"extras\":{\"kepplr\":{}}}}";
+        Path glb = writeGlb(json);
+        Quaternion q = GLTFUtils.readModelToBodyFixedQuatFromGlb(glb);
+        assertIdentity(q);
+    }
+
+    @Test
+    void returnsIdentityWhenQuatValueEmptyArray() throws IOException {
+        // Has kepplr key but value is an empty array
+        String json = "{\"asset\":{\"extras\":{\"kepplr\":{\"modelToBodyFixedQuat\":{\"value\":[]}}}}}";
+        Path glb = writeGlb(json);
+        Quaternion q = GLTFUtils.readModelToBodyFixedQuatFromGlb(glb);
+        assertIdentity(q);
+    }
+
+    @Test
+    void returnsIdentityWhenQuatValueWrongLength() throws IOException {
+        // Has kepplr key but value array has wrong number of elements
+        String json = "{\"asset\":{\"extras\":{\"kepplr\":{\"modelToBodyFixedQuat\":{\"value\":[1,2,3]}}}}}";
+        Path glb = writeGlb(json);
+        Quaternion q = GLTFUtils.readModelToBodyFixedQuatFromGlb(glb);
+        assertIdentity(q);
+    }
+
     // ── assertion helpers ─────────────────────────────────────────────────────────────────────────
 
     private static void assertIdentity(Quaternion q) {
