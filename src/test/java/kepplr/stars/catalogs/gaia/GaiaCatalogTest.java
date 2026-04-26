@@ -99,12 +99,14 @@ class GaiaCatalogTest {
         props.setProperty("tiling.nLon", "2");
         props.setProperty("gaia.dataRelease", "DR3");
         props.setProperty("gaia.refEpoch", "2016.0");
-        Files.write(dir.resolve("gaia.properties"), props);
+        try (var out = Files.newBufferedWriter(dir.resolve("gaia.properties"))) {
+            props.store(out, "Gaia test properties");
+        }
 
         // Write empty idx (2x2 = 4 tiles)
         int tileCount = 4;
         try (DataOutputStream dos = new DataOutputStream(
-                new BufferedOutputStream(Files.write(dir.resolve("gaia.idx"))))) {
+                new BufferedOutputStream(Files.newOutputStream(dir.resolve("gaia.idx"))))) {
             for (int i = 0; i < tileCount; i++) {
                 dos.writeLong(0);    // offset
                 dos.writeInt(0);     // length
