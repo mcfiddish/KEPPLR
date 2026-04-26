@@ -13,15 +13,15 @@
 
 ### Configuration
 
-- [ ] **CONF-01**: User receives structured configuration-load errors instead of process termination for missing or invalid config paths.
-- [ ] **CONF-02**: Multiple KEPPLR instances or tests do not collide through a shared `java.io.tmpdir/resources` extraction path.
-- [ ] **CONF-03**: Configuration reload behavior is covered by tests for singleton replacement, thread-local ephemeris access, and render/script interaction boundaries.
+- [x] **CONF-01**: User receives structured configuration-load errors instead of process termination for missing or invalid config paths.
+- [x] **CONF-02**: Multiple KEPPLR instances or tests do not collide through a shared `java.io.tmpdir/resources` extraction path.
+- [x] **CONF-03**: Configuration reload behavior is covered by tests for singleton replacement, thread-local ephemeris access, and render/script interaction boundaries.
 
 ### Scripting
 
-- [ ] **SCR-01**: User documentation clearly states that Groovy scripts are trusted local code with filesystem, network, process, configuration, and state access.
-- [ ] **SCR-02**: Script stop/replacement behavior is tested for cooperative interruption and blocking KEPPLR wait primitives.
-- [ ] **SCR-03**: Command recording remains executable for newly touched `SimulationCommands` methods.
+- [x] **SCR-01**: User documentation clearly states that Groovy scripts are trusted local code with filesystem, network, process, configuration, and state access.
+- [x] **SCR-02**: Script stop/replacement behavior is tested for cooperative interruption and blocking KEPPLR wait primitives.
+- [x] **SCR-03**: Command recording remains executable for newly touched `SimulationCommands` methods.
 
 ### Rendering
 
