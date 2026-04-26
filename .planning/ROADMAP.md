@@ -50,6 +50,10 @@ This roadmap prioritizes the concerns surfaced by codebase mapping, then lays th
 
 **Likely files:** `src/main/java/kepplr/config/KEPPLRConfiguration.java`, `src/main/java/kepplr/util/ResourceUtils.java`, `src/main/java/kepplr/scripting/ScriptRunner.java`, `src/main/java/kepplr/scripting/KepplrScript.java`, `doc/scripting.rst`, `src/test/java/kepplr/config`, `src/test/java/kepplr/scripting`
 
+**Plans:**
+- [ ] 02-01-PLAN.md — Configuration lifecycle: error handling, UUID-based resource paths, reload tests
+- [ ] 02-02-PLAN.md — Scripting lifecycle: security docs, interrupt tests, recording coverage
+
 **UI hint:** no
 
 ### Phase 3: Render Reliability and Visual Regression Foundations
