@@ -13,6 +13,28 @@ at the bottom of the control window.  See :doc:`gui` for details.
 For ready-to-use examples, see :doc:`scripting_examples`.
 
 
+Security Considerations
+-----------------------
+
+**Scripts are trusted local code.** KEPPLR does not sandbox Groovy scripts. A script has full access to:
+
+- Filesystem: read, write, and delete files on the host system
+- Network: make HTTP requests and open sockets
+- Process: execute external commands via Groovy's ``System.execute()``
+- Configuration: read and modify KEPPLR settings
+- State: control simulation time, camera, and all overlays
+
+**Only run scripts you trust.** Never run untrusted scripts from unknown sources. A malicious script could:
+
+- Access or delete any file the KEPPLR process can read/write
+- Exfiltrate sensitive data via network connections
+- Execute arbitrary commands on your system
+- Modify configuration in ways that persist after restart
+
+For trusted local automation only. If you receive a script from an untrusted source, review it
+carefully before execution.
+
+
 Basic Concepts
 --------------
 

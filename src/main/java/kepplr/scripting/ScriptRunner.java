@@ -26,6 +26,9 @@ import org.apache.logging.log4j.Logger;
  * <p>If {@link #runScript} is called while a script is already running, the previous script thread is interrupted and
  * any active transition is cancelled before the new script starts.
  *
+ * <p><b>Security warning:</b> Scripts are trusted local code with full system access (filesystem, network, process
+ * execution). Only run scripts you trust. See :doc:`../scripting` for details.
+ *
  * <h3>Example usage</h3>
  *
  * <pre>{@code

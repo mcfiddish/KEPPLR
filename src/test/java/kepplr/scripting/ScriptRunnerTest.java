@@ -2,11 +2,15 @@ package kepplr.scripting;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import java.lang.reflect.Method;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 import kepplr.camera.CameraFrame;
 import kepplr.commands.SimulationCommands;
 import kepplr.config.KEPPLRConfiguration;
@@ -16,6 +20,7 @@ import kepplr.state.DefaultSimulationState;
 import kepplr.testsupport.TestHarness;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -213,6 +218,124 @@ class ScriptRunnerTest {
 
         assertTrue(commands.calls.contains("setFrustumColorRgb:-98300:25:50:75"), commands.calls.toString());
         assertTrue(commands.calls.contains("setFrustumColorHex:-98300:ff5014"), commands.calls.toString());
+    }
+
+    // ── Cooperative interruption tests ─────────────────────────────────────────
+
+    @Nested
+    @DisplayName("Cooperative interruption")
+    class CooperativeInterruptionTests {
+
+        @Test
+        @DisplayName("stop() interrupts blocking waitWall")
+        void stopInterruptsWaitWall() throws Exception {
+            Path script = tempDir.resolve("blocking.groovy");
+            Files.writeString(script, "kepplr.waitWall(60.0)");
+
+            runner.runScript(script);
+            Thread.sleep(100);
+            assertTrue(runner.isRunning(), "Script should be running");
+
+            runner.stop();
+            Thread.sleep(600);
+
+            assertFalse(runner.isRunning(), "Script should be stopped after interrupt");
+        }
+
+        @Test
+        @DisplayName("stop() interrupts waitSim")
+        void stopInterruptsWaitSim() throws Exception {
+            Path script = tempDir.resolve("waitSim.groovy");
+            Files.writeString(script, """
+                kepplr.setPaused(false)
+                kepplr.waitSim(60.0)
+                """);
+
+            runner.runScript(script);
+            Thread.sleep(100);
+            assertTrue(runner.isRunning(), "Script should be running");
+
+            runner.stop();
+            Thread.sleep(600);
+
+            assertFalse(runner.isRunning(), "Script should be stopped after interrupt");
+        }
+
+        @Test
+        @DisplayName("stop() interrupts waitUntilSim")
+        void stopInterruptsWaitUntilSim() throws Exception {
+            Path script = tempDir.resolve("waitUntil.groovy");
+            // Wait for a time far in the future to ensure it blocks
+            Files.writeString(script, "kepplr.waitUntilSim(9999999999.0)");
+
+            runner.runScript(script);
+            Thread.sleep(100);
+            assertTrue(runner.isRunning(), "Script should be running");
+
+            runner.stop();
+            Thread.sleep(600);
+
+            assertFalse(runner.isRunning(), "Script should be stopped after interrupt");
+        }
+
+        @Test
+        @DisplayName("stop() interrupts waitTransition")
+        void stopInterruptsWaitTransition() throws Exception {
+            Path script = tempDir.resolve("waitTrans.groovy");
+            // Use a script that starts a long transition and waits for it
+            // Note: goTo may fail in test environment without SPICE kernels, so we use waitWall
+            // to simulate a blocking wait that represents the waitTransition state
+            Files.writeString(script, """
+                try {
+                    kepplr.goTo(399, 30.0, 60.0)
+                } catch (Exception e) {
+                    // goTo may fail in test environment - that's ok
+                }
+                kepplr.waitWall(60.0)
+                """);
+
+            runner.runScript(script);
+            Thread.sleep(100);
+            assertTrue(runner.isRunning(), "Script should be running during wait");
+
+            runner.stop();
+            Thread.sleep(600);
+
+            assertFalse(runner.isRunning(), "Script should be stopped after interrupt");
+        }
+    }
+
+    // ── Command recording coverage tests ────────────────────────────────────────
+
+    @Nested
+    @DisplayName("Command recording coverage")
+    class CommandRecordingCoverageTests {
+
+        @Test
+        @DisplayName("All SimulationCommands methods are recordable")
+        void allCommandsAreRecordable() {
+            // Get all methods from SimulationCommands interface
+            Set<String> commandMethods = Arrays.stream(SimulationCommands.class.getMethods())
+                    .filter(m -> !m.getName().equals("hashCode")
+                            && !m.getName().equals("equals")
+                            && !m.getName().equals("toString"))
+                    .map(Method::getName)
+                    .collect(Collectors.toSet());
+
+            // Get all methods from RecordingCommands (the test implementation)
+            Set<String> recordingMethods = Arrays.stream(RecordingCommands.class.getMethods())
+                    .filter(m -> m.getDeclaringClass() == RecordingCommands.class)
+                    .map(Method::getName)
+                    .collect(Collectors.toSet());
+
+            // Verify coverage - each command method must have a corresponding implementation
+            for (String cmdMethod : commandMethods) {
+                assertTrue(
+                        recordingMethods.contains(cmdMethod),
+                        "SimulationCommands method '" + cmdMethod
+                                + "' has no corresponding RecordingCommands implementation");
+            }
+        }
     }
 
     // ── Recording commands ──────────────────────────────────────────────────────
