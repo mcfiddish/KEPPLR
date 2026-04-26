@@ -25,10 +25,10 @@
 
 ### Rendering
 
-- [ ] **REND-01**: Render-path test infrastructure contains at least one real `@Tag("render")` smoke or focused test, or a documented blocker if the live render harness cannot support it yet.
-- [ ] **REND-02**: Eclipse/shadow quality policy has measurable behavior for occluder limits and render quality tiers before GLB shape-shadow expansion.
-- [ ] **REND-03**: GLB-backed body and spacecraft rendering has regression coverage or documented manual verification paths for material, lighting, and fallback behavior.
-- [ ] **REND-04**: Wide-cone star tile lookup behavior is explicitly tested near and beyond the documented convexity boundary.
+- [x] **REND-01**: Render-path test infrastructure contains at least one real `@Tag("render")` smoke or focused test, or a documented blocker if the live render harness cannot support it yet.
+- [x] **REND-02**: Eclipse/shadow quality policy has measurable behavior for occluder limits and render quality tiers before GLB shape-shadow expansion.
+- [x] **REND-03**: GLB-backed body and spacecraft rendering has regression coverage or documented manual verification paths for material, lighting, and fallback behavior.
+- [x] **REND-04**: Wide-cone star tile lookup behavior is explicitly tested near and beyond the documented convexity boundary.
 
 ### Data
 
@@ -78,16 +78,16 @@
 | BASE-01 | Phase 1 | Complete |
 | BASE-02 | Phase 1 | Complete |
 | BASE-03 | Phase 1 | Complete |
-| CONF-01 | Phase 2 | Pending |
-| CONF-02 | Phase 2 | Pending |
-| CONF-03 | Phase 2 | Pending |
-| SCR-01 | Phase 2 | Pending |
-| SCR-02 | Phase 2 | Pending |
-| SCR-03 | Phase 2 | Pending |
-| REND-01 | Phase 3 | Pending |
-| REND-02 | Phase 3 | Pending |
-| REND-03 | Phase 3 | Pending |
-| REND-04 | Phase 3 | Pending |
+| CONF-01 | Phase 2 | Complete |
+| CONF-02 | Phase 2 | Complete |
+| CONF-03 | Phase 2 | Complete |
+| SCR-01 | Phase 2 | Complete |
+| SCR-02 | Phase 2 | Complete |
+| SCR-03 | Phase 2 | Complete |
+| REND-01 | Phase 3 | Complete |
+| REND-02 | Phase 3 | Complete |
+| REND-03 | Phase 3 | Complete |
+| REND-04 | Phase 3 | Complete |
 | DATA-01 | Phase 4 | Pending |
 | DATA-02 | Phase 4 | Pending |
 | DATA-03 | Phase 4 | Pending |

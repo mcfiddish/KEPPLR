@@ -51,7 +51,13 @@ This roadmap prioritizes the concerns surfaced by codebase mapping, then lays th
 
 **Requirements:** REND-01, REND-02, REND-03, REND-04
 
-**Status:** Ready to execute
+**Status:** Complete (2026-04-26)
+
+**Verified:** 4/4 requirements verified:
+- REND-01: Technical blocker documented (no display in headless CI)
+- REND-02: Shadow quality policy documented in RenderQuality.java
+- REND-03: GLB fallback tests added (5 new tests)
+- REND-04: Star tile convexity boundary documented in Initializer.java
 
 **Success criteria:**
 1. Render-tagged Maven flow has at least one meaningful render smoke/focused test, or a documented technical blocker with a narrower replacement test.
