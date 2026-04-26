@@ -128,6 +128,38 @@ public final class GaiaCatalog implements StarCatalog<GaiaStar>, TiledStarCatalo
         return new Summary(dataRelease, referenceEpochYear, tiling.nLat, tiling.nLon, populated, stars, bytes);
     }
 
+    /**
+     * Returns statistics about the tile cache for memory auditing.
+     * The cache is an LRU with a configurable capacity (default 256 tiles).
+     */
+    public CacheStats getCacheStats() {
+        synchronized (tileCache) {
+            // Estimate: GaiaStar is ~32 bytes (sourceId long + 4 floats + object overhead)
+            long bytesPerStar = 32;
+            long totalBytes = 0;
+            for (GaiaStar[] tile : tileCache.values()) {
+                totalBytes += tile.length * bytesPerStar;
+            }
+            return new CacheStats(tileCache.size(), totalBytes);
+        }
+    }
+
+    /** Statistics about the tile cache for debugging memory issues. */
+    public static final class CacheStats {
+        public final int cachedTileCount;
+        public final long estimatedMemoryBytes;
+
+        CacheStats(int cachedTileCount, long estimatedMemoryBytes) {
+            this.cachedTileCount = cachedTileCount;
+            this.estimatedMemoryBytes = estimatedMemoryBytes;
+        }
+
+        @Override
+        public String toString() {
+            return "CacheStats{cachedTiles=" + cachedTileCount + ", estimatedBytes~" + estimatedMemoryBytes + "}";
+        }
+    }
+
     private GaiaCatalog(
             String dataRelease,
             double referenceEpochYear,
@@ -329,10 +361,12 @@ public final class GaiaCatalog implements StarCatalog<GaiaStar>, TiledStarCatalo
             throw new StarCatalogLookupException("Invalid Gaia id: " + id);
         }
 
-        if (sourceIndexChannel == null) {
-            throw new UnsupportedOperationException(
-                    "This tile pack was built without a source-id index (" + DEFAULT_SOURCE_INDEX_FILE + "). "
-                            + "Rebuild with GaiaBuildSourceIndex or enable source indexing during pack build.");
+        if (sourceIndexFile == null) {
+            throw new IllegalArgumentException(
+                    "Missing source index file (" + DEFAULT_SOURCE_INDEX_FILE + "). "
+                            + "This file is required for getStar() lookups by source ID. "
+                            + "To fix: run 'java -cp kepplr.jar kepplr.stars.catalogs.gaia.tools.GaiaBuildSourceIndex --pack <tile-pack-dir>' "
+                            + "to build the source index, or use tile-pack lookup methods (lookup/filter/iterator) instead.");
         }
 
         // binary search the memory-mapped source index
