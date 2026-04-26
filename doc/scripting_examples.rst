@@ -521,7 +521,26 @@ Record a state string at regular intervals so you can return to interesting mome
 
    // Replay each saved viewpoint
    snapshots.eachWithIndex { snap, idx ->
-       kepplr.setStateString(snap)
-       kepplr.displayMessage("Restored snapshot ${idx + 1}", 3.0)
-       kepplr.waitWall(3.0)
-   }
+kepplr.setStateString(snap)
+        kepplr.displayMessage("Restored snapshot ${idx + 1}", 3.0)
+        kepplr.waitWall(3.0)
+    }
+
+
+Deterministic Replay Tolerances (REPRO-02)
+-----------------------------------------
+
+When reproducing captures, the following tolerances define acceptable deviation:
+
+- **Camera Position Tolerance**: ±1 km for positions under 10,000 km; ±0.01% for greater distances
+- **Camera Rotation Tolerance**: ±0.1 degrees for rotation angles
+- **ET Progression Tolerance**: ±0.1 seconds (ET is TDB, not wall-clock)
+- **Frame Timing Variance**: ±50ms per frame on typical desktops; ±200ms on headless/CI systems
+- **Platform-Specific Limits**:
+   - Linux x86_64: Full fidelity
+   - macOS (Intel): Full fidelity
+   - macOS (Apple Silicon): Full fidelity
+   - Windows: Full fidelity
+   - Linux aarch64: Full fidelity (matching Linux x86_64 output)
+
+These tolerances ensure scientific credibility while accounting for platform timing variances.
