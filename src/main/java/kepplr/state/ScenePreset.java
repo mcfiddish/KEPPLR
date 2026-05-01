@@ -207,19 +207,7 @@ public record ScenePreset(
 
     /** Convert a VectorType to a string representation for JSON storage. */
     private static String vectorTypeToString(kepplr.render.vector.VectorType type) {
-        if (type == kepplr.render.vector.VectorTypes.velocity()) {
-            return "velocity";
-        } else if (type == kepplr.render.vector.VectorTypes.bodyAxisX()) {
-            return "bodyAxisX";
-        } else if (type == kepplr.render.vector.VectorTypes.bodyAxisY()) {
-            return "bodyAxisY";
-        } else if (type == kepplr.render.vector.VectorTypes.bodyAxisZ()) {
-            return "bodyAxisZ";
-        } else {
-            // For towardBody, we need to extract the target naif ID
-            // This is a simplification - in reality we'd need to inspect the type more carefully
-            return "velocity"; // fallback
-        }
+        return type.toString();
     }
 
     /** Create a default/empty scene preset. */

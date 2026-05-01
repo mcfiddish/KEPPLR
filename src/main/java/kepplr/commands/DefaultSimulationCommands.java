@@ -866,10 +866,12 @@ public final class DefaultSimulationCommands implements SimulationCommands {
      * <p>This applies all state atomically. For camera restore, we use the same pattern as setStateString.
      */
     private void applyScenePreset(ScenePreset preset) {
-        // Apply time state
-        clock.setET(preset.et());
-        clock.setTimeRate(preset.timeRate());
+        // Apply time state. Pause first so the clock freezes before we reposition the anchor.
         clock.setPaused(preset.paused());
+        clock.setTimeRate(preset.timeRate());
+        clock.setET(preset.et());
+        state.setCurrentEt(preset.et());
+        state.setDeltaSimSeconds(0.0);
 
         // Apply body selections
         state.setFocusedBodyId(preset.focusedBodyId());
@@ -950,7 +952,7 @@ public final class DefaultSimulationCommands implements SimulationCommands {
                 String key = entry.getKey();
                 boolean visible = entry.getValue();
                 // Parse "naifId:type" format
-                int colonIdx = key.lastIndexOf(':');
+                int colonIdx = key.indexOf(':');
                 if (colonIdx > 0) {
                     try {
                         int naifId = Integer.parseInt(key.substring(0, colonIdx));
@@ -992,7 +994,17 @@ public final class DefaultSimulationCommands implements SimulationCommands {
             case "bodyAxisX" -> kepplr.render.vector.VectorTypes.bodyAxisX();
             case "bodyAxisY" -> kepplr.render.vector.VectorTypes.bodyAxisY();
             case "bodyAxisZ" -> kepplr.render.vector.VectorTypes.bodyAxisZ();
-            default -> null;
+            default -> {
+                if (typeStr != null && typeStr.startsWith("towardBody:")) {
+                    try {
+                        yield kepplr.render.vector.VectorTypes.towardBody(
+                                Integer.parseInt(typeStr.substring("towardBody:".length())));
+                    } catch (NumberFormatException e) {
+                        yield null;
+                    }
+                }
+                yield null;
+            }
         };
     }
 

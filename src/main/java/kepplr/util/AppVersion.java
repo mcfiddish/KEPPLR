@@ -1,21 +1,20 @@
-
 package kepplr.util;
 
 public class AppVersion {
     public static final String lastCommit = "2026.04.26";
     // an M at the end of gitRevision means this was built from a "dirty" git repository
-    public static final String gitRevision = "134bc49M";
+    public static final String gitRevision = "575d697M";
     public static final String applicationName = "KEPPLR";
-    public static final String dateString = "2026-Apr-26 22:18:34 UTC";
+    public static final String dateString = "2026-May-01 14:00:07 UTC";
 
     private AppVersion() {}
 
-    /** KEPPLR version 2026.04.26-134bc49M built 2026-Apr-26 22:18:34 UTC */
+    /** KEPPLR version 2026.04.26-575d697M built 2026-May-01 14:00:07 UTC */
     public static String getFullString() {
         return String.format("%s version %s-%s built %s", applicationName, lastCommit, gitRevision, dateString);
     }
 
-    /** KEPPLR version 2026.04.26-134bc49M */
+    /** KEPPLR version 2026.04.26-575d697M */
     public static String getVersionString() {
         return String.format("%s version %s-%s", applicationName, lastCommit, gitRevision);
     }

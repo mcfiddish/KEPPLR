@@ -51,6 +51,40 @@ class ScenePresetValidatorTest {
                 emptyUnknown);
     }
 
+    private ScenePreset createPresetWithVectors(Map<String, Boolean> vectorVis) {
+        Map<Integer, Boolean> emptyIntBool = new HashMap<>();
+        Map<Integer, Double> emptyIntDouble = new HashMap<>();
+        Map<Integer, Integer> emptyIntInt = new HashMap<>();
+        Map<String, Boolean> emptyStringBool = new HashMap<>();
+        Map<String, Object> emptyUnknown = new HashMap<>();
+
+        return new ScenePreset(
+                1,
+                4.21348864184e8,
+                1.0,
+                false,
+                new double[] {1e8, 0, 0},
+                new float[] {0, 0, 0, 1},
+                CameraFrame.INERTIAL,
+                45.0,
+                399,
+                -1,
+                -1,
+                emptyIntBool,
+                emptyIntBool,
+                emptyIntBool,
+                emptyIntDouble,
+                emptyIntInt,
+                vectorVis,
+                emptyStringBool,
+                true,
+                true,
+                RenderQuality.HIGH,
+                1920,
+                1080,
+                emptyUnknown);
+    }
+
     @Nested
     @DisplayName("Valid preset")
     class ValidPreset {
@@ -489,6 +523,35 @@ class ScenePresetValidatorTest {
 
             List<ValidationError> errors = ScenePresetValidator.validate(preset);
             assertTrue(errors.stream().noneMatch(e -> e.field().startsWith("overlays.trailDurations")));
+        }
+    }
+
+    @Nested
+    @DisplayName("Vector visibility validation")
+    class VectorVisibilityValidation {
+
+        @Test
+        @DisplayName("towardBody vector keys are accepted")
+        void towardBodyKeyAccepted() {
+            Map<String, Boolean> vectors = new HashMap<>();
+            vectors.put("399:velocity", true);
+            vectors.put("399:towardBody:10", false);
+
+            List<ValidationError> errors = ScenePresetValidator.validate(createPresetWithVectors(vectors));
+
+            assertTrue(errors.stream().noneMatch(e -> e.field().startsWith("overlays.vectors")));
+        }
+
+        @Test
+        @DisplayName("invalid vector keys are rejected")
+        void invalidVectorKeyRejected() {
+            Map<String, Boolean> vectors = new HashMap<>();
+            vectors.put("399:not-a-vector", true);
+
+            List<ValidationError> errors = ScenePresetValidator.validate(createPresetWithVectors(vectors));
+
+            assertTrue(errors.stream()
+                    .anyMatch(e -> e.field().startsWith("overlays.vectors") && e.severity() == Severity.ERROR));
         }
     }
 

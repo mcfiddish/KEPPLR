@@ -37,6 +37,7 @@ class ScenePresetCodecTest {
 
         Map<String, Boolean> vecVis = new HashMap<>();
         vecVis.put("399:velocity", true);
+        vecVis.put("399:towardBody:10", false);
 
         Map<String, Boolean> frustumVis = new HashMap<>();
         frustumVis.put("-98300", true); // NH_LORRI

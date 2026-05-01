@@ -212,6 +212,8 @@ public final class ScenePresetValidator {
     }
 
     private static void validateOverlays(ScenePreset preset, List<ValidationError> errors) {
+        validateVectorVisibility(preset, errors);
+
         // Validate trail durations are reasonable
         if (preset.trailDurations() != null) {
             for (var entry : preset.trailDurations().entrySet()) {
@@ -244,6 +246,55 @@ public final class ScenePresetValidator {
                             Severity.WARNING));
                 }
             }
+        }
+    }
+
+    private static void validateVectorVisibility(ScenePreset preset, List<ValidationError> errors) {
+        if (preset.vectorVisibility() == null) {
+            return;
+        }
+        for (var entry : preset.vectorVisibility().entrySet()) {
+            String key = entry.getKey();
+            int colon = key == null ? -1 : key.indexOf(':');
+            if (colon <= 0 || colon == key.length() - 1) {
+                errors.add(new ValidationError(
+                        "overlays.vectors." + key, "Vector key must use 'naifId:type' format", Severity.ERROR));
+                continue;
+            }
+
+            try {
+                Integer.parseInt(key.substring(0, colon));
+            } catch (NumberFormatException e) {
+                errors.add(new ValidationError(
+                        "overlays.vectors." + key, "Vector key must start with a numeric NAIF ID", Severity.ERROR));
+                continue;
+            }
+
+            String type = key.substring(colon + 1);
+            if (!isSupportedVectorType(type)) {
+                errors.add(new ValidationError(
+                        "overlays.vectors." + key, "Unsupported vector type: " + type, Severity.ERROR));
+            }
+        }
+    }
+
+    private static boolean isSupportedVectorType(String type) {
+        return "velocity".equals(type)
+                || "bodyAxisX".equals(type)
+                || "bodyAxisY".equals(type)
+                || "bodyAxisZ".equals(type)
+                || isTowardBodyVectorType(type);
+    }
+
+    private static boolean isTowardBodyVectorType(String type) {
+        if (type == null || !type.startsWith("towardBody:")) {
+            return false;
+        }
+        try {
+            Integer.parseInt(type.substring("towardBody:".length()));
+            return true;
+        } catch (NumberFormatException e) {
+            return false;
         }
     }
 }

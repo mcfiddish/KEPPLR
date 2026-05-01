@@ -2,17 +2,24 @@ package kepplr.commands;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import java.nio.file.Path;
+import java.util.HashMap;
+import java.util.Map;
 import kepplr.camera.CameraFrame;
 import kepplr.camera.TransitionController;
 import kepplr.config.KEPPLRConfiguration;
 import kepplr.core.SimulationClock;
+import kepplr.render.RenderQuality;
 import kepplr.render.vector.VectorTypes;
 import kepplr.state.DefaultSimulationState;
+import kepplr.state.ScenePreset;
+import kepplr.state.ScenePresetCodec;
 import kepplr.testsupport.TestHarness;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 /**
  * Unit tests for {@link DefaultSimulationCommands}.
@@ -40,6 +47,55 @@ class DefaultSimulationCommandsTest {
         clock = new SimulationClock(state, 0.0);
         TransitionController tc = new TransitionController(state);
         commands = new DefaultSimulationCommands(state, clock, tc);
+    }
+
+    private ScenePreset sampleScenePreset() {
+        Map<Integer, Boolean> bodyVis = new HashMap<>();
+        bodyVis.put(EARTH, false);
+
+        Map<Integer, Boolean> labelVis = new HashMap<>();
+        labelVis.put(EARTH, true);
+
+        Map<Integer, Boolean> trailVis = new HashMap<>();
+        trailVis.put(EARTH, true);
+
+        Map<Integer, Double> trailDur = new HashMap<>();
+        trailDur.put(EARTH, 86400.0);
+
+        Map<Integer, Integer> trailRef = new HashMap<>();
+        trailRef.put(EARTH, MOON);
+
+        Map<String, Boolean> vectorVis = new HashMap<>();
+        vectorVis.put(EARTH + ":" + VectorTypes.towardBody(SUN), true);
+
+        Map<String, Boolean> frustumVis = new HashMap<>();
+        frustumVis.put("-98300", true);
+
+        return new ScenePreset(
+                1,
+                123456.0,
+                42.0,
+                true,
+                new double[] {1.0, 2.0, 3.0},
+                new float[] {0.0f, 0.0f, 0.0f, 1.0f},
+                CameraFrame.SYNODIC,
+                55.0,
+                EARTH,
+                MOON,
+                EARTH,
+                bodyVis,
+                labelVis,
+                trailVis,
+                trailDur,
+                trailRef,
+                vectorVis,
+                frustumVis,
+                false,
+                false,
+                RenderQuality.LOW,
+                1600,
+                900,
+                Map.of());
     }
 
     // ─────────────────────────────────────────────────────────────────
@@ -704,6 +760,117 @@ class DefaultSimulationCommandsTest {
         @DisplayName("setStateString with invalid string throws IllegalArgumentException")
         void setStateStringInvalidThrows() {
             assertThrows(IllegalArgumentException.class, () -> commands.setStateString("not-a-valid-state"));
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────────
+    // Scene preset (SCENE-01, SCENE-02, SCENE-03)
+    // ─────────────────────────────────────────────────────────────────
+
+    @Nested
+    @DisplayName("Scene preset (SCENE-01, SCENE-02, SCENE-03)")
+    class ScenePresetTests {
+
+        @Test
+        @DisplayName("saveScenePreset writes a loadable .kepplrscene file")
+        void saveScenePresetWritesLoadableFile(@TempDir Path tempDir) throws Exception {
+            ScenePreset preset = sampleScenePreset();
+            commands.setWindowSizeGetter(dims -> {
+                dims[0] = preset.windowWidth();
+                dims[1] = preset.windowHeight();
+            });
+
+            state.setCurrentEt(preset.et());
+            state.setTimeRate(preset.timeRate());
+            state.setPaused(preset.paused());
+            state.setCameraPositionJ2000(preset.camPosJ2000().clone());
+            state.setCameraOrientationJ2000(preset.camOrientJ2000().clone());
+            state.setCameraFrame(preset.cameraFrame());
+            state.setFovDeg(preset.fovDeg());
+            state.setSelectedBodyId(preset.selectedBodyId());
+            state.setFocusedBodyId(preset.focusedBodyId());
+            state.setTargetedBodyId(preset.targetedBodyId());
+            state.setBodyVisible(EARTH, false);
+            state.setLabelVisible(EARTH, true);
+            state.setTrailVisible(EARTH, true);
+            state.setTrailDuration(EARTH, 86400.0);
+            state.setTrailReferenceBody(EARTH, MOON);
+            state.setVectorVisible(EARTH, VectorTypes.towardBody(SUN), true);
+            state.setFrustumVisible(-98300, true);
+            state.setHudTimeVisible(false);
+            state.setHudInfoVisible(false);
+            state.setRenderQuality(RenderQuality.LOW);
+
+            Path file = tempDir.resolve("scene.kepplrscene");
+            commands.saveScenePreset(file.toString());
+
+            ScenePreset loaded = ScenePresetCodec.loadFromFile(file);
+            assertEquals(preset.et(), loaded.et(), 1e-10);
+            assertEquals(preset.timeRate(), loaded.timeRate(), 1e-10);
+            assertEquals(preset.paused(), loaded.paused());
+            assertEquals(preset.cameraFrame(), loaded.cameraFrame());
+            assertEquals(preset.renderQuality(), loaded.renderQuality());
+            assertEquals(preset.windowWidth(), loaded.windowWidth());
+            assertEquals(preset.windowHeight(), loaded.windowHeight());
+            assertTrue(loaded.vectorVisibility().containsKey(EARTH + ":" + VectorTypes.towardBody(SUN)));
+            assertEquals(true, loaded.vectorVisibility().get(EARTH + ":" + VectorTypes.towardBody(SUN)));
+            assertEquals(86400.0, loaded.trailDurations().get(EARTH), 1e-10);
+            assertEquals(MOON, loaded.trailReferences().get(EARTH));
+        }
+
+        @Test
+        @DisplayName("loadScenePreset restores state atomically")
+        void loadScenePresetRestoresState(@TempDir Path tempDir) throws Exception {
+            ScenePreset preset = sampleScenePreset();
+            Path file = tempDir.resolve("scene.kepplrscene");
+            ScenePresetCodec.saveToFile(preset, file);
+
+            state.setCurrentEt(0.0);
+            state.setTimeRate(1.0);
+            state.setPaused(false);
+            state.setSelectedBodyId(-1);
+            state.setFocusedBodyId(-1);
+            state.setTargetedBodyId(-1);
+            state.setCameraFrame(CameraFrame.INERTIAL);
+            state.setFovDeg(45.0);
+            state.setBodyVisible(EARTH, true);
+            state.setLabelVisible(EARTH, false);
+            state.setTrailVisible(EARTH, false);
+            state.setTrailDuration(EARTH, -1.0);
+            state.setTrailReferenceBody(EARTH, -1);
+            state.setVectorVisible(EARTH, VectorTypes.velocity(), false);
+            state.setFrustumVisible(-98300, false);
+            state.setHudTimeVisible(true);
+            state.setHudInfoVisible(true);
+            state.setRenderQuality(RenderQuality.HIGH);
+
+            commands.loadScenePreset(file.toString());
+
+            assertEquals(preset.et(), state.currentEtProperty().get(), 1e-10);
+            assertEquals(preset.timeRate(), state.timeRateProperty().get(), 1e-10);
+            assertTrue(state.pausedProperty().get());
+            assertEquals(preset.focusedBodyId(), state.focusedBodyIdProperty().get());
+            assertEquals(preset.targetedBodyId(), state.targetedBodyIdProperty().get());
+            assertEquals(preset.selectedBodyId(), state.selectedBodyIdProperty().get());
+            assertEquals(preset.cameraFrame(), state.cameraFrameProperty().get());
+            assertEquals(45.0, state.fovDegProperty().get(), 1e-10);
+            assertFalse(state.bodyVisibleProperty(EARTH).get());
+            assertTrue(state.labelVisibleProperty(EARTH).get());
+            assertTrue(state.trailVisibleProperty(EARTH).get());
+            assertEquals(86400.0, state.trailDurationProperty(EARTH).get(), 1e-10);
+            assertEquals(MOON, state.trailReferenceBodyProperty(EARTH).get());
+            assertTrue(state.vectorVisibleProperty(EARTH, VectorTypes.towardBody(SUN))
+                    .get());
+            assertTrue(state.frustumVisibleProperty(-98300).get());
+            assertFalse(state.hudTimeVisibleProperty().get());
+            assertFalse(state.hudInfoVisibleProperty().get());
+            assertEquals(RenderQuality.LOW, state.renderQualityProperty().get());
+
+            DefaultSimulationState.PendingCameraRestore restore = state.consumePendingCameraRestore();
+            assertNotNull(restore);
+            assertArrayEquals(preset.camPosJ2000(), restore.posJ2000());
+            assertArrayEquals(preset.camOrientJ2000(), restore.orientJ2000());
+            assertEquals(preset.fovDeg(), restore.fovDeg(), 1e-10);
         }
     }
 }

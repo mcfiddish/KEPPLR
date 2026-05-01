@@ -15,7 +15,7 @@ This roadmap prioritizes the concerns surfaced by codebase mapping, then lays th
 | 3 | Render Reliability and Visual Regression Foundations | Strengthen render-path coverage and measurable quality policy for shadows, GLB rendering, and star lookup. | REND-01, REND-02, REND-03, REND-04 | 5 |
 | 4 | Data Tooling and Catalog Robustness | Harden Gaia and model-conversion edge cases with validation, tests, and memory-aware behavior. | DATA-01, DATA-02, DATA-03 | 4 |
 | 5 | Replay, Manifest, and Performance Foundations | Add reproducibility metadata, deterministic expectations, and lightweight telemetry before heavy v0.3 features. | REPRO-01, REPRO-02, REPRO-03 | 5 |
-| 6 | Scene Preset Persistence Contract | Specify and implement the first atomic `.kepplrscene` load/apply foundation. | SCENE-01, SCENE-02, SCENE-03 | 5 |
+| 6 | Scene Preset Persistence Contract | 1/1 | Complete    | 2026-05-01 |
 
 ## Phase Details
 
