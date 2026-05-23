@@ -1274,6 +1274,43 @@ public final class KepplrScript {
         commands.loadConfiguration(path);
     }
 
+    // ── Scene preset persistence (SCENE-01, SCENE-02, SCENE-03) ──────────────────
+
+    /**
+     * Save the current scene to a `.kepplrscene` JSON file.
+     *
+     * <p><b>Execution semantics:</b> <em>Immediate</em> — writes to the file system and returns.
+     *
+     * <p>Captures the full visual state including time, camera, bodies, overlays (labels, trails, trail durations,
+     * trail references, vectors, frustums, HUD), render quality, and window size.
+     *
+     * <p>Example: {@code kepplr.saveScene("/path/to/scene.kepplrscene")}
+     *
+     * @param path file system path for the output `.kepplrscene` file
+     * @throws java.io.IOException if an I/O error occurs while writing the file
+     */
+    public void saveScene(String path) throws java.io.IOException {
+        commands.saveScenePreset(path);
+    }
+
+    /**
+     * Load and apply a `.kepplrscene` file atomically.
+     *
+     * <p><b>Execution semantics:</b> <em>Immediate</em> — validates and applies state; throws on validation error.
+     *
+     * <p>Reads the JSON file, validates all fields, and applies the scene state atomically. If validation fails, throws
+     * an IllegalArgumentException and the existing application state is preserved unchanged.
+     *
+     * <p>Example: {@code kepplr.loadScene("/path/to/scene.kepplrscene")}
+     *
+     * @param path file system path to the `.kepplrscene` file
+     * @throws java.io.IOException if an I/O error occurs while reading the file
+     * @throws IllegalArgumentException if the file contains an invalid or unsupported scene preset
+     */
+    public void loadScene(String path) throws java.io.IOException, IllegalArgumentException {
+        commands.loadScenePreset(path);
+    }
+
     // ── HUD messages (Step 28) ──────────────────────────────────────────────────
 
     /**

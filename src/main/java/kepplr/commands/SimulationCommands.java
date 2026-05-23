@@ -1,5 +1,6 @@
 package kepplr.commands;
 
+import java.io.IOException;
 import kepplr.camera.CameraFrame;
 import kepplr.render.RenderQuality;
 import kepplr.render.vector.VectorType;
@@ -679,4 +680,47 @@ public interface SimulationCommands {
      * @param visible {@code true} to show, {@code false} to hide
      */
     void setBodyVisible(int naifId, boolean visible);
+
+    // ── Scene preset persistence (SCENE-01, SCENE-02, SCENE-03) ──
+
+    /**
+     * Save the current scene to a `.kepplrscene` JSON file (SCENE-01).
+     *
+     * <p>Captures the full visual state including time, camera, bodies, overlays (labels, trails, trail durations,
+     * trail references, vectors, frustums, HUD), render quality, and window size.
+     *
+     * <p>Recorded by {@link kepplr.scripting.CommandRecorder} as:
+     *
+     * <pre>{@code kepplr.saveScene("/path/to/scene.kepplrscene") }</pre>
+     *
+     * @param path file system path for the output `.kepplrscene` file
+     * @throws IOException if an I/O error occurs while writing the file
+     */
+    void saveScenePreset(String path) throws IOException;
+
+    /**
+     * Load and apply a `.kepplrscene` file atomically (SCENE-02).
+     *
+     * <p>Reads the JSON file, validates all fields, and applies the scene state atomically — all state is applied or
+     * none is applied. If validation fails, the existing application state is preserved unchanged.
+     *
+     * <p>The load is atomic: if ANY validation error is detected, NO state is applied. This prevents the application
+     * from being left in a partially applied state.
+     *
+     * <p>Recorded by {@link kepplr.scripting.CommandRecorder} as:
+     *
+     * <pre>{@code kepplr.loadScene("/path/to/scene.kepplrscene") }</pre>
+     *
+     * @param path file system path to the `.kepplrscene` file
+     * @throws IOException if an I/O error occurs while reading the file
+     * @throws IllegalArgumentException if the file contains an invalid or unsupported scene preset
+     */
+    void loadScenePreset(String path) throws IOException, IllegalArgumentException;
+
+    /**
+     * Get the current scene preset as a ScenePreset (SCENE-03).
+     *
+     * @return a ScenePreset capturing the current full visual state
+     */
+    kepplr.state.ScenePreset getScenePreset();
 }

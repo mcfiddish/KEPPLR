@@ -1078,6 +1078,61 @@ public final class KepplrStatusWindow {
             }
         });
 
+        // ── Save Scene... ──────────────────────────────────────────────
+        MenuItem saveScene = menuItem("Save Scene...");
+        saveScene.setOnAction(e -> {
+            FileChooser chooser = new FileChooser();
+            chooser.setTitle("Save Scene Preset");
+            chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("KEPPLR Scene Files", "*.kepplrscene"));
+            chooser.setInitialFileName("scene.kepplrscene");
+            File file = chooser.showSaveDialog(stage);
+            if (file != null) {
+                String path = file.getAbsolutePath();
+                if (!path.toLowerCase().endsWith(".kepplrscene")) {
+                    path = path + ".kepplrscene";
+                }
+                try {
+                    commands.saveScenePreset(path);
+                    logger.info("Scene preset saved to: {}", path);
+                } catch (IOException ex) {
+                    Alert alert =
+                            new Alert(Alert.AlertType.ERROR, "Failed to save scene: " + ex.getMessage(), ButtonType.OK);
+                    alert.setTitle("Save Scene Error");
+                    alert.setHeaderText(null);
+                    alert.showAndWait();
+                }
+            }
+        });
+
+        // ── Load Scene... ──────────────────────────────────────────────
+        MenuItem loadScene = menuItem("Load Scene...");
+        loadScene.setOnAction(e -> {
+            FileChooser chooser = new FileChooser();
+            chooser.setTitle("Load Scene Preset");
+            chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("KEPPLR Scene Files", "*.kepplrscene"));
+            chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("All Files", "*.*"));
+            File file = chooser.showOpenDialog(stage);
+            if (file != null) {
+                String path = file.getAbsolutePath();
+                try {
+                    commands.loadScenePreset(path);
+                    logger.info("Scene preset loaded from: {}", path);
+                } catch (IllegalArgumentException ex) {
+                    Alert alert =
+                            new Alert(Alert.AlertType.ERROR, "Invalid scene file:\n" + ex.getMessage(), ButtonType.OK);
+                    alert.setTitle("Load Scene Error");
+                    alert.setHeaderText(null);
+                    alert.showAndWait();
+                } catch (IOException ex) {
+                    Alert alert =
+                            new Alert(Alert.AlertType.ERROR, "Failed to load scene: " + ex.getMessage(), ButtonType.OK);
+                    alert.setTitle("Load Scene Error");
+                    alert.setHeaderText(null);
+                    alert.showAndWait();
+                }
+            }
+        });
+
         // ── Capture Sequence... ─────────────────────────────────────────
         MenuItem captureSeq = menuItem("Capture Sequence...");
         captureSeq.setOnAction(e -> showCaptureSequenceDialog(captureSeq, saveScreenshot));
@@ -1128,6 +1183,8 @@ public final class KepplrStatusWindow {
                 "File",
                 null,
                 loadConfig,
+                saveScene,
+                loadScene,
                 new SeparatorMenuItem(),
                 runScript,
                 recordToggle,

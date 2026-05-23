@@ -679,6 +679,25 @@ public final class CommandRecorder implements SimulationCommands {
         delegate.loadConfiguration(path);
     }
 
+    // ── Scene preset persistence (SCENE-01, SCENE-02, SCENE-03) ──
+
+    @Override
+    public void saveScenePreset(String path) throws java.io.IOException {
+        recordCommand("kepplr.saveScene(\"" + path + "\")");
+        delegate.saveScenePreset(path);
+    }
+
+    @Override
+    public void loadScenePreset(String path) throws java.io.IOException, IllegalArgumentException {
+        recordCommand("kepplr.loadScene(\"" + path + "\")");
+        delegate.loadScenePreset(path);
+    }
+
+    @Override
+    public kepplr.state.ScenePreset getScenePreset() {
+        return delegate.getScenePreset();
+    }
+
     // ── HUD message (Step 28) ──
 
     @Override

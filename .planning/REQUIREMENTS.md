@@ -1,0 +1,108 @@
+# Requirements: KEPPLR Stabilization and v0.3 Foundations
+
+**Defined:** 2026-04-26
+**Core Value:** KEPPLR must remain a scientifically credible, scriptable, reproducible SPICE visualization tool while new rendering, scene, and mission-geometry features are added.
+
+## v1 Requirements
+
+### Baseline
+
+- [x] **BASE-01**: Developer can run the current test baseline and see pre-existing failures documented before phase work begins.
+- [x] **BASE-02**: Developer can run `mvn test` and `mvn spotless:check` as explicit gates for changes made during this milestone.
+- [x] **BASE-03**: Developer can identify which mapped concern each stabilization change addresses.
+
+### Configuration
+
+- [x] **CONF-01**: User receives structured configuration-load errors instead of process termination for missing or invalid config paths.
+- [x] **CONF-02**: Multiple KEPPLR instances or tests do not collide through a shared `java.io.tmpdir/resources` extraction path.
+- [x] **CONF-03**: Configuration reload behavior is covered by tests for singleton replacement, thread-local ephemeris access, and render/script interaction boundaries.
+
+### Scripting
+
+- [x] **SCR-01**: User documentation clearly states that Groovy scripts are trusted local code with filesystem, network, process, configuration, and state access.
+- [x] **SCR-02**: Script stop/replacement behavior is tested for cooperative interruption and blocking KEPPLR wait primitives.
+- [x] **SCR-03**: Command recording remains executable for newly touched `SimulationCommands` methods.
+
+### Rendering
+
+- [x] **REND-01**: Render-path test infrastructure contains at least one real `@Tag("render")` smoke or focused test, or a documented blocker if the live render harness cannot support it yet.
+- [x] **REND-02**: Eclipse/shadow quality policy has measurable behavior for occluder limits and render quality tiers before GLB shape-shadow expansion.
+- [x] **REND-03**: GLB-backed body and spacecraft rendering has regression coverage or documented manual verification paths for material, lighting, and fallback behavior.
+- [x] **REND-04**: Wide-cone star tile lookup behavior is explicitly tested near and beyond the documented convexity boundary.
+
+### Data
+
+- [x] **DATA-01**: Gaia catalog lookup failure modes produce clear validation or error messages when optional source indexes are missing.
+- [x] **DATA-02**: Gaia tile cache behavior is bounded or measured by memory-oriented criteria rather than only tile count, or a follow-up is documented with evidence.
+- [x] **DATA-03**: Model conversion tooling has focused fixture tests for pure parsing/metadata behavior that can run without Blender.
+
+### Reproducibility
+
+- [x] **REPRO-01**: Capture outputs can include a render manifest with app version, platform, config identity, kernel identity, script or scene identity, render quality, resolution, frame count, and ET per frame.
+- [x] **REPRO-02**: Deterministic replay expectations and numeric tolerances are documented for camera state, ET progression, and capture timing.
+- [x] **REPRO-03**: Lightweight performance telemetry reports frame time and key scene counts needed to set quality budgets.
+
+### Scene
+
+- [x] **SCENE-01**: `.kepplrscene` format is specified with versioning, readable JSON structure, validation errors, and unknown-field handling.
+- [x] **SCENE-02**: Scene load/apply is atomic: invalid scenes do not leave the app in a partially applied state.
+- [x] **SCENE-03**: Scene files can preserve the current authored visual setup, including state string fields plus overlay visibility and trail/frustum/body visibility state.
+
+## v2 Requirements
+
+### v0.3 Feature Roadmap
+
+- **OBJ-01**: User can search bodies, spacecraft, and instruments with autocomplete, recents, favorites, bookmarks, filters, and explicit actions.
+- **SHOT-01**: User can define, preview, play, and deterministically capture named camera shots and shot sequences.
+- **TIME-01**: User can scrub simulation time through a timeline with event markers and script-defined marker groups.
+- **GEOM-01**: User can show SPICE-derived measurement labels and geometry readouts for camera range, light time, phase angle, local solar time, altitude, and boresight intercepts.
+- **INST-01**: User can inspect instrument boresight lines, intercept markers, angular separation, targeting actions, and per-instrument color controls.
+- **MESH-01**: GLB-backed bodies can receive clipped frustums, footprints, retained swaths, and altitude calculations from mesh intersections with ellipsoid fallback.
+- **REF-01**: User can toggle and record reference geometry layers such as grids, planes, meridians, terminators, and directional lines.
+- **LOD-01**: Render quality presets enforce LOD and update-cadence budgets for heavy visual features.
+
+## Out of Scope
+
+| Feature | Reason |
+|---------|--------|
+| Full v0.3 feature completion in this milestone | Current priority is reducing mapped risk and building foundations. |
+| Untrusted Groovy script sandbox | Requires a separate security design; current scripts are trusted local automation. |
+| Complete class-size refactor | Large files are refactored only when a phase needs a specific risk reduction. |
+| Server, web, or cloud mode | KEPPLR is a local desktop simulator and tooling app. |
+| Replacing Picante/SPICE architecture | Existing scientific ephemeris path is core validated behavior. |
+
+## Traceability
+
+| Requirement | Phase | Status |
+|-------------|-------|--------|
+| BASE-01 | Phase 1 | Complete |
+| BASE-02 | Phase 1 | Complete |
+| BASE-03 | Phase 1 | Complete |
+| CONF-01 | Phase 2 | Complete |
+| CONF-02 | Phase 2 | Complete |
+| CONF-03 | Phase 2 | Complete |
+| SCR-01 | Phase 2 | Complete |
+| SCR-02 | Phase 2 | Complete |
+| SCR-03 | Phase 2 | Complete |
+| REND-01 | Phase 3 | Complete |
+| REND-02 | Phase 3 | Complete |
+| REND-03 | Phase 3 | Complete |
+| REND-04 | Phase 3 | Complete |
+| DATA-01 | Phase 4 | Complete |
+| DATA-02 | Phase 4 | Complete |
+| DATA-03 | Phase 4 | Complete |
+| REPRO-01 | Phase 5 | Complete |
+| REPRO-02 | Phase 5 | Complete |
+| REPRO-03 | Phase 5 | Complete |
+| SCENE-01 | Phase 6 | Complete |
+| SCENE-02 | Phase 6 | Complete |
+| SCENE-03 | Phase 6 | Complete |
+
+**Coverage:**
+- v1 requirements: 22 total
+- Mapped to phases: 22
+- Unmapped: 0
+
+---
+*Requirements defined: 2026-04-26*
+*Last updated: 2026-04-26 after Phase 1 completion*

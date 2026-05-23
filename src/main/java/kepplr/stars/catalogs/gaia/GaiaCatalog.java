@@ -128,6 +128,38 @@ public final class GaiaCatalog implements StarCatalog<GaiaStar>, TiledStarCatalo
         return new Summary(dataRelease, referenceEpochYear, tiling.nLat, tiling.nLon, populated, stars, bytes);
     }
 
+    /**
+     * Returns statistics about the tile cache for memory auditing. The cache is an LRU with a configurable capacity
+     * (default 256 tiles).
+     */
+    public CacheStats getCacheStats() {
+        synchronized (tileCache) {
+            // Estimate: GaiaStar is ~32 bytes (sourceId long + 4 floats + object overhead)
+            long bytesPerStar = 32;
+            long totalBytes = 0;
+            for (GaiaStar[] tile : tileCache.values()) {
+                totalBytes += tile.length * bytesPerStar;
+            }
+            return new CacheStats(tileCache.size(), totalBytes);
+        }
+    }
+
+    /** Statistics about the tile cache for debugging memory issues. */
+    public static final class CacheStats {
+        public final int cachedTileCount;
+        public final long estimatedMemoryBytes;
+
+        CacheStats(int cachedTileCount, long estimatedMemoryBytes) {
+            this.cachedTileCount = cachedTileCount;
+            this.estimatedMemoryBytes = estimatedMemoryBytes;
+        }
+
+        @Override
+        public String toString() {
+            return "CacheStats{cachedTiles=" + cachedTileCount + ", estimatedBytes~" + estimatedMemoryBytes + "}";
+        }
+    }
+
     private GaiaCatalog(
             String dataRelease,
             double referenceEpochYear,
@@ -251,10 +283,8 @@ public final class GaiaCatalog implements StarCatalog<GaiaStar>, TiledStarCatalo
             srcIndexChannel = FileChannel.open(srcIdxPath, StandardOpenOption.READ);
             // entry size 16 bytes: sourceId(long), tileId(int), indexInTile(int)
             long size = srcIndexChannel.size();
-            if (size % 16 != 0) {
-                throw new IOException("Invalid source index size (must be multiple of 16): " + size);
-            }
-            srcEntries = size / 16;
+            // -1 signals a corrupt file; getStar() will surface a clear error on first use
+            srcEntries = (size % 16 != 0) ? -1 : size / 16;
         }
 
         return new GaiaCatalog(
@@ -330,9 +360,15 @@ public final class GaiaCatalog implements StarCatalog<GaiaStar>, TiledStarCatalo
         }
 
         if (sourceIndexChannel == null) {
-            throw new UnsupportedOperationException(
-                    "This tile pack was built without a source-id index (" + DEFAULT_SOURCE_INDEX_FILE + "). "
-                            + "Rebuild with GaiaBuildSourceIndex or enable source indexing during pack build.");
+            throw new IllegalArgumentException("Missing source index file (" + DEFAULT_SOURCE_INDEX_FILE + "). "
+                    + "This file is required for getStar() lookups by source ID. "
+                    + "To fix: run 'java -cp kepplr.jar kepplr.stars.catalogs.gaia.tools.GaiaBuildSourceIndex --pack <tile-pack-dir>' "
+                    + "to build the source index, or use tile-pack lookup methods (lookup/filter/iterator) instead.");
+        }
+        if (sourceIndexEntries < 0) {
+            throw new IllegalArgumentException(
+                    "Source index file (" + DEFAULT_SOURCE_INDEX_FILE + ") is corrupt "
+                            + "(size is not a multiple of 16 bytes). Delete it and re-run GaiaBuildSourceIndex to generate a fresh one.");
         }
 
         // binary search the memory-mapped source index

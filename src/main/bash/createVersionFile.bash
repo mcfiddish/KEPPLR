@@ -49,13 +49,13 @@ public class AppVersion {
     public static String getVersionString() {
         return String.format("%s version %s-%s", applicationName, lastCommit, gitRevision);
     }
+
+    /** Returns platform description: "os/arch (java version)". */
+    public static String getPlatform() {
+        String os = System.getProperty("os.name", "unknown");
+        String arch = System.getProperty("os.arch", "unknown");
+        String javaVersion = System.getProperty("java.version", "unknown");
+        return String.format("%s/%s (Java %s)", os, arch, javaVersion);
+    }
 }
 EOF
-
-conf="../../../doc/conf.py"
-if [ -e $conf ]; then
-
-   sed "s/version =.*/version = \"${lastCommit}-${rev}\"/" $conf > tmp
-   mv tmp $conf
-
-fi

@@ -415,6 +415,8 @@ public class KepplrApp extends SimpleApplication {
 
     @Override
     public void simpleUpdate(float tpf) {
+        long frameStartNanos = System.nanoTime();
+
         // One-shot: position the JavaFX window to the right of the JME window on first frame
         if (!fxWindowPositioned) {
             fxWindowPositioned = true;
@@ -595,6 +597,11 @@ public class KepplrApp extends SimpleApplication {
         if (restoreLatch != null) {
             restoreLatch.countDown();
         }
+
+        // Record frame time telemetry (REPRO-03)
+        long frameEndNanos = System.nanoTime();
+        double frameTimeMs = (frameEndNanos - frameStartNanos) / 1_000_000.0;
+        simulationState.setFrameTimeMs(frameTimeMs);
 
         PendingRenderFence fence;
         int fenceCount = pendingRenderFences.size();

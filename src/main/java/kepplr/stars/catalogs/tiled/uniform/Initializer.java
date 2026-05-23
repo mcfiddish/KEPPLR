@@ -12,6 +12,16 @@ import picante.math.vectorspace.VectorIJK;
  *
  * <p>It is not intended for the consumer of this class to retain a reference past initialization.
  *
+ * <h3>Convexity Boundary</h3>
+ *
+ * <p>The tiling is designed for cone queries up to a hemisphere (π/2 radians or 90°). The spherical cone geometry
+ * assumes the cone apex is at the sphere center and the cone axis points toward the tile center. This approximation
+ * becomes inaccurate when the cone angle exceeds ~90° because the spherical cap geometry breaks down.
+ *
+ * <p>Beyond hemisphere size, query results are undefined — the locator may return no tiles or incorrect tiles. The
+ * {@link #ANGLE_ADJUSTMENT} factor provides a small buffer (1.000001) for floating-point precision, but does not extend
+ * the valid range beyond π/2.
+ *
  * @author F.S.Turner
  */
 class Initializer {

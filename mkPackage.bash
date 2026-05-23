@@ -187,6 +187,7 @@ function make_doc() {
     python3 -m pip --default-timeout=1000 install sphinx-theme-pd
     python3 -m pip --default-timeout=1000 install Pillow # Python Imaging Library
 
+    export KEPPLR_DOC_VERSION="${date}-${rev}"
     ./make_doc.bash ${scriptDir}
     sphinx-build -b html . _build
     rsync -a _build/ ${docDir}
@@ -258,6 +259,10 @@ pythonDir=$(
 # Build the jar file
 build_jar ${rev}
 
+if [ -d .git ]; then
+    git restore $srcFile
+fi
+
 # create the executable scripts
 make_scripts
 
@@ -275,7 +280,3 @@ tar cfz ./dist/${pkgBase}-${rev}-src.tar.gz ./${pkgBase}-src
 echo -e "\nCreated ./dist/${pkgBase}-${rev}.tar.gz ./dist/${pkgBase}-${rev}-src.tar.gz"
 
 /bin/rm -fr ./${pkgBase} ./${pkgBase}-src
-
-if [ -d .git ]; then
-    git restore $srcFile doc/conf.py
-fi

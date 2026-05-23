@@ -204,5 +204,42 @@ class KEPPLRConfigurationTest {
             KEPPLRConfiguration reloaded = KEPPLRConfiguration.reload(pc);
             assertEquals("C", reloaded.timeFormat());
         }
+
+        @Test
+        @DisplayName("Singleton replacement clears old state")
+        void reloadClearsOldState() {
+            KEPPLRConfiguration first = KEPPLRConfiguration.getTemplate();
+            assertTrue(KEPPLRConfiguration.isLoaded());
+
+            // Reload with new config
+            PropertiesConfiguration pc = first.toPropertiesConfiguration();
+            pc.setProperty("logLevel", "DEBUG");
+            KEPPLRConfiguration second = KEPPLRConfiguration.reload(pc);
+
+            assertNotSame(first, second, "Reload should create new instance");
+            assertEquals("DEBUG", second.logLevel(), "Reload should use new config");
+        }
+
+        @Test
+        @DisplayName("ThreadLocal ephemeris recreated after reload")
+        void reloadRecreatesEphemeris() throws InterruptedException {
+            KEPPLRConfiguration config = KEPPLRConfiguration.getTemplate();
+            KEPPLREphemeris eph1 = config.getEphemeris();
+
+            // Reload
+            KEPPLRConfiguration reloaded = KEPPLRConfiguration.reload(config.toPropertiesConfiguration());
+
+            // Thread that used old config
+            Thread oldThread = new Thread(() -> {
+                KEPPLREphemeris ephOld = config.getEphemeris();
+                assertNotNull(ephOld);
+            });
+            oldThread.start();
+            oldThread.join();
+
+            // New config gets new ephemeris
+            KEPPLREphemeris eph2 = reloaded.getEphemeris();
+            assertNotSame(eph1, eph2, "Reloaded config should have different ephemeris");
+        }
     }
 }

@@ -76,16 +76,13 @@ class CaptureServiceTest {
     class CaptureInfo {
 
         @Test
-        @DisplayName("capture_info.json is valid JSON with expected fields")
-        void captureInfoIsValidJson(@TempDir Path tmpDir) throws IOException {
+        @DisplayName("capture_info.json is valid JSON with extended fields")
+        void captureInfoHasExtendedFields(@TempDir Path tmpDir) throws IOException {
             // Create a fake frame file so the image-reading code has something to find
             Path frame = tmpDir.resolve("frame_0000.png");
             // Write a minimal 1x1 PNG
             write1x1Png(frame);
 
-            // We can't call the private writeCaptureInfo directly, but we can verify the format
-            // by examining what CaptureService.captureSequence would produce.
-            // For this test, manually write the JSON format and verify it parses.
             String json = """
                     {
                       "startEt": 9.322824693587389E8,
@@ -94,7 +91,12 @@ class CaptureServiceTest {
                       "startFrameIndex": 240,
                       "width": 1920,
                       "height": 1080,
-                      "captureTimestamp": "2026-03-22T14:30:00Z"
+                      "captureTimestamp": "2026-03-22T14:30:00Z",
+                      "appVersion": "KEPPLR version 2026.04.26-4c78154M",
+                      "platform": "Linux/amd64 (Java 21)",
+                      "configIdentity": "kepplr.properties",
+                      "kernelIdentity": "resources/spice/kepplr.tm",
+                      "renderQuality": "HIGH"
                     }
                     """;
 
@@ -110,6 +112,12 @@ class CaptureServiceTest {
             assertTrue(content.contains("\"width\""));
             assertTrue(content.contains("\"height\""));
             assertTrue(content.contains("\"captureTimestamp\""));
+            // Extended manifest fields from REPRO-01
+            assertTrue(content.contains("\"appVersion\""));
+            assertTrue(content.contains("\"platform\""));
+            assertTrue(content.contains("\"configIdentity\""));
+            assertTrue(content.contains("\"kernelIdentity\""));
+            assertTrue(content.contains("\"renderQuality\""));
         }
     }
 

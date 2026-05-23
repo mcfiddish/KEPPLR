@@ -5,12 +5,13 @@
 
 # -- Themes used -------------------------------------------------------------
 
+import os
 import sphinx_theme_pd
 
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
-version = "UNVERSIONED"
+version = os.environ.get("KEPPLR_DOC_VERSION", "UNVERSIONED")
 release = version
 project = "KEPPLR"
 copyright = "2025, Hari Nair"
